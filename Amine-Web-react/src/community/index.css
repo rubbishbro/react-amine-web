@@ -1,0 +1,90 @@
+:root {
+    --primary-color: #FF85A1;
+    --secondary-color: #4CC9F0;
+    --bg-card: rgba(255, 255, 255, 0.92);
+    --text-main: #4A4A4A;
+    --text-sub: #888888;
+    --shadow-soft: 0 10px 25px rgba(149, 157, 165, 0.2);
+    --radius-large: 30px;
+    --radius-small: 15px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+
+/* 作用域化到组件根，避免覆盖全局 body */
+.community-root {
+    font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
+    background-color: #f0f2f5;
+    background-image: url('https://images.unsplash.com/photo-1581833971358-2c8b550f87b3?q=80&w=2671&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    color: var(--text-main);
+}
+
+.community-root .menu-trigger {
+    position: fixed;
+    top: 25px;
+    left: 25px;
+    z-index: 1000;
+    width: 56px;
+    height: 56px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    color: var(--primary-color);
+}
+
+.community-root .menu-trigger:hover {
+    transform: scale(1.1) rotate(90deg);
+    background: var(--primary-color);
+    color: #fff;
+}
+
+.community-root .hamburger div { width: 24px; height: 3px; background: currentColor; margin: 4px 0; border-radius: 4px; }
+
+.community-root .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 260px; background: rgba(255,255,255,0.98); transform: translateX(-100%); transition: transform 0.4s ease; z-index: 999; padding-top: 100px; box-shadow: 5px 0 20px rgba(0,0,0,0.05); border-top-right-radius: var(--radius-large); border-bottom-right-radius: var(--radius-large); }
+.community-root .sidebar.active { transform: translateX(0); }
+
+.community-root .nav-item { display: block; padding: 16px 30px; color: var(--text-main); text-decoration: none; font-weight: 500; transition: 0.3s; margin: 5px 15px; border-radius: var(--radius-small); display: flex; align-items: center; }
+.community-root .nav-item:hover { background-color: #FFF0F3; color: var(--primary-color); transform: translateX(5px); }
+.community-root .nav-icon { margin-right: 12px; font-size: 1.1em; }
+
+.community-root .main-card { width: 85%; height: 85%; background: var(--bg-card); border-radius: var(--radius-large); box-shadow: var(--shadow-soft); display: flex; flex-direction: column; position: relative; overflow: hidden; backdrop-filter: blur(8px); }
+.community-root .card-header { padding: 25px 40px; background: rgba(255,255,255,0.6); border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+.community-root .logo-area h1 { font-family: 'ZCOOL KuaiLe', cursive; color: var(--primary-color); font-size: 28px; letter-spacing: 1px; }
+.community-root .search-bar { background: #f5f5f5; padding: 8px 20px; border-radius: 20px; display: flex; align-items: center; width: 300px; }
+.community-root .search-bar input { border: none; background: transparent; width: 100%; margin-left: 10px; color: var(--text-main); }
+
+.community-root .card-content { flex: 1; padding: 30px 40px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--primary-color) #f0f0f0; }
+.community-root .card-content::-webkit-scrollbar { width: 8px; }
+.community-root .card-content::-webkit-scrollbar-thumb { background: #FFC2D1; border-radius: 10px; }
+
+.community-root .welcome-banner { background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%); padding: 30px; border-radius: var(--radius-small); color: white; margin-bottom: 30px; position: relative; overflow: hidden; box-shadow: 0 5px 15px rgba(76,201,240,0.3); }
+.community-root .welcome-banner h2 { margin-bottom: 10px; }
+
+.community-root .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+.community-root .post-card { background: #fff; border-radius: var(--radius-small); padding: 20px; transition: all 0.3s ease; border: 2px solid transparent; box-shadow: 0 2px 10px rgba(0,0,0,0.03); cursor: pointer; position: relative; }
+.community-root .post-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); border-color: var(--secondary-color); }
+
+.community-root .card-badge { font-size: 12px; padding: 4px 12px; border-radius: 12px; color: white; display: inline-block; margin-bottom: 12px; font-weight: bold; }
+.community-root .tag-anime { background-color: #FF99C8; }
+.community-root .tag-event { background-color: #A9DEF9; color: #444; }
+.community-root .tag-tech { background-color: #E4C1F9; }
+.community-root .tag-chat { background-color: #FCF6BD; color: #666; }
+
+.community-root .post-card h3 { font-size: 18px; color: var(--text-main); margin-bottom: 8px; line-height: 1.4; }
+.community-root .post-card p { font-size: 14px; color: var(--text-sub); line-height: 1.6; }
+
+.community-root .post-meta { margin-top: 15px; display: flex; align-items: center; font-size: 12px; color: #aaa; }
+.community-root .avatar-mini { width: 24px; height: 24px; border-radius: 50%; background: #ddd; margin-right: 8px; }
