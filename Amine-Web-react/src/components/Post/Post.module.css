@@ -25,6 +25,10 @@
   cursor: default; /* 确保悬停时也是默认指针 */
 }
 
+.post.pinned:hover {
+  box-shadow: 0 8px 24px rgba(255, 215, 0, 0.3);
+}
+
 .postHeader {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
@@ -120,6 +124,61 @@
   /* 回退方案 */
   max-height: 4.8em;
 }
+
+/* 新增置顶样式 */
+.post {
+  position: relative; /* 为绝对定位的置顶标识提供定位上下文 */
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.post.pinned {
+  border: 2px solid #FFD700; /* 置顶帖子的金色边框 */
+  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.2);
+}
+
+.pinnedBadge {
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  z-index: 10;
+  animation: pulse 2s infinite;
+}
+
+.pinnedIcon {
+  font-size: 14px;
+}
+
+.pinnedText {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 
 /* Markdown 样式 */
 .markdownH1 {

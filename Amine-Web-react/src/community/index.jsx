@@ -63,9 +63,19 @@ export default function CommunityBoard() {
 
   // 处理阅读全文点击
   const handleReadMore = (postId) => {
-    navigate(`/post/${postId}`);
+    navigate(`/post/${postId}`, { 
+      state: { from: location.pathname } 
+    });
     closeSidebar();
   };
+
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'smooth'
+    });
+  }, [location.key]);
 
   return (
     <div className="community-root">
@@ -118,7 +128,7 @@ export default function CommunityBoard() {
               <>
                 <div className="welcome-banner">
                   <h2>👋 下午好！今天想看点什么？</h2>
-                  <p>本周社团活动定于周六，不要忘记报名哦~</p>
+                  <p>欢迎来到LNSY动漫社官网~</p>
                 </div>
                 <div style={{ marginBottom: 20, fontWeight: 'bold', color: 'var(--text-main)', fontSize: 18 }}>
                   ✨ 最新动态

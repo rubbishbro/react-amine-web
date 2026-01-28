@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Post from '../Post';
 import styles from './PostList.module.css';
-import { loadAllPosts } from '../../utils/postLoader';
+import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName, getPostPinnedStatus } from '../../utils/postLoader';
 
-const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
+const PostList = ({ onReadMore, category = null }) => {
   const [posts, setPosts] = useState([]);
+  const [pinnedStatus, setPinnedStatus] = useState({}); // 存储置顶状态
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -13,47 +14,66 @@ const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
   const observerRef = useRef(null);
   const postsPerPage = 5;
 
+  // 根据分类加载帖子
+  const loadPosts = useCallback(async (pageNum = 1, categoryParam = null) => {
+    try {
+      setLoading(true);
+      
+      let allPosts;
+      if (categoryParam && categoryParam !== 'all') {
+        allPosts = await loadPostsByCategory(categoryParam);
+      } else {
+        allPosts = await loadAllPosts();
+      }
+      
+      // 计算当前页的帖子
+      const startIndex = 0;
+      const endIndex = pageNum * postsPerPage;
+      const currentPosts = allPosts.slice(startIndex, endIndex);
+      
+      // 获取置顶状态
+      const pinnedMap = {};
+      for (const post of currentPosts) {
+        const pinned = await getPostPinnedStatus(post.id);
+        pinnedMap[post.id] = pinned;
+      }
+      
+      setPosts(currentPosts);
+      setPinnedStatus(pinnedMap);
+      setPage(pageNum);
+      setHasMore(currentPosts.length < allPosts.length);
+      setError(null);
+      
+      return allPosts;
+    } catch (err) {
+      setError('加载帖子失败，请刷新重试');
+      console.error('Error loading posts:', err);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [postsPerPage]);
+
   // 初始加载帖子
   useEffect(() => {
-    const initLoadPosts = async () => {
-      try {
-        setLoading(true);
-        const allPosts = await loadAllPosts();
-        setPosts(allPosts.slice(0, postsPerPage));
-        setHasMore(allPosts.length > postsPerPage);
-        setError(null);
-      } catch (err) {
-        setError('加载帖子失败，请刷新重试');
-        console.error('Error loading posts:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initLoadPosts();
-  }, []);
+    loadPosts(1, category);
+  }, [category, loadPosts]);
 
   // 加载更多帖子
   const loadMorePosts = useCallback(async () => {
     if (loading || !hasMore) return;
-
+    
     try {
       setLoading(true);
-      const allPosts = await loadAllPosts();
       const nextPage = page + 1;
-      const nextPosts = allPosts.slice(0, nextPage * postsPerPage);
-      
-      setPosts(nextPosts);
-      setPage(nextPage);
-      setHasMore(nextPosts.length < allPosts.length);
-      setError(null);
+      await loadPosts(nextPage, category);
     } catch (err) {
       setError('加载更多帖子失败');
       console.error('Error loading more posts:', err);
     } finally {
       setLoading(false);
     }
-  }, [page, loading, hasMore]);
+  }, [page, loading, hasMore, category, loadPosts]);
 
   // 观察器回调
   const handleObserver = useCallback((entries) => {
@@ -65,7 +85,7 @@ const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
 
   // 设置Intersection Observer
   useEffect(() => {
-    const currentLoaderRef = loaderRef.current; // 将ref的值复制到局部变量
+    const currentLoaderRef = loaderRef.current;
     const option = {
       root: null,
       rootMargin: "20px",
@@ -93,19 +113,35 @@ const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
     };
   }, [handleObserver]);
 
+  // 获取当前分类的显示名称（中文）
+  const getCategoryLabel = useCallback(() => {
+    if (!category || category === 'all') return '帖子';
+    return getCategoryDisplayName(category);
+  }, [category]);
+
   // 如果没有帖子
   if (!loading && posts.length === 0 && !error) {
     return (
       <div className={styles.emptyState}>
         <div className={styles.emptyIcon}>📝</div>
-        <h3>暂无帖子</h3>
-        <p>还没有发布任何内容，快去添加一些帖子吧！</p>
+        <h3>暂无{getCategoryLabel()}</h3>
+        <p>当前分类还没有发布任何内容</p>
       </div>
     );
   }
 
   return (
     <div className={styles.postList}>
+      {/* 分类标题（如果有分类） */}
+      {category && category !== 'all' && (
+        <div className={styles.categoryHeader}>
+          <h2>{getCategoryLabel()}</h2>
+          <div className={styles.categoryBadge}>
+            {posts.length} 篇{getCategoryLabel()}
+          </div>
+        </div>
+      )}
+
       {/* 帖子列表 */}
       <div className={styles.postsContainer}>
         {posts.map((post) => (
@@ -113,7 +149,8 @@ const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
             key={post.id} 
             post={post} 
             preview={true} 
-            onReadMore={onReadMore} // 传递给Post组件
+            onReadMore={onReadMore}
+            isPinned={pinnedStatus[post.id] || false} // 传递置顶状态
           />
         ))}
       </div>
@@ -129,7 +166,7 @@ const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
           <div className={styles.endMessage}>
             <div className={styles.endIcon}>✨</div>
             <h3>已经到底了~</h3>
-            <p>没有更多帖子了，期待下次更新！</p>
+            <p>没有更多{getCategoryLabel()}了</p>
           </div>
         ) : (
           <button 
@@ -137,7 +174,7 @@ const PostList = ({ onReadMore }) => { // 接收 onReadMore 回调
             className={styles.loadMoreButton}
             disabled={loading}
           >
-            加载更多
+            加载更多{getCategoryLabel()}
           </button>
         )}
       </div>

@@ -1,44 +1,64 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './PostDetail.module.css';
-import { loadPostContent } from '../../utils/postLoader'; // 如果这个文件存在
+import { loadPostContent } from '../../utils/postLoader';
 
 const PostDetail = () => {
-  const { id: postId } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // 从location.state中获取返回路径，如果没有则使用主页
+  const getBackPath = () => {
+    if (location.state?.from) {
+      return location.state.from;
+    }
+    
+    const referrer = document.referrer;
+    if (referrer) {
+      const url = new URL(referrer);
+      if (url.origin === window.location.origin) {
+        return url.pathname;
+      }
+    }
+    
+    return '/';
+  };
+
+  // 处理返回
+  const handleBack = () => {
+    const backPath = getBackPath();
+    navigate(backPath);
+  };
+
   useEffect(() => {
-    const loadPost = async () => {
+    const fetchPost = async () => {
       try {
         setLoading(true);
+        const postData = await loadPostContent(id);
         
-        // 如果有 postLoader，使用它
-        if (typeof loadPostContent === 'function') {
-          const postData = await loadPostContent(postId);
-          if (postData) {
-            setPost(postData);
-            setError(null);
-          } else {
-            setError('帖子不存在或加载失败');
-          }
+        if (!postData) {
+          setError('帖子不存在或加载失败');
+          return;
         }
+        
+        setPost(postData);
+        setError(null);
       } catch (err) {
-        setError('加载帖子时发生错误');
+        setError('加载帖子失败，请刷新重试');
         console.error('Error loading post:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    if (postId) {
-      loadPost();
-    }
-  }, [postId]);
+    fetchPost();
+  }, [id]);
 
   if (loading) {
     return (
@@ -63,7 +83,7 @@ const PostDetail = () => {
 
   return (
     <div className={styles.postDetail}>
-      <button onClick={() => navigate('/')} className={styles.backButton}>
+      <button onClick={handleBack} className={styles.backButton}>
         ← 返回
       </button>
       

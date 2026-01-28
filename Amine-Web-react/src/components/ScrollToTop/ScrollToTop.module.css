@@ -1,0 +1,86 @@
+.scrollToTopButton {
+  position: fixed;
+  bottom: 30px;
+  left: 40px; 
+  width: 50px;
+  height: 55px;
+  border-radius: 50%;
+  background-color: var(--secondary-color); 
+  color: white;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(135, 206, 235, 0.3); 
+  transition: all 0.3s ease;
+  z-index: 1000;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.scrollToTopButton:hover {
+  background-color: var(--primary-color); 
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(135, 206, 235, 0.4);
+}
+
+.scrollToTopButton:hover .tooltip {
+  opacity: 1;
+  transform: translateX(100%) translateY(-50%);
+}
+
+.tooltip {
+  position: absolute;
+  left: calc(100% - 70px); 
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(135, 206, 235, 0.9);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  z-index: 1001;
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent rgba(135, 206, 235, 0.9) transparent transparent; /* 淡蓝色箭头 */
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 移动设备响应式调整 */
+@media (max-width: 768px) {
+  .scrollToTopButton {
+    bottom: 20px;
+    left: 20px;
+    width: 45px;
+    height: 45px;
+    font-size: 20px;
+  }
+  
+  .tooltip {
+    display: none; /* 在移动设备上隐藏提示 */
+  }
+}

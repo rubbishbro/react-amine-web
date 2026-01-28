@@ -1,141 +1,380 @@
+
 :root {
-    --primary-color: #FF85A1;
-    --secondary-color: #4CC9F0;
-    --bg-card: rgba(255, 255, 255, 0.92);
-    --text-main: #4A4A4A;
-    --text-sub: #888888;
-    --shadow-soft: 0 10px 25px rgba(149, 157, 165, 0.2);
-    --radius-large: 30px;
-    --radius-small: 15px;
+  --primary-color: #FF85A1;
+  --secondary-color: #4CC9F0;
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --text-main: #4A4A4A;
+  --text-sub: #888888;
+  --shadow-soft: 0 10px 25px rgba(149, 157, 165, 0.2);
+  --radius-large: 30px;
+  --radius-small: 15px;
+  --transition-base: 0.3s ease;
+  --transition-smooth: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+/* 基础重置 */
+.community-root * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  outline: none;
+}
 
-/* 作用域化到组件根，避免覆盖全局 body */
+/* 主容器 - 关键：自然文档流，可以滚动 */
 .community-root {
-    font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
-    background-color: #f0f2f5;
-    background-image: url('/public/Background.png');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    color: var(--text-main);
+  font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
+  background: #f0f2f5 url('/Background.png') center / cover fixed;
+  min-height: 100vh;
+  min-width: 320px;
+  color: var(--text-main);
+  position: relative;
+  contain: layout style paint;
+  /* 自然文档流，可以滚动 */
+  display: block;
+  /* 为卡片预留足够空间 */
+  padding: 40px 20px 100px;
+}
+
+/* 固定定位元素 */
+.community-root .menu-trigger,
+.community-root .home-button {
+  position: fixed;
+  left: 25px;
+  z-index: 1000;
+  width: 56px;
+  height: 56px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  transform-origin: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  /* 提前声明transform */
+  transform: translateY(0);
 }
 
 .community-root .menu-trigger {
-    position: fixed;
-    top: 25px;
-    left: 25px;
-    z-index: 1000;
-    width: 56px;
-    height: 56px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    color: var(--primary-color);
-    transform-origin: center;
+  top: 25px;
+  color: var(--primary-color);
 }
 
-.community-root .menu-trigger:hover {
-    transform: scale(1.1) rotate(90deg);
-    background: var(--primary-color);
-    color: #fff;
-}
-
-.community-root .hamburger div { width: 24px; height: 3px; background: currentColor; margin: 4px 0; border-radius: 4px; }
-
-/* 返回主页按钮，位于菜单触发器下方 */
 .community-root .home-button {
-    position: fixed;
-    top: 95px;
-    left: 25px;
-    z-index: 1000;
-    width: 56px;
-    height: 56px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: var(--secondary-color);
-    transition: left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.22s ease, color 0.22s ease;
-    font-size: 20px;
-    transform-origin: center;
+  top: 95px;
+  color: var(--secondary-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
+
+/* 悬停效果 */
+.community-root .menu-trigger:hover {
+  transform: scale(1.1) rotate(90deg);
+  background: var(--primary-color);
+  color: #fff;
+}
+
 .community-root .home-button:hover {
-    transform: translateY(-4px);
-    background: var(--secondary-color);
-    color: #fff;
+  transform: translateY(-4px);
+  background: var(--secondary-color);
+  color: #fff;
 }
 
-.community-root .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 260px; background: rgba(255,255,255,0.98); transform: translateX(-100%); transition: transform 0.4s ease; z-index: 999; padding-top: 100px; box-shadow: 5px 0 20px rgba(0,0,0,0.05); border-top-right-radius: var(--radius-large); border-bottom-right-radius: var(--radius-large); }
-.community-root .sidebar.active { transform: translateX(0); }
+/* 汉堡菜单图标 */
+.community-root .hamburger div {
+  width: 24px;
+  height: 3px;
+  background: currentColor;
+  margin: 4px 0;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
 
-.community-root .nav-item { display: block; padding: 16px 30px; color: var(--text-main); text-decoration: none; font-weight: 500; transition: 0.3s; margin: 5px 15px; border-radius: var(--radius-small); display: flex; align-items: center; }
-.community-root .nav-item:hover { background-color: #FFF0F3; color: var(--primary-color); transform: translateX(5px); }
-.community-root .nav-icon { margin-right: 12px; font-size: 1.1em; }
+/* 侧边栏 */
+.community-root .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 260px;
+  background: rgba(255, 255, 255, 0.98);
+  transform: translateX(-100%);
+  transition: transform var(--transition-base);
+  z-index: 999;
+  padding-top: 100px;
+  box-shadow: 5px 0 20px rgba(0, 0, 0, 0.05);
+  border-radius: 0 var(--radius-large) var(--radius-large) 0;
+  overflow: hidden;
+  contain: strict;
+}
 
-.community-root .main-card { width: 85%; height: 85%; background: var(--bg-card); border-radius: var(--radius-large); box-shadow: var(--shadow-soft); display: flex; flex-direction: column; position: relative; overflow: hidden; backdrop-filter: blur(8px); }
-.community-root .card-header { padding: 25px 40px; background: rgba(255,255,255,0.6); border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
-.community-root .logo-area h1 { font-family: 'ZCOOL KuaiLe', cursive; color: var(--primary-color); font-size: 28px; letter-spacing: 1px; }
+.community-root .sidebar.active {
+  transform: translateX(0);
+}
 
-.community-root .card-content { flex: 1; padding: 30px 40px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--primary-color) #f0f0f0; }
-.community-root .card-content::-webkit-scrollbar { width: 8px; }
-.community-root .card-content::-webkit-scrollbar-thumb { background: #FFC2D1; border-radius: 10px; }
+/* 导航项 */
+.community-root .nav-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 30px;
+  color: var(--text-main);
+  text-decoration: none;
+  font-weight: 500;
+  margin: 5px 15px;
+  border-radius: var(--radius-small);
+  transition: var(--transition-base);
+  min-height: 48px;
+  flex-shrink: 0;
+}
 
-.community-root .welcome-banner { background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%); padding: 30px; border-radius: var(--radius-small); color: white; margin-bottom: 30px; position: relative; overflow: hidden; box-shadow: 0 5px 15px rgba(76,201,240,0.3); }
-.community-root .welcome-banner h2 { margin-bottom: 10px; }
+.community-root .nav-item:hover {
+  background-color: #FFF0F3;
+  color: var(--primary-color);
+  transform: translateX(5px);
+}
 
-.community-root .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
-.community-root .post-card { background: #fff; border-radius: var(--radius-small); padding: 20px; transition: all 0.3s ease; border: 2px solid transparent; box-shadow: 0 2px 10px rgba(0,0,0,0.03); cursor: pointer; position: relative; }
-.community-root .post-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); border-color: var(--secondary-color); }
+.community-root .nav-icon {
+  margin-right: 12px;
+  font-size: 1.1em;
+  width: 24px;
+  flex-shrink: 0;
+}
 
-.community-root .card-badge { font-size: 12px; padding: 4px 12px; border-radius: 12px; color: white; display: inline-block; margin-bottom: 12px; font-weight: bold; }
+/* 主卡片 - 关键：自然高度，不限制滚动 */
+.community-root .main-card {
+  width: 100%;
+  max-width: 1200px;
+  min-height: 500px;
+  background: var(--bg-card);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(8px);
+  contain: layout style paint;
+  /* 居中但不限制高度 */
+  margin: 0 auto;
+  /* 不设置overflow，让内容自然扩展 */
+  overflow: visible;
+  /* 确保布局稳定 */
+  position: relative;
+}
+
+/* 卡片头部 - 固定高度 */
+.community-root .card-header {
+  padding: 25px 40px;
+  background: rgba(255, 255, 255, 0.6);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 80px;
+  flex-shrink: 0;
+  border-top-left-radius: var(--radius-large);
+  border-top-right-radius: var(--radius-large);
+  /* 相对定位，不固定 */
+  position: relative;
+  backdrop-filter: blur(5px);
+}
+
+.community-root .logo-area {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.community-root .logo-area h1 {
+  font-family: 'ZCOOL KuaiLe', cursive;
+  color: var(--primary-color);
+  font-size: 28px;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+/* 卡片内容区域 - 关键：自然扩展，无滚动 */
+.community-root .card-content {
+  flex: 1;
+  padding: 30px 40px;
+  /* 关键：不设置overflow，让内容自然扩展 */
+  overflow: visible;
+  min-height: 400px;
+  /* 使用CSS Grid稳定内部布局 */
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 30px;
+  contain: content;
+}
+
+/* 欢迎横幅 - 固定高度 */
+.community-root .welcome-banner {
+  background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+  padding: 30px;
+  border-radius: var(--radius-small);
+  color: white;
+  margin-bottom: 0;
+  box-shadow: 0 5px 15px rgba(76, 201, 240, 0.3);
+  position: relative;
+  overflow: hidden;
+  min-height: 120px;
+  grid-row: 1;
+  contain: content;
+}
+
+.community-root .welcome-banner h2 {
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+/* 网格布局容器 - 使用固定高度占位符 */
+.community-root .grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 25px;
+  /* 关键：固定行高，避免内容加载时变化 */
+  grid-auto-rows: minmax(200px, auto);
+  align-items: start;
+  grid-row: 2;
+  min-height: 400px;
+}
+
+/* 帖子卡片 - 固定高度，使用flex填充 */
+.community-root .post-card {
+  background: #fff;
+  border-radius: var(--radius-small);
+  padding: 20px;
+  border: 2px solid transparent;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: var(--transition-base);
+  /* 固定高度容器 */
+  height: 100%;
+  min-height: 200px;
+  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+  contain: layout style;
+  /* 提前声明transform */
+  transform: translateY(0);
+  /* 防止内容溢出 */
+  overflow: hidden;
+}
+
+.community-root .post-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  border-color: var(--secondary-color);
+}
+
+/* 标签样式 */
+.community-root .card-badge {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  color: white;
+  display: inline-block;
+  margin-bottom: 12px;
+  font-weight: bold;
+  width: fit-content;
+  flex-shrink: 0;
+}
+
 .community-root .tag-anime { background-color: #FF99C8; }
 .community-root .tag-event { background-color: #A9DEF9; color: #444; }
 .community-root .tag-tech { background-color: #E4C1F9; }
 .community-root .tag-chat { background-color: #FCF6BD; color: #666; }
 
-.community-root .post-card h3 { font-size: 18px; color: var(--text-main); margin-bottom: 8px; line-height: 1.4; }
-.community-root .post-card p { font-size: 14px; color: var(--text-sub); line-height: 1.6; }
+/* 帖子标题 - 固定行数 */
+.community-root .post-card h3 {
+  font-size: 18px;
+  color: var(--text-main);
+  margin-bottom: 8px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  box-orient: vertical;
+  flex: 0 0 auto;
+  max-height: calc(1.4em * 2 + 8px);
+}
 
-.community-root .post-meta { margin-top: 15px; display: flex; align-items: center; font-size: 12px; color: #aaa; }
-.community-root .avatar-mini { width: 24px; height: 24px; border-radius: 50%; background: #ddd; margin-right: 8px; }
+/* 帖子内容 - 固定行数 */
+.community-root .post-card p {
+  font-size: 14px;
+  color: var(--text-sub);
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-clamp: 3;
+  box-orient: vertical;
+  flex: 1;
+  max-height: calc(1.6em * 3);
+}
+
+/* 元数据 */
+.community-root .post-meta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #aaa;
+  min-height: 24px;
+  flex-shrink: 0;
+  padding-top: 10px;
+}
+
+.community-root .avatar-mini {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ddd;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+/* 底部占位符 - 确保内容加载后有足够空间 */
+.community-root .content-end {
+  grid-row: 3;
+  height: 50px;
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* 帖子详情容器 */
-.post-detail-container {
+.community-root .post-detail-container {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
   padding: 2rem;
-  margin: 0 auto;
-  max-width: 100%;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  min-height: 400px;
+  contain: layout style paint;
+  grid-row: 1 / span 3;
 }
 
-/* 确保帖子内容区域适应卡片 */
-.card-content .post-detail-container {
+.community-root .card-content .post-detail-container {
   padding: 0;
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+  border: none;
+  min-height: 0;
 }
 
-/* 调整 PostDetail 组件内部样式 */
-.card-content .post-detail-container .postDetail {
+.community-root .card-content {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 20px;
   padding: 2rem;
@@ -143,15 +382,97 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  contain: layout style;
 }
 
-/* 响应式调整 */
+/* 图片占位符 - 防止布局偏移 */
+.community-root img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  background-color: #f5f5f5;
+  /* 关键：固定宽高比占位 */
+  aspect-ratio: 16/9;
+  object-fit: cover;
+}
+
+/* 加载占位符 - 内容加载前的稳定布局 */
+.community-root .post-card.loading {
+  background: linear-gradient(90deg, #f5f5f5 25%, #e8e8e8 50%, #f5f5f5 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .post-detail-container {
-    padding: 1rem;
+  .community-root {
+    padding: 20px 10px 60px;
   }
   
-  .card-content .post-detail-container .postDetail {
-    padding: 1.5rem;
+  .community-root .main-card {
+    min-height: 400px;
+  }
+  
+  .community-root .card-header,
+  .community-root .card-content {
+    padding: 20px;
+  }
+  
+  .community-root .welcome-banner {
+    padding: 20px;
+    min-height: 100px;
+  }
+  
+  .community-root .grid-container {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    min-height: 300px;
+  }
+  
+  .community-root .post-card {
+    max-height: 220px;
+    min-height: 180px;
+  }
+  
+  .community-root .menu-trigger,
+  .community-root .home-button {
+    left: 10px;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .community-root .menu-trigger {
+    top: 10px;
+  }
+  
+  .community-root .home-button {
+    top: 70px;
+  }
+}
+
+/* 减少运动模式 */
+@media (prefers-reduced-motion: reduce) {
+  .community-root * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 多行截断回退 */
+@supports not ((-webkit-line-clamp: 2) or (line-clamp: 2)) {
+  .community-root .post-card h3 {
+    max-height: calc(1.4em * 2 + 8px);
+    overflow: hidden;
+  }
+  
+  .community-root .post-card p {
+    max-height: calc(1.6em * 3);
+    overflow: hidden;
   }
 }

@@ -3,12 +3,14 @@
 */
 
 import CommunityBoard from './community/index.jsx'
+import ScrollToTop from './components/ScrollToTop/index.jsx'
 import './App.css'
 
 function App() {
   return (
     <>
       <CommunityBoard />
+      <ScrollToTop />
     </>
   )
 }

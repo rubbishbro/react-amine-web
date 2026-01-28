@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './Post.module.css';
 
-const Post = ({ post, preview = false, onReadMore }) => {
+const Post = ({ post, preview = false,isPinned = false , onReadMore }) => {
   if (!post) return null;
 
   // 如果是预览模式，只显示摘要
@@ -20,17 +20,26 @@ const Post = ({ post, preview = false, onReadMore }) => {
       '论坛闲聊': '#FCF6BD',
       '同人/杂谈': '#FF85A1',
       '网络资源': '#4CC9F0',
-      '音游区': '#D0F4DE'
+      '音游区': '#D0F4DE',
+      '网站开发': '#FFD6A5'
     };
     return colors[category] || colors['论坛闲聊'];
   };
 
-  // 移除整个卡片的点击事件，只保留按钮点击
-
   return (
-    <article className={`${styles.post} ${preview ? styles.preview : ''}`}>
+    <article className={`${styles.post} ${preview ? styles.preview : ''} ${isPinned ? styles.pinned : ''}`}>
+
       <div className={styles.postHeader}>
         <div className={styles.postMeta}>
+
+          {/* 置顶标识 - 显示在左上角 */}
+          {isPinned && (
+            <div className={styles.pinnedBadge}>
+              <span className={styles.pinnedIcon}>🔝</span>
+              <span className={styles.pinnedText}>置顶</span>
+            </div>
+          )}
+
           <span 
             className={styles.category}
             style={{ backgroundColor: getCategoryColor(post.category) }}
@@ -95,7 +104,7 @@ const Post = ({ post, preview = false, onReadMore }) => {
           <button 
             className={styles.readMoreButton}
             onClick={(e) => {
-              e.stopPropagation(); // 防止事件冒泡
+              e.stopPropagation();
               if (onReadMore) onReadMore(post.id);
             }}
           >
