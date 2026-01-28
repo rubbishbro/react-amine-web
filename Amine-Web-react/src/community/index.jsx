@@ -1,6 +1,7 @@
 /*
   CommunityBoard组件，包含侧边导航栏和主内容区，实现了不同页面内容的切换
   网站的核心主页功能集中在此组件中
+  改为使用router进行页面导航和内容切换
 */
 
 import { useEffect, useState } from 'react'
@@ -8,6 +9,7 @@ import './index.css'
 import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle } from './index.js'
 import PostList from '../components/PostList'
 import PostDetail from '../components/PostDetail'
+import { Routes, Route, Link, useNavigate, useLocation} from 'react-router-dom'
 
 //社团介绍页面
 import { Content as AboutContent } from '../about/about.jsx'
@@ -28,31 +30,30 @@ import { Content as MusicGamesContent } from '../musicgames/musicgames.jsx'
 
 
 export default function CommunityBoard() {
-  const [page, setPage] = useState('home')
-  const [selectedPostId, setSelectedPostId] = useState(null)
+  const location = useLocation();
+  const navigate = useNavigate();
   const { setTitle } = usePageTitle();
 
-  // 处理页面标题的逻辑
+  // 根据当前路径设置标题
   useEffect(() => {
     const pageTitles = {
-      'home': '动漫社基地 | 首页',
-      'about': '动漫社基地 | 社团介绍',
-      'amine': '动漫社基地 | 季度新番',
-      'forum': '动漫社基地 | 论坛闲聊',
-      'activities': '动漫社基地 | 社团活动',
-      'derivativeworks': '动漫社基地 | 同人/杂谈',
-      'tech': '动漫社基地 | 前沿技术',
-      'resources': '动漫社基地 | 网络资源',
-      'musicgames': '动漫社基地 | 音游区',
-      'post': '动漫社基地 | 帖子详情'
+      '/': '动漫社基地 | 首页',
+      '/about': '动漫社基地 | 社团介绍',
+      '/amine': '动漫社基地 | 季度新番',
+      '/forum': '动漫社基地 | 论坛闲聊',
+      '/activities': '动漫社基地 | 社团活动',
+      '/derivativeworks': '动漫社基地 | 同人/杂谈',
+      '/tech': '动漫社基地 | 前沿技术',
+      '/resources': '动漫社基地 | 网络资源',
+      '/musicgames': '动漫社基地 | 音游区',
     };
     
-    // 根据当前状态设置标题
-    if (pageTitles[page]) {
-      setTitle(pageTitles[page]);
+    if (pageTitles[location.pathname]) {
+      setTitle(pageTitles[location.pathname]);
+    } else if (location.pathname.startsWith('/post/')) {
+       setTitle('动漫社基地 | 帖子详情');
     }
-
-  }, [page, setTitle, selectedPostId]);
+  }, [location, setTitle]);
 
   // 处理初始化
   useEffect(() => {
@@ -60,33 +61,10 @@ export default function CommunityBoard() {
     return () => teardownCommunityBoard();
   }, []);
 
-  // 处理选中帖子时的页面更新
-  useEffect(() => {
-    if (selectedPostId && page !== 'post') {
-      // 使用 setTimeout 将状态更新推迟到下一个渲染周期
-      const timer = setTimeout(() => {
-        setPage('post');
-      }, 0);
-      return () => clearTimeout(timer);
-    } else if (!selectedPostId && page === 'post') {
-      // 如果没有选中的帖子但当前是帖子详情页，返回首页
-      const timer = setTimeout(() => {
-        setPage('home');
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedPostId, page]);
-
   // 处理阅读全文点击
   const handleReadMore = (postId) => {
-    setSelectedPostId(postId);
+    navigate(`/post/${postId}`);
     closeSidebar();
-  };
-
-  // 处理返回首页
-  const handleBackToHome = () => {
-    setSelectedPostId(null);
-    setPage('home');
   };
 
   return (
@@ -100,13 +78,9 @@ export default function CommunityBoard() {
       </div>
 
       {/*主要内容部分*/}
-      <div 
-        className="home-button" 
-        onClick={(e)=>{e.preventDefault(); handleBackToHome(); closeSidebar()}} 
-        title="返回主页"
-      >
-        🏠
-      </div>
+      <Link to="/" className="home-button" onClick={closeSidebar}>
+      🏠
+      </Link>
 
       {/*侧边导航栏*/}
       <nav className="sidebar" id="sidebar">
@@ -117,14 +91,14 @@ export default function CommunityBoard() {
           <p style={{ fontSize: 12, color: 'var(--text-sub)' }}>Lv.5 高级会员</p>
         </div>
         {/*导航链接*/}
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('about'); closeSidebar()}}><span>🏫 社团介绍</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('amine'); closeSidebar()}}><span>📺 季度新番</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('forum'); closeSidebar()}}><span>💬 论坛闲聊</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('activities'); closeSidebar()}}><span>🎉 社团活动</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('derivativeworks'); closeSidebar()}}><span>🎨 同人/杂谈</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('tech'); closeSidebar()}}><span>💻 前沿技术</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('resources'); closeSidebar()}}><span>💾 网络资源</span></a>
-        <a href="#" className="nav-item" onClick={(e)=>{e.preventDefault(); handleBackToHome(); setPage('musicgames'); closeSidebar()}}><span>🎵 音游区</span></a>
+        <Link to="/about" className="nav-item" onClick={closeSidebar}><span>🏫 社团介绍</span></Link>
+        <Link to="/amine" className="nav-item" onClick={closeSidebar}><span>📺 季度新番</span></Link>
+        <Link to="/forum" className="nav-item" onClick={closeSidebar}><span>💬 论坛闲聊</span></Link>
+        <Link to="/activities" className="nav-item" onClick={closeSidebar}><span>🎉 社团活动</span></Link>
+        <Link to="/derivativeworks" className="nav-item" onClick={closeSidebar}><span>🎨 同人/杂谈</span></Link>
+        <Link to="/tech" className="nav-item" onClick={closeSidebar}><span>💻 前沿技术</span></Link>
+        <Link to="/resources" className="nav-item" onClick={closeSidebar}><span>💾 网络资源</span></Link>
+        <Link to="/musicgames" className="nav-item" onClick={closeSidebar}><span>🎵 音游区</span></Link>
       </nav>
 
       {/*主内容区*/}
@@ -142,37 +116,32 @@ export default function CommunityBoard() {
         </header>
 
         <section className="card-content" style={{ position: 'relative', minHeight: '200px' }}>
-          {/* 关键：确保这里有内容 */}
-          {selectedPostId ? (
-            <div>
-              <PostDetail postId={selectedPostId} onBack={handleBackToHome} />
-            </div>
-          ) : (
-            <>
-              {page === 'home' && (
-                <>
-                  <div className="welcome-banner">
-                    <h2>👋 下午好！今天想看点什么？</h2>
-                    <p>本周社团活动定于周六，不要忘记报名哦~</p>
-                  </div>
-                  <div style={{ marginBottom: 20, fontWeight: 'bold', color: 'var(--text-main)', fontSize: 18 }}>
-                    ✨ 最新动态
-                  </div>
-                  <PostList onReadMore={handleReadMore} />
-                </>
-              )}
-
-              {/* 其他页面 */}
-              {page === 'about' && <AboutContent />}
-              {page === 'activities' && <ActivitiesContent />}
-              {page === 'amine' && <AmineContent />}
-              {page === 'derivativeworks' && <DerivativeWorksContent />}
-              {page === 'forum' && <ForumContent />}
-              {page === 'resources' && <ResourcesContent />}
-              {page === 'tech' && <TechContent />}
-              {page === 'musicgames' && <MusicGamesContent />}
-            </>
-          )}
+          <Routes>
+            {/* 首页 */}
+            <Route path="/" element={
+              <>
+                <div className="welcome-banner">
+                  <h2>👋 下午好！今天想看点什么？</h2>
+                  <p>本周社团活动定于周六，不要忘记报名哦~</p>
+                </div>
+                <div style={{ marginBottom: 20, fontWeight: 'bold', color: 'var(--text-main)', fontSize: 18 }}>
+                  ✨ 最新动态
+                </div>
+                <PostList onReadMore={handleReadMore} />
+              </>
+            } />
+            
+            {/* 各个子页面 */}
+            <Route path="/about" element={<AboutContent />} />
+            <Route path="/amine" element={<AmineContent />} />
+            <Route path="/activities" element={<ActivitiesContent />} />
+            <Route path="/derivativeworks" element={<DerivativeWorksContent />} />
+            <Route path="/forum" element={<ForumContent />} />
+            <Route path="/resources" element={<ResourcesContent />} />
+            <Route path="/tech" element={<TechContent />} />
+            <Route path="/musicgames" element={<MusicGamesContent />} />
+            <Route path="/post/:id" element={<PostDetail />} />
+          </Routes>
         </section>
       </main>
     </div>

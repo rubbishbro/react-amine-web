@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './PostDetail.module.css';
 import { loadPostContent } from '../../utils/postLoader'; // 如果这个文件存在
 
-const PostDetail = ({ postId, onBack }) => {
+const PostDetail = () => {
+  const { id: postId } = useParams();
+  const navigate = useNavigate();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,7 +54,7 @@ const PostDetail = ({ postId, onBack }) => {
       <div className={styles.errorContainer}>
         <div className={styles.errorIcon}>⚠️</div>
         <h3>{error}</h3>
-        <button onClick={onBack} className={styles.backButton}>
+        <button onClick={() => navigate('/')} className={styles.backButton}>
           返回首页
         </button>
       </div>
@@ -60,7 +63,7 @@ const PostDetail = ({ postId, onBack }) => {
 
   return (
     <div className={styles.postDetail}>
-      <button onClick={onBack} className={styles.backButton}>
+      <button onClick={() => navigate('/')} className={styles.backButton}>
         ← 返回
       </button>
       
