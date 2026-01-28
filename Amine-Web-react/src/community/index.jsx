@@ -4,7 +4,7 @@
   改为使用router进行页面导航和内容切换
 */
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import './index.css'
 import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle } from './index.js'
 import PostList from '../components/PostList'
@@ -45,7 +45,7 @@ export default function CommunityBoard() {
       '/derivativeworks': '动漫社基地 | 同人/杂谈',
       '/tech': '动漫社基地 | 前沿技术',
       '/resources': '动漫社基地 | 网络资源',
-      '/musicgames': '动漫社基地 | 音游区',
+      '/musicgames': '动漫社基地 | 音游区'
     };
     
     if (pageTitles[location.pathname]) {
@@ -85,11 +85,7 @@ export default function CommunityBoard() {
       {/*侧边导航栏*/}
       <nav className="sidebar" id="sidebar">
         {/*用户信息*/}
-        <div style={{ padding: '0 30px 30px', textAlign: 'center' }}>
-          <div style={{ width: 80, height: 80, background: 'var(--secondary-color)', borderRadius: '50%', margin: '0 auto 15px' }}></div>
-          <h3 style={{ color: 'var(--text-main)' }}>User_Name</h3>
-          <p style={{ fontSize: 12, color: 'var(--text-sub)' }}>Lv.5 高级会员</p>
-        </div>
+        {/*以后再写*/}
         {/*导航链接*/}
         <Link to="/about" className="nav-item" onClick={closeSidebar}><span>🏫 社团介绍</span></Link>
         <Link to="/amine" className="nav-item" onClick={closeSidebar}><span>📺 季度新番</span></Link>

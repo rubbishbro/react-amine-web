@@ -15,7 +15,7 @@
 .community-root {
     font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
     background-color: #f0f2f5;
-    background-image: url('../assets/BackGround.png');
+    background-image: url('/public/Background.png');
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
