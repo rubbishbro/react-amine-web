@@ -5,6 +5,40 @@
   padding: 20px 0;
 }
 
+/* 分类头部样式 */
+.categoryHeader {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  padding-left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 2px solid;
+  border-left: 4px solid;
+  transition: all 0.3s ease;
+}
+
+.categoryHeader h2 {
+  margin: 0;
+  color: var(--text-main, #212121);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* 分类徽章 */
+.categoryBadge {
+  padding: 0.5rem 1rem;
+  border-radius: 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+/* 帖子容器 */
 .postsContainer {
   display: flex;
   flex-direction: column;
@@ -12,14 +46,17 @@
   margin-bottom: 30px;
 }
 
+/* 加载更多区域 */
 .loaderArea {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100px;
   width: 100%;
+  padding: 20px 0;
 }
 
+/* 加载中样式 */
 .loadingSpinner {
   display: flex;
   flex-direction: column;
@@ -31,7 +68,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #f3f3f3;
-  border-top: 3px solid #3498db;
+  border-top: 3px solid var(--accent-color, #4CAF50);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -41,9 +78,8 @@
   100% { transform: rotate(360deg); }
 }
 
+/* 加载更多按钮 */
 .loadMoreButton {
-  background-color: var(--accent-color, #4CAF50);
-  color: white;
   border: none;
   padding: 12px 30px;
   border-radius: 25px;
@@ -52,39 +88,52 @@
   cursor: pointer;
   transition: all 0.3s ease;
   min-width: 160px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
 
 .loadMoreButton:hover:not(:disabled) {
-  background-color: var(--accent-hover, #45a049);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  opacity: 0.9;
 }
 
 .loadMoreButton:disabled {
-  background-color: #cccccc;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+/* 到底了提示 */
 .endMessage {
   text-align: center;
   padding: 30px 20px;
-  color: #666;
+  color: var(--text-secondary, #666);
+  width: 100%;
 }
 
 .endIcon {
   font-size: 48px;
   margin-bottom: 15px;
+  opacity: 0.7;
 }
 
 .endMessage h3 {
   margin: 10px 0;
-  color: #333;
+  color: var(--text-main, #333);
+  font-weight: 500;
 }
 
+.endMessage p {
+  margin: 5px 0;
+  font-size: 0.95rem;
+}
+
+/* 空状态 */
 .emptyState {
   text-align: center;
   padding: 60px 20px;
-  color: #666;
+  color: var(--text-secondary, #666);
+  width: 100%;
 }
 
 .emptyIcon {
@@ -95,30 +144,71 @@
 
 .emptyState h3 {
   margin: 15px 0;
-  color: #333;
-}
-
-/* 新增的分类头部样式 */
-.categoryHeader {
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid var(--accent-color, #4CAF50);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.categoryHeader h2 {
-  margin: 0;
-  color: var(--text-main);
-  font-size: 1.5rem;
-}
-
-.categoryBadge {
-  background-color: var(--accent-color, #4CAF50);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.875rem;
+  color: var(--text-main, #333);
   font-weight: 500;
+}
+
+.emptyState p {
+  margin: 10px 0;
+  font-size: 0.95rem;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .postList {
+    padding: 15px 0;
+  }
+  
+  .categoryHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .categoryHeader h2 {
+    font-size: 1.25rem;
+  }
+  
+  .categoryBadge {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+  
+  .postsContainer {
+    gap: 20px;
+    margin-bottom: 25px;
+  }
+  
+  .loadMoreButton {
+    padding: 10px 20px;
+    font-size: 14px;
+    min-width: 140px;
+  }
+  
+  .emptyIcon {
+    font-size: 48px;
+  }
+  
+  .endIcon {
+    font-size: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .categoryHeader h2 {
+    font-size: 1.1rem;
+  }
+  
+  .categoryBadge {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+  }
+  
+  .loadMoreButton {
+    padding: 8px 16px;
+    font-size: 13px;
+    min-width: 120px;
+  }
 }

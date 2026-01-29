@@ -2,9 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Post from '../Post';
 import styles from './PostList.module.css';
 import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName } from '../../utils/postLoader';
+import { getCategoryColor } from '../../config/colors';
+import { getContrastTextColor, generateGradient } from '../../utils/colorUtils';
 
 const PostList = ({ onReadMore, category = null }) => {
   const [posts, setPosts] = useState([]);
+  const [allPostsCount, setAllPostsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -24,6 +27,9 @@ const PostList = ({ onReadMore, category = null }) => {
       } else {
         allPosts = await loadAllPosts();
       }
+      
+      // 存储总帖子数
+      setAllPostsCount(allPosts.length);
       
       // 计算当前页的帖子
       const startIndex = 0;
@@ -110,6 +116,52 @@ const PostList = ({ onReadMore, category = null }) => {
     return getCategoryDisplayName(category);
   }, [category]);
 
+  // 获取分类徽章的文本
+  const getCategoryBadgeText = useCallback(() => {
+    if (category && category !== 'all') {
+      return `共 ${posts.length} 篇帖子`;
+    } else {
+      // 主页显示总帖子数
+      return `共 ${allPostsCount} 篇帖子`;
+    }
+  }, [category, posts.length, allPostsCount]);
+
+  // 获取当前分类的颜色
+  const getCurrentCategoryColor = useCallback(() => {
+    if (!category || category === 'all') {
+      return '#FFD6A5'; // 主页使用网站开发的颜色
+    }
+    return getCategoryColor(category);
+  }, [category]);
+
+  // 获取分类头部样式
+  const getHeaderStyles = useCallback(() => {
+    const color = getCurrentCategoryColor();
+    return {
+      borderBottom: `2px solid ${color}`,
+      borderLeft: `4px solid ${color}`,
+      paddingLeft: '12px'
+    };
+  }, [getCurrentCategoryColor]);
+
+  // 获取徽章样式
+  const getBadgeStyles = useCallback(() => {
+    const color = getCurrentCategoryColor();
+    return {
+      background: generateGradient(color),
+      color: getContrastTextColor(color)
+    };
+  }, [getCurrentCategoryColor]);
+
+  // 获取加载更多按钮样式
+  const getLoadMoreButtonStyles = useCallback(() => {
+    const color = getCurrentCategoryColor();
+    return {
+      background: generateGradient(color),
+      color: getContrastTextColor(color)
+    };
+  }, [getCurrentCategoryColor]);
+
   // 如果没有帖子
   if (!loading && posts.length === 0 && !error) {
     return (
@@ -123,15 +175,18 @@ const PostList = ({ onReadMore, category = null }) => {
 
   return (
     <div className={styles.postList}>
-      {/* 分类标题（如果有分类） */}
-      {category && category !== 'all' && (
-        <div className={styles.categoryHeader}>
-          <h2>{getCategoryLabel()}</h2>
-          <div className={styles.categoryBadge}>
-            {posts.length} 篇{getCategoryLabel()}
-          </div>
+      {/* 分类标题 - 使用动态样式 */}
+      <div className={styles.categoryHeader} style={getHeaderStyles()}>
+        <h2>
+          {category && category !== 'all' 
+            ? getCategoryLabel() 
+            : '最新帖子'
+          }
+        </h2>
+        <div className={styles.categoryBadge} style={getBadgeStyles()}>
+          {getCategoryBadgeText()}
         </div>
-      )}
+      </div>
 
       {/* 帖子列表 */}
       <div className={styles.postsContainer}>
@@ -169,6 +224,7 @@ const PostList = ({ onReadMore, category = null }) => {
             onClick={loadMorePosts}
             className={styles.loadMoreButton}
             disabled={loading}
+            style={getLoadMoreButtonStyles()}
           >
             加载更多{getCategoryLabel()}
           </button>
