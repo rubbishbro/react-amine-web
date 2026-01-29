@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Post from '../Post';
 import styles from './PostList.module.css';
-import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName, getPostPinnedStatus } from '../../utils/postLoader';
+import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName } from '../../utils/postLoader';
 
 const PostList = ({ onReadMore, category = null }) => {
   const [posts, setPosts] = useState([]);
-  const [pinnedStatus, setPinnedStatus] = useState({}); // 存储置顶状态
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -31,15 +30,7 @@ const PostList = ({ onReadMore, category = null }) => {
       const endIndex = pageNum * postsPerPage;
       const currentPosts = allPosts.slice(startIndex, endIndex);
       
-      // 获取置顶状态
-      const pinnedMap = {};
-      for (const post of currentPosts) {
-        const pinned = await getPostPinnedStatus(post.id);
-        pinnedMap[post.id] = pinned;
-      }
-      
       setPosts(currentPosts);
-      setPinnedStatus(pinnedMap);
       setPage(pageNum);
       setHasMore(currentPosts.length < allPosts.length);
       setError(null);
@@ -150,7 +141,12 @@ const PostList = ({ onReadMore, category = null }) => {
             post={post} 
             preview={true} 
             onReadMore={onReadMore}
-            isPinned={pinnedStatus[post.id] || false} // 传递置顶状态
+            isPinned={
+              category && category !== 'all' 
+                ? post.isPinnedInCurrentCategory 
+                : post.isPinnedGlobally
+            }
+            currentCategory={category}
           />
         ))}
       </div>

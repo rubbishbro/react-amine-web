@@ -4,6 +4,8 @@
 import { useEffect } from 'react'
 import './resources.css'
 import { initPage, teardownPage } from './resources.js'
+import { useNavigate,useLocation } from 'react-router-dom'
+import PostList from '../components/PostList'
 
 export default function ResourcesPage() {
   useEffect(() => { initPage(); return () => teardownPage() }, [])
@@ -18,10 +20,24 @@ export default function ResourcesPage() {
 }
 
 export function Content() {
+  const navigate = useNavigate();
+
+  const location = useLocation();
+
+  const handleReadMore = (postId) => {
+    navigate(`/post/${postId}`, {state : { from: location.pathname } });
+  };  
+  
   return (
     <>
-      <h2>资源</h2>
-      <p>收集对成员有用的番剧、教程与镜像资源链接。</p>
+      <div className='welcome-banner'>
+        <h2>资源</h2>
+        <p>收集对成员有用的番剧、教程与镜像资源链接。</p>
+      </div>
+      <PostList 
+        onReadMore={handleReadMore}
+        category="网络资源"
+      />
     </>
   )
 }

@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './PostDetail.module.css';
 import { loadPostContent } from '../../utils/postLoader';
+import { getCategoryColor } from '../../config';
 
 const PostDetail = () => {
   const { id } = useParams();
@@ -151,20 +152,6 @@ const PostDetail = () => {
       )}
     </div>
   );
-};
-
-// 辅助函数：获取分类颜色
-const getCategoryColor = (category) => {
-  const colors = {
-    '季度新番': '#FF99C8',
-    '社团活动': '#A9DEF9',
-    '前沿技术': '#E4C1F9',
-    '论坛闲聊': '#FCF6BD',
-    '同人/杂谈': '#FF85A1',
-    '网络资源': '#4CC9F0',
-    '音游区': '#D0F4DE'
-  };
-  return colors[category] || colors['论坛闲聊'];
 };
 
 export default PostDetail;

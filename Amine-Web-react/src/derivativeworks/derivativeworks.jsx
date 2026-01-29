@@ -4,6 +4,8 @@
 import { useEffect } from 'react'
 import './derivativeworks.css'
 import { initPage, teardownPage } from './derivativeworks.js'
+import { useNavigate,useLocation } from 'react-router-dom'
+import PostList from '../components/PostList'
 
 export default function DerivativeWorksPage() {
   useEffect(() => { initPage(); return () => teardownPage() }, [])
@@ -18,10 +20,24 @@ export default function DerivativeWorksPage() {
 }
 
 export function Content() {
+  const navigate = useNavigate();
+
+  const location = useLocation();
+
+  const handleReadMore = (postId) => {
+    navigate(`/post/${postId}`, {state : { from: location.pathname } });
+  };
+  
   return (
     <>
-      <h2>同人空间</h2>
-      <p>展示社团成员的同人漫画、插画与创作流程分享。</p>
+      <div className='welcome-banner'>
+        <h2>同人空间</h2>
+        <p>展示社团成员的同人漫画、插画与创作流程分享。</p>
+      </div>
+      <PostList 
+        onReadMore={handleReadMore}
+        category="同人/杂谈"
+      />
     </>
   )
 }

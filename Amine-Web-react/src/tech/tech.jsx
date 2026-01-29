@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import './tech.css'
 import { initPage, teardownPage } from './tech.js'
+import { useNavigate,useLocation } from 'react-router-dom'
+import PostList from '../components/PostList'
 
 export default function TechPage() {
   useEffect(() => { initPage(); return () => teardownPage() }, [])
@@ -23,10 +25,24 @@ export default function TechPage() {
 }
 
 export function Content() {
+  const navigate = useNavigate();
+
+  const location = useLocation();
+
+  const handleReadMore = (postId) => {
+    navigate(`/post/${postId}`, {state : { from: location.pathname } });
+  };  
+  
   return (
     <>
-      <h2>技术 · 文章</h2>
-      <p>分享开发、部署与自动化相关的技巧与资源。</p>
+      <div className="welcome-banner">
+        <h2>技术 · 文章</h2>
+        <p>分享开发、部署与自动化相关的技巧与资源。</p>
+      </div>
+      <PostList 
+        onReadMore={handleReadMore} 
+        category="前沿技术"
+      />
     </>
   )
 }

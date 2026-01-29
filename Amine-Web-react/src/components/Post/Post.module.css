@@ -304,3 +304,51 @@
     padding: 0.15rem 0.5rem;
   }
 }
+
+/* 更新置顶标识样式以支持多行文本 */
+.pinnedBadge {
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  z-index: 10;
+  animation: pulse 2s infinite;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 当内容较长时的样式 */
+.pinnedBadge.longText {
+  white-space: normal;
+  max-width: 200px;
+  min-width: 120px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.pinnedIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.pinnedText {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 多分类置顶的特别样式 */
+.pinnedBadge.multiCategory {
+  background: linear-gradient(135deg, #FF6B6B, #FFA500);
+}

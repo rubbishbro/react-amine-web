@@ -5,6 +5,8 @@
 import { useEffect } from 'react'
 import './activities.css'
 import { initPage, teardownPage } from './activities.js'
+import { useNavigate,useLocation } from 'react-router-dom'
+import PostList from '../components/PostList'
 
 export default function ActivitiesPage() {
   useEffect(() => {
@@ -30,10 +32,24 @@ export default function ActivitiesPage() {
 }
 
 export function Content() {
+  const navigate = useNavigate();
+
+  const location = useLocation();
+
+  const handleReadMore = (postId) => {
+    navigate(`/post/${postId}`, {state : { from: location.pathname } });
+  };
+
   return (
     <>
-      <h2>即将到来的活动</h2>
-      <p>本页展示活动时间、地点与报名方式，方便成员快速参与。</p>
+      <div className="welcome-banner">
+        <h2>即将到来的活动</h2>
+        <p>本页展示活动时间、地点与报名方式，方便成员快速参与。</p>
+      </div>
+        <PostList 
+          onReadMore={handleReadMore} 
+          category="社团活动"
+        />
     </>
   )
 }

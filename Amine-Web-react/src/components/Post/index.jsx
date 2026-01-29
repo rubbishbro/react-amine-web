@@ -2,8 +2,10 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './Post.module.css';
+import { getCategoryColor } from '../../config';
 
-const Post = ({ post, preview = false,isPinned = false , onReadMore }) => {
+const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
+  
   if (!post) return null;
 
   // 如果是预览模式，只显示摘要
@@ -11,35 +13,41 @@ const Post = ({ post, preview = false,isPinned = false , onReadMore }) => {
     ? post.summary 
     : (post.content || post.summary);
 
-  // 根据分类设置不同的颜色
-  const getCategoryColor = (category) => {
-    const colors = {
-      '季度新番': '#FF99C8',
-      '社团活动': '#A9DEF9',
-      '前沿技术': '#E4C1F9',
-      '论坛闲聊': '#FCF6BD',
-      '同人/杂谈': '#FF85A1',
-      '网络资源': '#4CC9F0',
-      '音游区': '#D0F4DE',
-      '网站开发': '#FFD6A5'
-    };
-    return colors[category] || colors['论坛闲聊'];
+  // 显示置顶在哪些分类中
+  const renderPinnedInfo = () => {
+    if (!isPinned || !post.pinnedInCategories || post.pinnedInCategories.length === 0) {
+      return null;
+    }
+    
+    // 如果只在当前分类中置顶，显示简单的"置顶"
+    if (currentCategory && post.pinnedInCategories.length === 1 && 
+        post.pinnedInCategories[0] === currentCategory) {
+      return (
+        <div className={styles.pinnedBadge}>
+          <span className={styles.pinnedIcon}>🔝</span>
+          <span className={styles.pinnedText}>置顶</span>
+        </div>
+      );
+    }
+    
+    // 如果在多个分类中置顶，显示具体分类
+    return (
+      <div className={styles.pinnedBadge}>
+        <span className={styles.pinnedIcon}>🔝</span>
+        <span className={styles.pinnedText}>
+          置顶：{post.pinnedInCategories.join('、')}
+        </span>
+      </div>
+    );
   };
 
   return (
     <article className={`${styles.post} ${preview ? styles.preview : ''} ${isPinned ? styles.pinned : ''}`}>
+      {/* 置顶标识 */}
+      {isPinned && renderPinnedInfo()}
 
       <div className={styles.postHeader}>
         <div className={styles.postMeta}>
-
-          {/* 置顶标识 - 显示在左上角 */}
-          {isPinned && (
-            <div className={styles.pinnedBadge}>
-              <span className={styles.pinnedIcon}>🔝</span>
-              <span className={styles.pinnedText}>置顶</span>
-            </div>
-          )}
-
           <span 
             className={styles.category}
             style={{ backgroundColor: getCategoryColor(post.category) }}
@@ -55,7 +63,9 @@ const Post = ({ post, preview = false,isPinned = false , onReadMore }) => {
           )}
         </div>
         
-        <h2 className={styles.postTitle}>{post.title}</h2>
+        <h2 className={styles.postTitle}>
+          {post.title}
+        </h2>
         
         {post.tags && post.tags.length > 0 && (
           <div className={styles.tags}>

@@ -5,6 +5,8 @@
 import { useEffect } from 'react'
 import './musicgames.css'
 import { initPage, teardownPage } from './musicgames.js'
+import { useNavigate,useLocation } from 'react-router-dom'
+import PostList from '../components/PostList'
 
 export default function MusicGamesPage() {
   useEffect(() => {
@@ -30,10 +32,24 @@ export default function MusicGamesPage() {
 }
 
 export function Content() {
+  const navigate = useNavigate();
+
+  const location = useLocation();
+
+  const handleReadMore = (postId) => {
+    navigate(`/post/${postId}`, {state : { from: location.pathname } });
+  };    
+  
   return (
     <>
-      <h2>音游爱好者的天堂</h2>
-      <p>这里可以随意讨论任何音游内容。</p>
+      <div className='welcome-banner'>
+        <h2>音游爱好者的天堂</h2>
+        <p>这里可以随意讨论任何音游内容。</p>
+      </div>
+      <PostList 
+        onReadMore={handleReadMore}
+        category="音游区"
+      />
     </>
   )
 }

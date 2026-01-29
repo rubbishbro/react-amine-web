@@ -30,7 +30,7 @@ export function Content() {
   const handleReadMore = (postId) => {
     navigate(`/post/${postId}`, {state : { from: location.pathname } });
   };
-
+  
   return (
     <>
       <div className="welcome-banner">
