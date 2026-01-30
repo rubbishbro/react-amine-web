@@ -7,6 +7,7 @@ import ScrollToTop from './pages/components/ScrollToTop/index.jsx'
 import CreatePostButton from './pages/components/CreatePostButton/index.jsx';
 import './App.css'
 import { UserProvider } from './pages/context/UserContext';
+import PublicProfile from './pages/profile/PublicProfile';
 
 function App() {
   return (

@@ -7,21 +7,23 @@ import remarkGfm from 'remark-gfm';
 import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostEditor.module.css';
 import { getAllCategories, loadPostContent } from '../../utils/postLoader';
-import { getCategoryColor } from '../../config/colors';
+import { getCategoryColor, getCategoryTextColor } from '../../config';
+import { useUser, isProfileComplete } from '../../context/UserContext';
 
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
   const { id: postId } = useParams();
+  const { user } = useUser();
   const [loading, setLoading] = useState(false); // 保持用于编辑模式加载
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
   const [currentTag, setCurrentTag] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  
+
   // 添加独立的状态管理
   const [savingDraft, setSavingDraft] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  
+
   // 初始化表单
   const { register, formState: { errors }, setValue, watch } = useForm({
     defaultValues: initialData || {
@@ -56,7 +58,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         logMessage('加载分类失败', 'error');
       }
     };
-    
+
     loadCategories();
   }, [logMessage]);
 
@@ -74,7 +76,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                 setValue(key, postData[key]);
               }
             });
-            
+
             // 设置标签
             if (postData.tags) {
               setTags(postData.tags);
@@ -87,7 +89,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           setLoading(false);
         }
       };
-      
+
       loadPost();
     }
   }, [isEditMode, postId, setValue, formData, logMessage]);
@@ -136,43 +138,52 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       logMessage('请输入帖子标题', 'warn');
       return false;
     }
-    
+
     if (!formData.category) {
       logMessage('请选择帖子分类', 'warn');
       return false;
     }
-    
+
     if (!formData.content.trim() || formData.content.trim() === '# 请输入内容\n\n从这里开始编辑...') {
       logMessage('请输入帖子内容', 'warn');
       return false;
     }
-    
+
     return true;
   }, [formData, logMessage]);
 
   // 准备保存数据
   const preparePostData = useCallback((status) => {
+    const author = {
+      id: user?.id || 'local',
+      name: user?.profile?.name || '匿名',
+      avatar: user?.profile?.avatar || '',
+      school: user?.profile?.school || '',
+      className: user?.profile?.className || '',
+      email: user?.profile?.email || '',
+    };
+
     const postData = {
       ...formData,
       tags: tags,
       date: new Date().toISOString().split('T')[0],
-      author: 'Lilizi-ovo',
+      author,
       readTime: calculateReadTime(formData.content),
       status: status
     };
-    
+
     // 如果摘要为空，自动生成
     if (!postData.summary) {
       postData.summary = generateSummary(formData.content);
     }
-    
+
     // 如果是编辑模式且没有ID，自动生成ID
     if (!postData.id && !isEditMode) {
       postData.id = `post-${Date.now()}`;
     }
-    
+
     return postData;
-  }, [formData, tags, calculateReadTime, generateSummary, isEditMode]);
+  }, [formData, tags, calculateReadTime, generateSummary, isEditMode, user]);
 
   // 保存函数（不包含状态管理）
   const savePostData = useCallback(async (postData, status) => {
@@ -180,7 +191,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       // TODO: 调用API保存数据
       // 模拟API调用
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // 根据状态显示不同的通知
       console.log('保存完成，显示通知，状态:', status);
       if (status === 'draft') {
@@ -188,9 +199,9 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       } else {
         logMessage('帖子已成功发布', 'info');
       }
-      
+
       setHasUnsavedChanges(false);
-      
+
       // 只有发布状态才跳转
       if (status === 'published') {
         console.log('发布成功，准备跳转');
@@ -198,7 +209,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           navigate(`/post/${postData.id}`);
         }, 1500);
       }
-      
+
       return true;
     } catch (error) {
       console.error('保存失败:', error);
@@ -210,18 +221,18 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
   // 保存草稿
   const handleSaveDraft = useCallback(async () => {
     console.log('开始保存草稿');
-    
+
     // 验证表单
     if (!validateForm()) {
       return;
     }
-    
+
     setSavingDraft(true);
-    
+
     try {
       const postData = preparePostData('draft');
       console.log('准备保存草稿，数据状态:', postData.status);
-      
+
       await savePostData(postData, 'draft');
     } catch (error) {
       console.error('保存草稿失败:', error);
@@ -233,18 +244,18 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
   // 发布帖子
   const handlePublishPost = useCallback(async () => {
     console.log('开始发布帖子');
-    
+
     // 验证表单
     if (!validateForm()) {
       return;
     }
-    
+
     setPublishing(true);
-    
+
     try {
       const postData = preparePostData('published');
       console.log('准备发布，数据状态:', postData.status);
-      
+
       await savePostData(postData, 'published');
     } catch (error) {
       console.error('发布失败:', error);
@@ -301,26 +312,26 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         <button onClick={handleCancel} className={styles.backButton}>
           ← 返回
         </button>
-        
+
         <div className={styles.headerTitle}>
           <h2>{isEditMode ? '编辑帖子' : '新建帖子'}</h2>
           {hasUnsavedChanges && (
             <span className={styles.unsavedIndicator}>未保存</span>
           )}
         </div>
-        
+
         <div className={styles.headerActions}>
           {/* 保存草稿按钮 */}
-          <button 
+          <button
             onClick={handleSaveDraft}
             className={`${styles.actionButton} ${styles.saveDraftButton}`}
             disabled={savingDraft || publishing}
           >
             {savingDraft ? '保存中...' : '保存草稿'}
           </button>
-          
+
           {/* 发布按钮 */}
-          <button 
+          <button
             onClick={handlePublishPost}
             className={`${styles.actionButton} ${styles.publishButton}`}
             disabled={publishing || savingDraft}
@@ -338,7 +349,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
             type="text"
             placeholder="输入帖子标题..."
             className={`${styles.titleInput} ${errors.title ? styles.error : ''}`}
-            {...register('title', { 
+            {...register('title', {
               required: '标题不能为空',
               minLength: { value: 2, message: '标题至少2个字' },
               maxLength: { value: 100, message: '标题最多100个字' }
@@ -360,19 +371,20 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
               className={`${styles.categorySelect} ${errors.category ? styles.error : ''}`}
               {...register('category', { required: '请选择分类' })}
               style={{
-                borderColor: formData.category ? getCategoryColor(formData.category) : '#e0e0e0',
-                color: formData.category ? getCategoryColor(formData.category) : 'var(--text-sub)'
+                borderColor: formData.category ? getCategoryTextColor(formData.category) : '#e0e0e0',
+                color: formData.category ? getCategoryTextColor(formData.category) : 'var(--text-sub)',
+                backgroundColor: 'white'
               }}
               onChange={(e) => {
                 setValue('category', e.target.value);
               }}
             >
-              <option value="" style={{ color: 'var(--text-sub)' }}>选择分类</option>
+              <option value="" style={{ color: 'var(--text-sub)', backgroundColor: 'white' }}>选择分类</option>
               {categories.map(cat => {
-                const categoryColor = getCategoryColor(cat.name);
+                const categoryColor = getCategoryTextColor(cat.name);
                 return (
-                  <option 
-                    key={cat.id} 
+                  <option
+                    key={cat.id}
                     value={cat.name}
                     style={{
                       color: categoryColor,
@@ -389,12 +401,14 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
               <span className={styles.errorMessage}>{errors.category.message}</span>
             )}
           </div>
-          
+
           <div className={styles.formGroup}>
             <label className={styles.label}>作者</label>
-            <div className={styles.authorDisplay}>Lilizi-ovo</div>
+            <div className={styles.authorDisplay}>
+              {user?.profile?.name || '匿名'}
+            </div>
           </div>
-          
+
           <div className={styles.formGroup}>
             <label className={styles.label}>发布日期</label>
             <div className={styles.dateDisplay}>
@@ -430,10 +444,10 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                 ];
                 const colorIndex = index % tagColors.length;
                 const tagStyle = tagColors[colorIndex];
-                
+
                 return (
-                  <span 
-                    key={tag} 
+                  <span
+                    key={tag}
                     className={styles.tag}
                     style={{
                       backgroundColor: tagStyle.bg,
@@ -442,7 +456,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                     }}
                   >
                     #{tag}
-                    <button 
+                    <button
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
                       className={styles.removeTag}
@@ -467,7 +481,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           <textarea
             placeholder="输入帖子摘要，建议不超过200字..."
             className={`${styles.summaryInput} ${errors.summary ? styles.error : ''}`}
-            {...register('summary', { 
+            {...register('summary', {
               maxLength: { value: 300, message: '摘要最多300个字' }
             })}
             rows="3"

@@ -74,9 +74,17 @@
 }
 
 @keyframes pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 1; }
-  100% { opacity: 0.7; }
+  0% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.7;
+  }
 }
 
 .headerActions {
@@ -190,42 +198,9 @@
   padding: 12px 15px;
   font-size: 15px;
   font-weight: 600;
-  color: #222 !important;
+  color: inherit;
   margin: 4px 0;
   border-radius: 8px;
-}
-
-/* 每个分类使用对应的标签颜色作为背景 */
-.categorySelect option[value="网站开发"] {
-  background-color: #FF85A1 !important;
-}
-
-.categorySelect option[value="动漫讨论"] {
-  background-color: #4CC9F0 !important;
-}
-
-.categorySelect option[value="活动公告"] {
-  background-color: #FFD166 !important;
-}
-
-.categorySelect option[value="技术分享"] {
-  background-color: #06D6A0 !important;
-}
-
-.categorySelect option[value="资源分享"] {
-  background-color: #EF476F !important;
-}
-
-.categorySelect option[value="音乐游戏"] {
-  background-color: #118AB2 !important;
-}
-
-.categorySelect option[value="二次创作"] {
-  background-color: #9D4EDD !important;
-}
-
-.categorySelect option[value="论坛交流"] {
-  background-color: #FF9E6D !important;
 }
 
 /* 悬停效果 */
@@ -494,8 +469,13 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* 响应式设计 */
@@ -503,21 +483,21 @@
   .postEditor {
     gap: 20px;
   }
-  
+
   .editorHeader,
   .editorContent,
   .editorFooter {
     padding: 0 25px;
   }
-  
+
   .editorHeader {
     padding-top: 20px;
   }
-  
+
   .editorFooter {
     padding-bottom: 20px;
   }
-  
+
   .titleInput {
     font-size: 28px;
     padding: 15px 20px;
@@ -529,50 +509,50 @@
     gap: 15px;
     border-radius: 20px;
   }
-  
+
   .editorHeader {
     flex-direction: column;
     gap: 15px;
     padding: 15px 20px 0;
   }
-  
+
   .headerTitle h2 {
     font-size: 24px;
   }
-  
+
   .editorContent,
   .editorFooter {
     padding: 0 20px;
   }
-  
+
   .editorFooter {
     padding-bottom: 15px;
   }
-  
+
   .basicInfo {
     grid-template-columns: 1fr;
   }
-  
+
   .titleInput {
     font-size: 24px;
     padding: 12px 15px;
   }
-  
+
   .markdownContainer {
     height: 400px;
   }
-  
+
   .actionButton {
     padding: 12px 25px;
     min-width: 120px;
     font-size: 14px;
   }
-  
+
   .footerActions {
     flex-direction: column;
     align-items: center;
   }
-  
+
   /* 通知响应式 */
   .notificationContainer {
     top: 20px;
@@ -580,7 +560,7 @@
     left: 20px;
     align-items: center;
   }
-  
+
   .notification {
     width: 100%;
     max-width: 320px;
@@ -593,30 +573,30 @@
     margin: -10px;
     border-radius: 10px;
   }
-  
+
   .editorHeader,
   .editorContent,
   .editorFooter {
     padding: 0 15px;
   }
-  
+
   .editorHeader {
     padding-top: 15px;
   }
-  
+
   .titleInput {
     font-size: 20px;
   }
-  
+
   .markdownContainer {
     height: 350px;
   }
-  
+
   .actionButton {
     width: 100%;
     max-width: 300px;
   }
-  
+
   .notificationContainer {
     top: 10px;
     right: 10px;

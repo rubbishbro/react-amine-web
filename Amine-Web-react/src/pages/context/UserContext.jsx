@@ -57,3 +57,9 @@ export function UserProvider({ children }) {
         </UserContext.Provider>
     );
 }
+
+export const isProfileComplete = (profile) => {
+    if (!profile) return false;
+    const { name, school, className, email } = profile;
+    return !!(name && school && className && email);
+};

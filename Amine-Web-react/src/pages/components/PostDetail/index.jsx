@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './PostDetail.module.css';
@@ -14,27 +14,18 @@ const PostDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 从location.state中获取返回路径，如果没有则使用主页
   const getBackPath = () => {
-    if (location.state?.from) {
-      return location.state.from;
-    }
-    
+    if (location.state?.from) return location.state.from;
     const referrer = document.referrer;
     if (referrer) {
       const url = new URL(referrer);
-      if (url.origin === window.location.origin) {
-        return url.pathname;
-      }
+      if (url.origin === window.location.origin) return url.pathname;
     }
-    
     return '/';
   };
 
-  // 处理返回
   const handleBack = () => {
-    const backPath = getBackPath();
-    navigate(backPath);
+    navigate(getBackPath());
   };
 
   useEffect(() => {
@@ -42,12 +33,10 @@ const PostDetail = () => {
       try {
         setLoading(true);
         const postData = await loadPostContent(id);
-        
         if (!postData) {
           setError('帖子不存在或加载失败');
           return;
         }
-        
         setPost(postData);
         setError(null);
       } catch (err) {
@@ -57,7 +46,6 @@ const PostDetail = () => {
         setLoading(false);
       }
     };
-
     fetchPost();
   }, [id]);
 
@@ -82,21 +70,21 @@ const PostDetail = () => {
     );
   }
 
+  const author = post?.author;
+
   return (
-    <div className={styles.postDetail}>
+    <div className={styles.detail}>
       <button onClick={handleBack} className={styles.backButton}>
         ← 返回
       </button>
-      
+
       {post && (
         <>
           <div className={styles.postHeader}>
             <div className={styles.postMeta}>
-              <span 
+              <span
                 className={styles.category}
-                style={{ 
-                  backgroundColor: getCategoryColor(post.category) 
-                }}
+                style={{ backgroundColor: getCategoryColor(post.category) }}
               >
                 {post.category}
               </span>
@@ -108,9 +96,9 @@ const PostDetail = () => {
                 <span className={styles.readTime}>⏱️ {post.readTime}</span>
               )}
             </div>
-            
+
             <h1 className={styles.postTitle}>{post.title}</h1>
-            
+
             {post.tags && post.tags.length > 0 && (
               <div className={styles.tags}>
                 {post.tags.map(tag => (
@@ -130,12 +118,7 @@ const PostDetail = () => {
                 p: (props) => <p className={styles.markdownParagraph} {...props} />,
                 code: (props) => <code className={styles.inlineCode} {...props} />,
                 img: ({ src, alt }) => (
-                  <img 
-                    src={src} 
-                    alt={alt} 
-                    className={styles.markdownImage}
-                    loading="lazy"
-                  />
+                  <img src={src} alt={alt} className={styles.markdownImage} loading="lazy" />
                 ),
                 blockquote: (props) => (
                   <blockquote className={styles.blockquote} {...props} />
@@ -149,6 +132,18 @@ const PostDetail = () => {
             </ReactMarkdown>
           </div>
         </>
+      )}
+
+      {author && (
+        <div className={styles.author}>
+          <Link to={`/user/${author.id}`} state={{ author }} className={styles.authorLink}>
+            <div
+              className={styles.authorAvatar}
+              style={author.avatar ? { backgroundImage: `url(${author.avatar})` } : undefined}
+            />
+            <span className={styles.authorName}>{author.name}</span>
+          </Link>
+        </div>
       )}
     </div>
   );

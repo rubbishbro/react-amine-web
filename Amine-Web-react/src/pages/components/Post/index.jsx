@@ -3,14 +3,15 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './Post.module.css';
 import { getCategoryColor } from '../../config';
+import { Link } from 'react-router-dom';
 
 const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
-  
+
   if (!post) return null;
 
   // 如果是预览模式，只显示摘要
-  const displayContent = preview 
-    ? post.summary 
+  const displayContent = preview
+    ? post.summary
     : (post.content || post.summary);
 
   // 显示置顶在哪些分类中
@@ -18,10 +19,10 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     if (!isPinned || !post.pinnedInCategories || post.pinnedInCategories.length === 0) {
       return null;
     }
-    
+
     // 如果只在当前分类中置顶，显示简单的"置顶"
-    if (currentCategory && post.pinnedInCategories.length === 1 && 
-        post.pinnedInCategories[0] === currentCategory) {
+    if (currentCategory && post.pinnedInCategories.length === 1 &&
+      post.pinnedInCategories[0] === currentCategory) {
       return (
         <div className={styles.pinnedBadge}>
           <span className={styles.pinnedIcon}>🔝</span>
@@ -29,7 +30,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
         </div>
       );
     }
-    
+
     // 如果在多个分类中置顶，显示具体分类
     return (
       <div className={styles.pinnedBadge}>
@@ -48,7 +49,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
 
       <div className={styles.postHeader}>
         <div className={styles.postMeta}>
-          <span 
+          <span
             className={styles.category}
             style={{ backgroundColor: getCategoryColor(post.category) }}
           >
@@ -62,11 +63,11 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
             <span className={styles.readTime}>⏱️ {post.readTime}</span>
           )}
         </div>
-        
+
         <h2 className={styles.postTitle}>
           {post.title}
         </h2>
-        
+
         {post.tags && post.tags.length > 0 && (
           <div className={styles.tags}>
             {post.tags.map(tag => (
@@ -89,9 +90,9 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
               p: (props) => <p className={styles.markdownParagraph} {...props} />,
               code: (props) => <code className={styles.inlineCode} {...props} />,
               img: ({ src, alt }) => (
-                <img 
-                  src={src} 
-                  alt={alt} 
+                <img
+                  src={src}
+                  alt={alt}
                   className={styles.markdownImage}
                   loading="lazy"
                 />
@@ -111,7 +112,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
 
       {preview && (
         <div className={styles.readMore}>
-          <button 
+          <button
             className={styles.readMoreButton}
             onClick={(e) => {
               e.stopPropagation();
