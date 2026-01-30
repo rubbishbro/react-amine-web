@@ -23,7 +23,7 @@
 /* 主容器 - 关键：自然文档流，可以滚动 */
 .community-root {
   font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
-  background: #f0f2f5 url('/Background.png') center / cover fixed;
+  background: #f0f2f5 url('../../../BackGround.png') center / cover fixed;
   min-height: 100vh;
   min-width: 320px;
   color: var(--text-main);
@@ -476,3 +476,4 @@
     overflow: hidden;
   }
 }
+

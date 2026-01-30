@@ -1,0 +1,142 @@
+/* pages/components/Notification/Notification.module.css */
+
+.notificationManager {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 400px;
+  pointer-events: none;
+}
+
+.notification {
+  position: relative;
+  padding: 15px 20px;
+  border-radius: 12px;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 600;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transform: translateX(0);
+  opacity: 1;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+.notification:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.notification.exiting {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+.icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.content {
+  flex: 1;
+}
+
+.message {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.closeButton:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 通知类型样式 */
+.notification.success {
+  background: rgba(76, 201, 240, 0.95);
+  color: white;
+  border-left: 5px solid #36b9e8;
+}
+
+.notification.error {
+  background: rgba(255, 107, 107, 0.95);
+  color: white;
+  border-left: 5px solid #ff6b6b;
+}
+
+.notification.info {
+  background: rgba(255, 133, 161, 0.95);
+  color: white;
+  border-left: 5px solid #ff6b9d;
+}
+
+.notification.warning {
+  background: rgba(255, 209, 102, 0.95);
+  color: #333;
+  border-left: 5px solid #ffc233;
+}
+
+/* 动画 */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .notificationManager {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+  
+  .notification {
+    padding: 12px 16px;
+  }
+}

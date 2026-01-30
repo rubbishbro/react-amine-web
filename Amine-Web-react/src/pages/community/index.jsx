@@ -10,6 +10,7 @@ import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle 
 import PostList from '../components/PostList'
 import PostDetail from '../components/PostDetail'
 import { Routes, Route, Link, useNavigate, useLocation} from 'react-router-dom'
+import PostEditor from '../components/PostEditor';
 
 //社团介绍页面
 import { Content as AboutContent } from '../about/about.jsx'
@@ -27,7 +28,6 @@ import { Content as ResourcesContent } from '../resources/resources.jsx'
 import { Content as TechContent } from '../tech/tech.jsx'
 //音游区页面
 import { Content as MusicGamesContent } from '../musicgames/musicgames.jsx'
-
 
 export default function CommunityBoard() {
   const location = useLocation();
@@ -74,7 +74,7 @@ export default function CommunityBoard() {
       top: 0,
       left: 0,
       behavior: 'smooth'
-    });
+    }); 
   }, [location.key]);
 
   return (
@@ -147,7 +147,10 @@ export default function CommunityBoard() {
             <Route path="/tech" element={<TechContent />} />
             <Route path="/musicgames" element={<MusicGamesContent />} />
             <Route path="/post/:id" element={<PostDetail />} />
+            <Route path="/editor" element={<PostEditor />} />
+            <Route path="/editor/:id" element={<PostEditor isEditMode={true} />} />
           </Routes>
+          {/* 添加创建帖子按钮 */}
         </section>
       </main>
     </div>
