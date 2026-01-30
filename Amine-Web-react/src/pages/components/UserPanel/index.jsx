@@ -1,8 +1,8 @@
-// 侧栏顶部放置用户面板组件
 import React, { useState } from 'react';
 import styles from './UserPanel.module.css';
 import { useUser } from '../../context/UserContext';
 import { useNavigate } from 'react-router-dom';
+import { closeSidebar } from '../../community';
 
 export default function UserPanel() {
     const { user, login } = useUser();
@@ -18,7 +18,26 @@ export default function UserPanel() {
     };
 
     const handleLoginClick = async () => {
-        await login();
+        // 先关闭侧边栏，等待完成
+        if (closeSidebar) {
+            await closeSidebar();
+        }
+        
+        // 如果需要登录且用户未登录，先执行登录
+        if (!user) {
+            await login(); // 等待登录完成
+        }
+        
+        // 然后导航到个人资料页
+        navigate('/profile');
+    };
+
+    const handleProfileClick = async () => {
+        // 先关闭侧边栏
+        if (closeSidebar) {
+            await closeSidebar();
+        }
+        // 然后导航到个人资料页
         navigate('/profile');
     };
 
@@ -35,7 +54,7 @@ export default function UserPanel() {
                 />
                 <div className={styles.info}>
                     {isLoggedIn ? (
-                        <button className={styles.nameBtn} onClick={() => navigate('/profile')}>
+                        <button className={styles.nameBtn} onClick={handleProfileClick}>
                             {name || '点击设置昵称'}
                         </button>
                     ) : (

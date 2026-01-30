@@ -11,8 +11,10 @@ const CreatePostButton = () => {
     navigate('/editor');
   };
 
-  // 在编辑器页面不显示按钮
-  if (location.pathname.startsWith('/editor')) {
+  const hiddenPaths = ['/editor', '/profile', '/login'];
+
+  // 在编辑器/登录/个人信息页面不显示按钮
+  if (hiddenPaths.some((path) => location.pathname.startsWith(path))) {
     return null;
   }
 

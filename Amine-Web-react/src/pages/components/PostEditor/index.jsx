@@ -12,12 +12,15 @@ import { getCategoryColor } from '../../config/colors';
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
   const { id: postId } = useParams();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // 保持用于编辑模式加载
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
   const [currentTag, setCurrentTag] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  
+  // 添加独立的状态管理
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   
   // 初始化表单
   const { register, formState: { errors }, setValue, watch } = useForm({
@@ -32,25 +35,15 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
 
   const formData = watch();
 
-  // 移除通知
-  const removeNotification = useCallback((id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
-
-  // 添加通知
-  const addNotification = useCallback((message, type = 'success', duration = 3000) => {
-    const id = Date.now() + Math.random();
-    setNotifications(prev => [...prev, { id, message, type, duration }]);
-    
-    // 自动移除
-    if (duration > 0) {
-      setTimeout(() => {
-        removeNotification(id);
-      }, duration + 300);
+  const logMessage = useCallback((message, level = 'warn') => {
+    if (level === 'error') {
+      console.error(message);
+    } else if (level === 'info') {
+      console.info(message);
+    } else {
+      console.warn(message);
     }
-    
-    return id;
-  }, [removeNotification]);
+  }, []);
 
   // 加载分类列表
   useEffect(() => {
@@ -60,12 +53,12 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         setCategories(categoryList);
       } catch (error) {
         console.error('加载分类失败:', error);
-        addNotification('加载分类失败', 'error');
+        logMessage('加载分类失败', 'error');
       }
     };
     
     loadCategories();
-  }, [addNotification]);
+  }, [logMessage]);
 
   // 如果是编辑模式，加载帖子数据
   useEffect(() => {
@@ -89,7 +82,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           }
         } catch (error) {
           console.error('加载帖子失败:', error);
-          addNotification('加载帖子失败', 'error');
+          logMessage('加载帖子失败', 'error');
         } finally {
           setLoading(false);
         }
@@ -97,7 +90,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       
       loadPost();
     }
-  }, [isEditMode, postId, setValue, formData, addNotification]);
+  }, [isEditMode, postId, setValue, formData, logMessage]);
 
   // 监听表单变化
   useEffect(() => {
@@ -137,51 +130,53 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     return plainText.substring(0, 200) + (plainText.length > 200 ? '...' : '');
   }, []);
 
-  // 修改 handleSave 函数，确保状态正确传递
-  const handleSave = useCallback(async (status = 'draft') => {
-    console.log('handleSave 调用，状态:', status);
-    
-    // 基础验证
+  // 验证表单
+  const validateForm = useCallback(() => {
     if (!formData.title.trim()) {
-      addNotification('请输入帖子标题', 'warning', 2000);
-      return;
+      logMessage('请输入帖子标题', 'warn');
+      return false;
     }
     
     if (!formData.category) {
-      addNotification('请选择帖子分类', 'warning', 2000);
-      return;
+      logMessage('请选择帖子分类', 'warn');
+      return false;
     }
     
     if (!formData.content.trim() || formData.content.trim() === '# 请输入内容\n\n从这里开始编辑...') {
-      addNotification('请输入帖子内容', 'warning', 2000);
-      return;
+      logMessage('请输入帖子内容', 'warn');
+      return false;
     }
     
-    setLoading(true);
+    return true;
+  }, [formData, logMessage]);
+
+  // 准备保存数据
+  const preparePostData = useCallback((status) => {
+    const postData = {
+      ...formData,
+      tags: tags,
+      date: new Date().toISOString().split('T')[0],
+      author: 'Lilizi-ovo',
+      readTime: calculateReadTime(formData.content),
+      status: status
+    };
     
+    // 如果摘要为空，自动生成
+    if (!postData.summary) {
+      postData.summary = generateSummary(formData.content);
+    }
+    
+    // 如果是编辑模式且没有ID，自动生成ID
+    if (!postData.id && !isEditMode) {
+      postData.id = `post-${Date.now()}`;
+    }
+    
+    return postData;
+  }, [formData, tags, calculateReadTime, generateSummary, isEditMode]);
+
+  // 保存函数（不包含状态管理）
+  const savePostData = useCallback(async (postData, status) => {
     try {
-      // 准备数据 - 确保 status 正确传递
-      const postData = {
-        ...formData,
-        tags: tags,
-        date: new Date().toISOString().split('T')[0],
-        author: 'Lilizi-ovo',
-        readTime: calculateReadTime(formData.content),
-        status: status // 确保这里使用的是传入的 status 参数
-      };
-      
-      console.log('准备保存，状态:', status, '数据状态:', postData.status);
-      
-      // 如果摘要为空，自动生成
-      if (!postData.summary) {
-        postData.summary = generateSummary(formData.content);
-      }
-      
-      // 如果是编辑模式且没有ID，自动生成ID
-      if (!postData.id && !isEditMode) {
-        postData.id = `post-${Date.now()}`;
-      }
-      
       // TODO: 调用API保存数据
       // 模拟API调用
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -189,9 +184,9 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       // 根据状态显示不同的通知
       console.log('保存完成，显示通知，状态:', status);
       if (status === 'draft') {
-        addNotification('草稿已保存到服务器', 'success');
+        logMessage('草稿已保存到服务器', 'info');
       } else {
-        addNotification('帖子已成功发布', 'success');
+        logMessage('帖子已成功发布', 'info');
       }
       
       setHasUnsavedChanges(false);
@@ -204,33 +199,59 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         }, 1500);
       }
       
+      return true;
     } catch (error) {
       console.error('保存失败:', error);
-      addNotification('保存失败，请检查网络连接', 'error', 4000);
-    } finally {
-      setLoading(false);
+      logMessage('保存失败，请检查网络连接', 'error');
+      throw error;
     }
-  }, [formData, tags, calculateReadTime, generateSummary, isEditMode, addNotification, navigate]);
+  }, [logMessage, navigate]);
 
-  // 处理发布
-  const handlePublish = useCallback(() => {
-    if (!formData.title.trim()) {
-      addNotification('请输入帖子标题', 'warning', 2000);
+  // 保存草稿
+  const handleSaveDraft = useCallback(async () => {
+    console.log('开始保存草稿');
+    
+    // 验证表单
+    if (!validateForm()) {
       return;
     }
     
-    if (!formData.category) {
-      addNotification('请选择帖子分类', 'warning', 2000);
+    setSavingDraft(true);
+    
+    try {
+      const postData = preparePostData('draft');
+      console.log('准备保存草稿，数据状态:', postData.status);
+      
+      await savePostData(postData, 'draft');
+    } catch (error) {
+      console.error('保存草稿失败:', error);
+    } finally {
+      setSavingDraft(false);
+    }
+  }, [validateForm, preparePostData, savePostData]);
+
+  // 发布帖子
+  const handlePublishPost = useCallback(async () => {
+    console.log('开始发布帖子');
+    
+    // 验证表单
+    if (!validateForm()) {
       return;
     }
     
-    if (!formData.content.trim() || formData.content.trim() === '# 请输入内容\n\n从这里开始编辑...') {
-      addNotification('请输入帖子内容', 'warning', 2000);
-      return;
-    }
+    setPublishing(true);
     
-    handleSave('published');
-  }, [formData, addNotification, handleSave]);
+    try {
+      const postData = preparePostData('published');
+      console.log('准备发布，数据状态:', postData.status);
+      
+      await savePostData(postData, 'published');
+    } catch (error) {
+      console.error('发布失败:', error);
+    } finally {
+      setPublishing(false);
+    }
+  }, [validateForm, preparePostData, savePostData]);
 
   // 处理取消
   const handleCancel = useCallback(() => {
@@ -273,93 +294,6 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     );
   }
 
-  // 通知组件
-  // 在 PostEditor 组件中的 Notification 内部组件
-  const Notification = ({ notification }) => {
-    const [progress, setProgress] = useState(100);
-    const [isExiting, setIsExiting] = useState(false);
-
-    // 将 startExit 移到 useEffect 之前，并用 useCallback 包装
-    const startExit = useCallback(() => {
-      setIsExiting(true);
-      setTimeout(() => {
-        removeNotification(notification.id);
-      }, 300);
-    }, [notification.id]);
-
-    useEffect(() => {
-      if (notification.duration > 0) {
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-          const elapsed = Date.now() - startTime;
-          const remaining = Math.max(0, 100 - (elapsed / notification.duration * 100));
-          setProgress(remaining);
-          
-          if (remaining <= 0) {
-            clearInterval(interval);
-            startExit();
-          }
-        }, 50);
-
-        return () => clearInterval(interval);
-      }
-    }, [notification.duration, startExit]); // 添加 startExit 到依赖数组
-
-    const handleClose = (e) => {
-      e.stopPropagation();
-      startExit();
-    };
-
-    const icons = {
-      success: '✅',
-      error: '❌',
-      info: '💡',
-      warning: '⚠️'
-    };
-
-    const typeLabels = {
-      success: '成功',
-      error: '错误',
-      info: '信息',
-      warning: '警告'
-    };
-
-    return (
-      <div 
-        className={`${styles.notification} ${styles[notification.type]} ${isExiting ? styles.exiting : ''}`}
-        onClick={startExit}
-      >
-        <div className={styles.notificationHeader}>
-          <div className={styles.notificationIcon}>
-            {icons[notification.type]}
-          </div>
-          <div className={styles.notificationTitle}>
-            <span className={styles.notificationType}>{typeLabels[notification.type]}</span>
-            <span className={styles.notificationTime}>刚刚</span>
-          </div>
-          <button 
-            className={styles.closeButton}
-            onClick={handleClose}
-            aria-label="关闭"
-          >
-            ×
-          </button>
-        </div>
-        
-        <div className={styles.notificationBody}>
-          {notification.message}
-        </div>
-        
-        <div className={styles.progressBar}>
-          <div 
-            className={styles.progressFill}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className={styles.postEditor}>
       {/* 头部操作栏 */}
@@ -376,28 +310,22 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         </div>
         
         <div className={styles.headerActions}>
-          {/* 保存草稿按钮 - 明确传递 'draft' */}
+          {/* 保存草稿按钮 */}
           <button 
-            onClick={() => {
-              console.log('点击保存草稿按钮');
-              handleSave('draft');
-            }}
+            onClick={handleSaveDraft}
             className={`${styles.actionButton} ${styles.saveDraftButton}`}
-            disabled={loading}
+            disabled={savingDraft || publishing}
           >
-            {loading ? '保存中...' : '保存草稿'}
+            {savingDraft ? '保存中...' : '保存草稿'}
           </button>
           
-          {/* 发布按钮 - 调用 handlePublish */}
+          {/* 发布按钮 */}
           <button 
-            onClick={() => {
-              console.log('点击发布按钮');
-              handlePublish();
-            }}
+            onClick={handlePublishPost}
             className={`${styles.actionButton} ${styles.publishButton}`}
-            disabled={loading}
+            disabled={publishing || savingDraft}
           >
-            {loading ? '发布中...' : '发布帖子'}
+            {publishing ? '发布中...' : '发布帖子'}
           </button>
         </div>
       </div>
@@ -582,15 +510,6 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         </div>
       </div>
 
-      {/* 通知容器 */}
-      <div className={styles.notificationContainer}>
-        {notifications.map(notification => (
-          <Notification 
-            key={notification.id}
-            notification={notification}
-          />
-        ))}
-      </div>
     </div>
   );
 };

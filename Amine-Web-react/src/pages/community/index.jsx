@@ -10,8 +10,12 @@ import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle 
 import PostList from '../components/PostList'
 import PostDetail from '../components/PostDetail'
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
+
 //用户面板组件
 import UserPanel from '../components/UserPanel'
+import Profile from '../profile';
+
+//帖子编辑器组件
 import PostEditor from '../components/PostEditor';
 
 //社团介绍页面
@@ -151,8 +155,8 @@ export default function CommunityBoard() {
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/editor" element={<PostEditor />} />
             <Route path="/editor/:id" element={<PostEditor isEditMode={true} />} />
+            <Route path="/profile" element={<Profile />} />
           </Routes>
-          {/* 添加创建帖子按钮 */}
         </section>
       </main>
     </div>

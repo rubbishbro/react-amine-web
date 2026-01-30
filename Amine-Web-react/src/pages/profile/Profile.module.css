@@ -1,16 +1,25 @@
 .page {
-    padding: 8px 24px 24px;
-    /* 贴近“动漫社·基地”下面 */
+    padding: 12px 8px 24px;
+    display: flex;
+    justify-content: center;
 }
 
 .title {
-    margin: 8px 0 16px;
+    margin: 0 0 16px;
+    color: var(--text-main);
 }
 
 .form {
-    max-width: 420px;
+    width: 100%;
+    max-width: 520px;
+    margin: auto;
     display: grid;
     gap: 12px;
+    padding: 20px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
 }
 
 .avatarRow {
@@ -37,6 +46,7 @@
     padding: 8px 10px;
     border: 1px solid #ddd;
     border-radius: 6px;
+    background: #fff;
 }
 
 .actions {
@@ -51,4 +61,47 @@
     border-radius: 6px;
     background: #fff;
     cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .page {
+        padding: 8px 0 20px;
+    }
+
+    .form {
+        padding: 16px;
+    }
+}
+
+.save {
+    color: black;
+}
+
+.logout {
+    color: black;
+}
+
+.form input {color: #333;}
+
+.label input:-webkit-autofill,
+.label input:-webkit-autofill:hover, 
+.label input:-webkit-autofill:focus,
+.label input:-webkit-autofill:active {
+    /* 覆盖黄色/灰色背景 */
+    -webkit-box-shadow: 0 0 0px 1000px white inset !important;
+    box-shadow: 0 0 0px 1000px white inset !important;
+    
+    /* 设置文字颜色 */
+    -webkit-text-fill-color: #333 !important;
+    
+    /* 设置背景颜色 */
+    background-color: white !important;
+    
+    /* 过渡动画 */
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+/* 如果需要保持border颜色 */
+.label input:-webkit-autofill {
+    border: 1px solid #ddd !important;
 }

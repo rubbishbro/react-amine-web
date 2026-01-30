@@ -22,11 +22,10 @@ export default function Profile() {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }, [isLoggedIn, login]);
 
-    const [form, setForm] = useState(emptyProfile);
-
-    useEffect(() => {
-        setForm({ ...emptyProfile, ...(user?.profile || {}) });
-    }, [user]);
+    const [form, setForm] = useState(() => ({
+    ...emptyProfile,
+    ...(user?.profile || {})
+    }));
 
     const handleChange = (e) => {
         setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
