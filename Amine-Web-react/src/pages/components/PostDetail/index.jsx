@@ -8,7 +8,7 @@ import rehypeHighlight from 'rehype-highlight';
 import MarkdownEditor from 'react-markdown-editor-lite';
 import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostDetail.module.css';
-import { loadPostContent } from '../../utils/postLoader';
+import { loadPostContent, markPostDeleted } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config';
 import { useUser } from '../../context/UserContext';
 
@@ -163,6 +163,7 @@ const PostDetail = () => {
       return;
     }
     if (!window.confirm('确定删除该帖子吗？此操作不可恢复。')) return;
+    markPostDeleted(id);
     setPost(null);
     navigate(getBackPath());
   };

@@ -53,6 +53,7 @@ const normalizeAuthor = (author) => {
 };
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
+const LOCAL_DELETED_POSTS_KEY = 'aw_deleted_posts';
 
 const readLocalPosts = () => {
   try {
@@ -72,6 +73,42 @@ const writeLocalPosts = (posts) => {
   } catch (error) {
     console.error('Error writing local posts:', error);
   }
+};
+
+const readDeletedPosts = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_DELETED_POSTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Error reading deleted posts:', error);
+    return [];
+  }
+};
+
+const writeDeletedPosts = (ids) => {
+  try {
+    localStorage.setItem(LOCAL_DELETED_POSTS_KEY, JSON.stringify(ids));
+  } catch (error) {
+    console.error('Error writing deleted posts:', error);
+  }
+};
+
+const isPostDeleted = (postId) => {
+  const ids = readDeletedPosts();
+  return ids.includes(postId);
+};
+
+export const markPostDeleted = (postId) => {
+  const ids = readDeletedPosts();
+  if (!ids.includes(postId)) {
+    ids.push(postId);
+    writeDeletedPosts(ids);
+  }
+  const posts = readLocalPosts();
+  const nextPosts = posts.filter((item) => item.id !== postId);
+  writeLocalPosts(nextPosts);
 };
 
 export const upsertLocalPost = (postData) => {
@@ -106,6 +143,9 @@ const getLocalPublishedPosts = () => {
  */
 export const loadPostContent = async (postId) => {
   try {
+    if (isPostDeleted(postId)) {
+      return null;
+    }
     const localPost = getLocalPostById(postId);
     if (localPost) {
       return {
@@ -187,7 +227,8 @@ export const loadAllPosts = async () => {
     const combinedPosts = Array.from(merged.values());
 
     // 过滤掉加载失败的帖子
-    const validPosts = combinedPosts.filter(post => post !== null);
+    const deletedIds = readDeletedPosts();
+    const validPosts = combinedPosts.filter(post => post !== null && !deletedIds.includes(post.id));
 
     // 排序：先按置顶，再按order权重，最后按日期
     return validPosts.sort((a, b) => {
