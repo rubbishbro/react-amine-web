@@ -10,5 +10,6 @@
 - rubbishbro
 - Lilizi-ovo
 - kondaidaidaisuki-dot
+- 趋势至
 
 ps：没有列在上面的人自己改完push到main分支上来(不要把你修改的其他项目文件传到main上来)，顺便练习一下如何修改项目文件
