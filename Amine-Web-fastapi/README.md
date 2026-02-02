@@ -1,20 +1,10 @@
-# 所需要的库
-- fastapi[all]
-- sqlmodel
-- asyncpg
-- psycopg2
-
-# 配置
-进入main.py
-
-修改Log.log.LOG_DIR为你的日志路径
-
-修改fastapi目录
+# vscode构建环境
+依赖项在requirements.txt
 
 # 运行
 先进入 Amine-Web-fastapi文件夹
 ```
-uvicorn main:app --reload
+./start.bat
 ```
 
 # 教程
@@ -24,42 +14,68 @@ uvicorn main:app --reload
 - SQLModel入门：https://blog.csdn.net/xnuscd/article/details/144081478
 - PostgreSQL教程：https://www.runoob.com/postgresql/postgresql-tutorial.html
 
-# 日志输出
-```python
-from Log import log
-log.print_log(log.LOG_INFO,"Hello World")
-```
-## print_log
-- 第一个参数为日志输出类型，有log.LOG_INFO,log.LOG_WARNING,log.LOG_ERROR
-- 第二个参数为日志输出内容
-
 # 数据库
-数据库使用PostgreSQL，在database.py文件中需要注意DATABASE_URL的修改，格式在注释中
+数据库使用PostgreSQL
+
+# 注意
+当前没有env，直接运行会报错
 
 # 文件结构
 ```
 D:.
-│  main.py #主函数
+│  .gitignore
 │  README.md
+│  requirements.txt #虚拟环境依赖项
+│  start.bat #运行后端
 │
 ├─.log #日志文件夹
+|
 │
-├─Db #关于数据库
-│  ├─Posts #关于帖子的数据库操作
-│  │      crud.py #关于帖子的插入，读取，更新，删除操作
-│  │      database.py #关于帖子的database
-│  │      post.py #关于帖子的sqlmodel
+├─app
+│  │  main.py #主函数
 │  │
-│  └─Users
-├─Log #关于日志
-│  │  log.py #新建日志，输出日志
-│  │  __init__.py
+│  ├─api #路由器
+│  │  │  api.py #路由器整合
+│  │  │  deps.py #关于OAuth2验证
+│  │  │
+│  │  └─endpoints
+│  │          auth.py #关于OAuth2验证的路由
+│  │          interact.py #关于帖子点赞评论的路由
+│  │          posts.py #关于帖子的路由
+│  │          upload.py #关于上传至服务端文件的路由
+│  │          users.py #关于用户的路由
+│  │
+│  ├─core
+│  │  │  config.py #设置
+│  │  │  security.py #用户身份校验与令牌生成
+│  │  │
+│  │  └─__pycache__
+│  │
+│  ├─crud #关于数据库的操作
+│  │      crud_interact.py #关于帖子点赞评论的数据库操作
+│  │      crud_post.py #关于帖子的数据库操作
+│  │      crud_user.py #关于用户的数据库操作
+│  │
+│  ├─db #数据库
+│  │      database.py #数据库初始化
+│  │
+│  ├─models #一些数据库存储结构
+│  │      interact.py #关于帖子点赞评论的 数据库存储结构
+│  │      post.py #关于帖子的 数据库存储结构
+│  │      user.py #关于用户的 数据库存储结构
+│  │      __init__.py
+│  │
+│  ├─schemas#一些数据库行为
+│  │      interact.py #关于帖子点赞评论的 数据库行为
+│  │      post.py #关于帖子的 数据库行为
+│  │      token.py #关于token的 模型
+│  │      user.py #关于用户的 数据库行为
 │  │
 │  └─__pycache__
+│          main.cpython-314.pyc
 │
-├─Management #关于后台管理的api
-├─Post #关于帖子的api
-│      postapi.py
-│
+├─Db
+│  └─Users
+├─Management
 └─__pycache__
 ```
