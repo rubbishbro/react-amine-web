@@ -6,3 +6,7 @@ __pycache__/
 .venv
 env/
 venv/
+node_modules/
+dist/
+dist-ssr/
+*.local
