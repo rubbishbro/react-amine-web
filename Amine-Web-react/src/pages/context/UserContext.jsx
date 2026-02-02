@@ -21,6 +21,24 @@ export function UserProvider({ children }) {
         return parsed?.loggedIn === true ? parsed : null;
     });
 
+    const [likes, setLikes] = useState(() => {
+        try {
+            const raw = localStorage.getItem('aw_likes');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const [favorites, setFavorites] = useState(() => {
+        try {
+            const raw = localStorage.getItem('aw_favorites');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    });
+
     useEffect(() => {
         try {
             if (user?.loggedIn) localStorage.setItem('aw_user', JSON.stringify(user));
@@ -36,6 +54,22 @@ export function UserProvider({ children }) {
             }
         }
     }, [user]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('aw_likes', JSON.stringify(likes));
+        } catch (e) {
+            console.error('Error saving likes:', e);
+        }
+    }, [likes]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('aw_favorites', JSON.stringify(favorites));
+        } catch (e) {
+            console.error('Error saving favorites:', e);
+        }
+    }, [favorites]);
 
     const login = async () => {
         setUser({ id: 'local', loggedIn: true, isAdmin: false, profile: { ...defaultProfile } });
@@ -61,8 +95,44 @@ export function UserProvider({ children }) {
 
     const logout = () => setUser(null);
 
+    const toggleLike = (postId) => {
+        setLikes((prev) => {
+            if (prev.includes(postId)) {
+                return prev.filter((id) => id !== postId);
+            } else {
+                return [...prev, postId];
+            }
+        });
+    };
+
+    const toggleFavorite = (postId) => {
+        setFavorites((prev) => {
+            if (prev.includes(postId)) {
+                return prev.filter((id) => id !== postId);
+            } else {
+                return [...prev, postId];
+            }
+        });
+    };
+
+    const isLiked = (postId) => likes.includes(postId);
+
+    const isFavorited = (postId) => favorites.includes(postId);
+
     return (
-        <UserContext.Provider value={{ user, login, logout, updateProfile, setAdmin }}>
+        <UserContext.Provider value={{
+            user,
+            login,
+            logout,
+            updateProfile,
+            setAdmin,
+            likes,
+            favorites,
+            toggleLike,
+            toggleFavorite,
+            isLiked,
+            isFavorited
+        }}>
             {children}
         </UserContext.Provider>
     );

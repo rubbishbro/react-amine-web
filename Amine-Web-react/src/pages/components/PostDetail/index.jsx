@@ -17,6 +17,7 @@ const PostDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useUser();
+  const { toggleLike, toggleFavorite, isLiked, isFavorited } = useUser();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -412,6 +413,20 @@ const PostDetail = () => {
           </div>
 
           <div className={styles.actionBar}>
+            <button
+              className={`${styles.actionButton} ${isLiked(id) ? styles.liked : ''}`}
+              onClick={() => toggleLike(id)}
+              title={isLiked(id) ? '取消点赞' : '点赞'}
+            >
+              {isLiked(id) ? '❤️' : '🤍'} 点赞
+            </button>
+            <button
+              className={`${styles.actionButton} ${isFavorited(id) ? styles.favorited : ''}`}
+              onClick={() => toggleFavorite(id)}
+              title={isFavorited(id) ? '取消收藏' : '收藏'}
+            >
+              {isFavorited(id) ? '⭐' : '☆'} 收藏
+            </button>
             <button className={styles.actionButton} onClick={() => setIsReplyOpen(true)}>
               💬 回复
             </button>

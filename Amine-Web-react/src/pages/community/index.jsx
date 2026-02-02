@@ -35,6 +35,8 @@ import { Content as ResourcesContent } from '../resources/resources.jsx'
 import { Content as TechContent } from '../tech/tech.jsx'
 //音游区页面
 import { Content as MusicGamesContent } from '../musicgames/musicgames.jsx'
+//收藏夹页面
+import { Content as FavoritesContent } from '../favorites/index.jsx'
 
 export default function CommunityBoard() {
   const location = useLocation();
@@ -52,7 +54,8 @@ export default function CommunityBoard() {
       '/derivativeworks': '动漫社基地 | 同人/杂谈',
       '/tech': '动漫社基地 | 前沿技术',
       '/resources': '动漫社基地 | 网络资源',
-      '/musicgames': '动漫社基地 | 音游区'
+      '/musicgames': '动漫社基地 | 音游区',
+      '/favorites': '动漫社基地 | 我的收藏夹'
     };
 
     if (pageTitles[location.pathname]) {
@@ -112,6 +115,7 @@ export default function CommunityBoard() {
         <Link to="/tech" className="nav-item" onClick={closeSidebar}><span>💻 前沿技术</span></Link>
         <Link to="/resources" className="nav-item" onClick={closeSidebar}><span>💾 网络资源</span></Link>
         <Link to="/musicgames" className="nav-item" onClick={closeSidebar}><span>🎵 音游区</span></Link>
+        <Link to="/favorites" className="nav-item" onClick={closeSidebar}><span>⭐ 收藏夹</span></Link>
       </nav>
 
       {/*主内容区*/}
@@ -153,6 +157,7 @@ export default function CommunityBoard() {
             <Route path="/resources" element={<ResourcesContent />} />
             <Route path="/tech" element={<TechContent />} />
             <Route path="/musicgames" element={<MusicGamesContent />} />
+            <Route path="/favorites" element={<FavoritesContent onReadMore={handleReadMore} />} />
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/user/:id" element={<PublicProfile />} />
             <Route path="/editor" element={<PostEditor />} />
