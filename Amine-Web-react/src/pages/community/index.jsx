@@ -124,7 +124,8 @@ export default function CommunityBoard() {
         {/*上边栏*/}
         <header className="card-header">
           <div className="logo-area">
-            <h1>动漫社 · 基地</h1>
+            <img className="logo-image" src="/e.jpg" alt="E=mc²动漫社" />
+            <h1 className="logo-text">E=mc²动漫社·基地</h1>
           </div>
           <div className="search-bar">
             <span>🔍</span>
