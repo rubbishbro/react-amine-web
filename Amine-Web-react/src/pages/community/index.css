@@ -195,6 +195,16 @@
   min-width: 0;
 }
 
+.community-root .logo-area .logo-image {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-right: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
 .community-root .logo-area h1 {
   font-family: 'ZCOOL KuaiLe', cursive;
   color: var(--primary-color);
@@ -500,4 +510,3 @@
     overflow: hidden;
   }
 }
-
