@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     POSTGRES_SERVER: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
+    POSTGRES_PORT: int
     POSTGRES_DB: str
     # 定义数据库连接字符串
     SQLALCHEMY_DATABASE_URI: Union[str, None] = None
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
         # 拼接/读取
         if isinstance(v, str):
             return v
-        return f"postgresql://{info.data.get('POSTGRES_USER')}:{info.data.get('POSTGRES_PASSWORD')}@{info.data.get('POSTGRES_SERVER')}/{info.data.get('POSTGRES_DB')}"
+        return f"postgresql://{info.data.get('POSTGRES_USER')}:{info.data.get('POSTGRES_PASSWORD')}@{info.data.get('POSTGRES_SERVER')}:{info.data.get('POSTGRES_PORT')}/{info.data.get('POSTGRES_DB')}"
 
     # JWT
     SECRET_KEY: str
