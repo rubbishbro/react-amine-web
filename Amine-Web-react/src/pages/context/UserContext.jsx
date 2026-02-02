@@ -14,12 +14,39 @@ const defaultProfile = {
 };
 
 export function UserProvider({ children }) {
+    const getStorageKey = (type, userId) => `aw_${type}_${userId || 'guest'}`;
+
+    const readList = (key) => {
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    };
+
     const [user, setUser] = useState(() => {
         const raw = localStorage.getItem('aw_user');
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return parsed?.loggedIn === true ? parsed : null;
     });
+
+    const [likes, setLikes] = useState(() => {
+        return readList(getStorageKey('likes', 'guest'));
+    });
+
+    const [favorites, setFavorites] = useState(() => {
+        return readList(getStorageKey('favorites', 'guest'));
+    });
+
+    useEffect(() => {
+        const userId = user?.id || 'guest';
+        setLikes(readList(getStorageKey('likes', userId)));
+        setFavorites(readList(getStorageKey('favorites', userId)));
+    }, [user?.id]);
 
     useEffect(() => {
         try {
@@ -36,6 +63,24 @@ export function UserProvider({ children }) {
             }
         }
     }, [user]);
+
+    useEffect(() => {
+        try {
+            const userId = user?.id || 'guest';
+            localStorage.setItem(getStorageKey('likes', userId), JSON.stringify(likes));
+        } catch (e) {
+            console.error('Error saving likes:', e);
+        }
+    }, [likes, user?.id]);
+
+    useEffect(() => {
+        try {
+            const userId = user?.id || 'guest';
+            localStorage.setItem(getStorageKey('favorites', userId), JSON.stringify(favorites));
+        } catch (e) {
+            console.error('Error saving favorites:', e);
+        }
+    }, [favorites, user?.id]);
 
     const login = async () => {
         setUser({ id: 'local', loggedIn: true, isAdmin: false, profile: { ...defaultProfile } });
@@ -61,8 +106,46 @@ export function UserProvider({ children }) {
 
     const logout = () => setUser(null);
 
+    const toggleLike = (postId) => {
+        if (!postId) return;
+        setLikes((prev) => {
+            if (prev.includes(postId)) {
+                return prev.filter((id) => id !== postId);
+            } else {
+                return [...prev, postId];
+            }
+        });
+    };
+
+    const toggleFavorite = (postId) => {
+        if (!postId) return;
+        setFavorites((prev) => {
+            if (prev.includes(postId)) {
+                return prev.filter((id) => id !== postId);
+            } else {
+                return [...prev, postId];
+            }
+        });
+    };
+
+    const isLiked = (postId) => likes.includes(postId);
+
+    const isFavorited = (postId) => favorites.includes(postId);
+
     return (
-        <UserContext.Provider value={{ user, login, logout, updateProfile, setAdmin }}>
+        <UserContext.Provider value={{
+            user,
+            login,
+            logout,
+            updateProfile,
+            setAdmin,
+            likes,
+            favorites,
+            toggleLike,
+            toggleFavorite,
+            isLiked,
+            isFavorited
+        }}>
             {children}
         </UserContext.Provider>
     );

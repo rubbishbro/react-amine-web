@@ -1,5 +1,5 @@
 class PostAPI{
-    constructor(baseUrl = 'http://192.168.33.158:8000'){
+    constructor(baseUrl = 'http://192.168.33.158:8000/api/v1'){
         this.baseUrl = baseUrl;
     }
 
