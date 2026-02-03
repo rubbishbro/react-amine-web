@@ -35,6 +35,23 @@
     background: linear-gradient(135deg, #f8b, #9cf);
     background-size: cover;
     background-position: center;
+    flex-shrink: 0;
+}
+
+.avatarUpload {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.avatarHint {
+    font-size: 0.75rem;
+    color: var(--text-sub, #888);
+}
+
+.avatarError {
+    font-size: 0.8rem;
+    color: #e11d48;
 }
 
 .label {

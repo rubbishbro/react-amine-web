@@ -28,10 +28,14 @@ export function UserProvider({ children }) {
     };
 
     const [user, setUser] = useState(() => {
-        const raw = localStorage.getItem('aw_user');
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        return parsed?.loggedIn === true ? parsed : null;
+        try {
+            const raw = localStorage.getItem('aw_user');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed?.loggedIn === true ? parsed : null;
+        } catch {
+            return null;
+        }
     });
 
     const [likes, setLikes] = useState(() => {
