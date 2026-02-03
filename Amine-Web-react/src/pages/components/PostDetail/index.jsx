@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -11,6 +11,14 @@ import styles from './PostDetail.module.css';
 import { loadPostContent, markPostDeleted, setPostPinnedLocally } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config';
 import { useUser } from '../../context/UserContext';
+import {
+  getPostStats,
+  incrementPostViews,
+  onPostStatsUpdated,
+  syncPostReplies,
+  updatePostFavorites,
+  updatePostLikes,
+} from '../../utils/postStats';
 
 const PostDetail = () => {
   const { id } = useParams();
@@ -26,6 +34,7 @@ const PostDetail = () => {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const adminMenuRef = useRef(null);
+  const viewTrackedRef = useRef(null);
   const LOCAL_REPLIES_KEY = 'aw_local_replies';
 
   const readLocalReplies = () => {
@@ -229,6 +238,50 @@ const PostDetail = () => {
     }
   };
 
+  const baseStats = useMemo(() => ({
+    views: post?.views ?? 0,
+    likes: post?.likes ?? 0,
+    favorites: post?.favorites ?? 0,
+    replies: post?.replies ?? 0,
+  }), [post?.views, post?.likes, post?.favorites, post?.replies]);
+
+  const [stats, setStats] = useState(() => getPostStats(id, baseStats));
+
+  useEffect(() => {
+    if (!post?.id) return;
+    setStats(getPostStats(post.id, baseStats));
+    const unsubscribe = onPostStatsUpdated((event) => {
+      if (event?.detail?.postId === post.id) {
+        setStats(getPostStats(post.id, baseStats));
+      }
+    });
+    return unsubscribe;
+  }, [post?.id, baseStats]);
+
+  useEffect(() => {
+    if (!post?.id) return;
+    if (viewTrackedRef.current === post.id) return;
+    viewTrackedRef.current = post.id;
+    incrementPostViews(post.id);
+  }, [post?.id]);
+
+  useEffect(() => {
+    if (!id) return;
+    syncPostReplies(id, replies.length);
+  }, [id, replies.length]);
+
+  const handleToggleLike = () => {
+    const wasLiked = isLiked(id);
+    toggleLike(id);
+    updatePostLikes(id, wasLiked ? -1 : 1);
+  };
+
+  const handleToggleFavorite = () => {
+    const wasFavorited = isFavorited(id);
+    toggleFavorite(id);
+    updatePostFavorites(id, wasFavorited ? -1 : 1);
+  };
+
   const replyEditorConfig = {
     view: {
       menu: true,
@@ -391,6 +444,13 @@ const PostDetail = () => {
               )}
             </div>
 
+            <div className={styles.postStats}>
+              <span className={styles.statItem}>👀 {stats.views}</span>
+              <span className={styles.statItem}>❤️ {stats.likes}</span>
+              <span className={styles.statItem}>⭐ {stats.favorites}</span>
+              <span className={styles.statItem}>💬 {stats.replies}</span>
+            </div>
+
             <h1 className={styles.postTitle}>{post.title}</h1>
 
             {post.tags && post.tags.length > 0 && (
@@ -414,14 +474,14 @@ const PostDetail = () => {
           <div className={styles.actionBar}>
             <button
               className={`${styles.actionButton} ${isLiked(id) ? styles.liked : ''}`}
-              onClick={() => toggleLike(id)}
+              onClick={handleToggleLike}
               title={isLiked(id) ? '取消点赞' : '点赞'}
             >
               {isLiked(id) ? '❤️' : '🤍'} 点赞
             </button>
             <button
               className={`${styles.actionButton} ${isFavorited(id) ? styles.favorited : ''}`}
-              onClick={() => toggleFavorite(id)}
+              onClick={handleToggleFavorite}
               title={isFavorited(id) ? '取消收藏' : '收藏'}
             >
               {isFavorited(id) ? '⭐' : '☆'} 收藏

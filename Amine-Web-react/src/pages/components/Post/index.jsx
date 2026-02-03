@@ -1,18 +1,16 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './Post.module.css';
 import { getCategoryColor } from '../../config';
 import { Link } from 'react-router-dom';
+import { getPostStats, onPostStatsUpdated } from '../../utils/postStats';
 
 const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
-
-  if (!post) return null;
-
   // 如果是预览模式，只显示摘要
   const displayContent = preview
-    ? post.summary
-    : (post.content || post.summary);
+    ? (post?.summary || '')
+    : (post?.content || post?.summary || '');
 
   // 显示置顶在哪些分类中
   const renderPinnedInfo = () => {
@@ -56,6 +54,29 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     : { name: post.author || '匿名' };
   const hasAuthorLink = !!authorInfo.id;
   const isAuthorAdmin = authorInfo.isAdmin === true;
+
+  const baseStats = useMemo(() => ({
+    views: post?.views ?? 0,
+    likes: post?.likes ?? 0,
+    favorites: post?.favorites ?? 0,
+    replies: post?.replies ?? 0,
+  }), [post?.views, post?.likes, post?.favorites, post?.replies]);
+
+  const [stats, setStats] = useState(() => getPostStats(post?.id, baseStats));
+
+  useEffect(() => {
+    if (!post?.id) return;
+    setStats(getPostStats(post.id, baseStats));
+    const unsubscribe = onPostStatsUpdated((event) => {
+      if (event?.detail?.postId === post.id) {
+        setStats(getPostStats(post.id, baseStats));
+      }
+    });
+    return unsubscribe;
+  }, [post?.id, baseStats]);
+
+  // 提前返回检查放在所有hooks之后
+  if (!post) return null;
 
   return (
     <article className={`${styles.post} ${preview ? styles.preview : ''} ${isPinned ? styles.pinned : ''}`}>
@@ -143,19 +164,28 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
         )}
       </div>
 
-      {preview && (
-        <div className={styles.readMore}>
-          <button
-            className={styles.readMoreButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onReadMore) onReadMore(post.id);
-            }}
-          >
-            阅读全文 →
-          </button>
+      <div className={styles.postFooter}>
+        <div className={styles.postStats}>
+          <span className={styles.statItem}>👀 {stats.views}</span>
+          <span className={styles.statItem}>❤️ {stats.likes}</span>
+          <span className={styles.statItem}>⭐ {stats.favorites}</span>
+          <span className={styles.statItem}>💬 {stats.replies}</span>
         </div>
-      )}
+
+        {preview && (
+          <div className={styles.readMore}>
+            <button
+              className={styles.readMoreButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onReadMore) onReadMore(post.id);
+              }}
+            >
+              阅读全文 →
+            </button>
+          </div>
+        )}
+      </div>
     </article>
   );
 };

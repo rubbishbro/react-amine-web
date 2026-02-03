@@ -35,10 +35,21 @@ export default function Profile() {
         setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
     };
 
+    const [avatarError, setAvatarError] = useState('');
+
     const handleAvatar = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // 限制原始文件大小（2MB）
+        const maxFileSize = 2 * 1024 * 1024;
+        if (file.size > maxFileSize) {
+            setAvatarError('图片大小不能超过 2MB');
+            e.target.value = '';
+            return;
+        }
+
+        setAvatarError('');
         const img = new Image();
         const reader = new FileReader();
         reader.onload = () => {
@@ -51,10 +62,23 @@ export default function Profile() {
                 canvas.width = w;
                 canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+                // 限制压缩后大小（50KB），避免 localStorage 配额超限
+                if (dataUrl.length > 50 * 1024) {
+                    setAvatarError('图片压缩后仍过大，请选择更小的图片');
+                    return;
+                }
+
                 setForm((s) => ({ ...s, avatar: dataUrl }));
             };
+            img.onerror = () => {
+                setAvatarError('图片加载失败，请选择有效的图片文件');
+            };
             img.src = reader.result;
+        };
+        reader.onerror = () => {
+            setAvatarError('读取文件失败');
         };
         reader.readAsDataURL(file);
     };
@@ -89,7 +113,11 @@ export default function Profile() {
                         className={styles.avatar}
                         style={form.avatar ? { backgroundImage: `url(${form.avatar})` } : undefined}
                     />
-                    <input type="file" accept="image/*" onChange={handleAvatar} />
+                    <div className={styles.avatarUpload}>
+                        <input type="file" accept="image/*" onChange={handleAvatar} />
+                        <span className={styles.avatarHint}>支持 JPG/PNG，最大 2MB</span>
+                        {avatarError && <span className={styles.avatarError}>{avatarError}</span>}
+                    </div>
                 </div>
 
                 <label className={styles.label}>

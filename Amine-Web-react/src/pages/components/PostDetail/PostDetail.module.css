@@ -57,6 +57,26 @@
   font-size: 0.95rem;
 }
 
+.postStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  color: var(--text-sub);
+  font-size: 0.9rem;
+  margin-bottom: 1.2rem;
+}
+
+.statItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(76, 201, 240, 0.08);
+  border: 1px solid rgba(76, 201, 240, 0.2);
+}
+
 .adminTools {
   position: relative;
   display: inline-flex;

@@ -65,11 +65,11 @@ export const Content = ({ onReadMore }) => {
             ) : (
                 <div className="favorites-list">
                     {favoritePosts.map((post) => (
-                        <div key={post.id} className="favorite-item" onClick={() => handleOpenPost(post.id)}>
+                        <div key={post.id} className="favorite-item">
                             <Post
                                 post={post}
                                 preview={true}
-                                onReadMore={onReadMore}
+                                onReadMore={handleOpenPost}
                             />
                         </div>
                     ))}
