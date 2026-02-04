@@ -28,8 +28,18 @@ export default function UserPanel() {
             await login(); // 等待登录完成
         }
         
-        // 然后导航到个人资料页
-        navigate('/profile');
+        const nextUser = user || { id: 'local', profile: {} };
+        // 然后导航到个人主页
+        navigate(`/user/${nextUser.id}`, { state: { author: {
+            id: nextUser.id,
+            name: nextUser.profile?.name || '匿名',
+            avatar: nextUser.profile?.avatar || '',
+            cover: nextUser.profile?.cover || '',
+            school: nextUser.profile?.school || '',
+            className: nextUser.profile?.className || '',
+            email: nextUser.profile?.email || '',
+            isAdmin: nextUser.isAdmin === true,
+        } } });
     };
 
     const handleProfileClick = async () => {
@@ -37,8 +47,18 @@ export default function UserPanel() {
         if (closeSidebar) {
             await closeSidebar();
         }
-        // 然后导航到个人资料页
-        navigate('/profile');
+        const nextUser = user || { id: 'local', profile: {} };
+        // 然后导航到个人主页
+        navigate(`/user/${nextUser.id}`, { state: { author: {
+            id: nextUser.id,
+            name: nextUser.profile?.name || '匿名',
+            avatar: nextUser.profile?.avatar || '',
+            cover: nextUser.profile?.cover || '',
+            school: nextUser.profile?.school || '',
+            className: nextUser.profile?.className || '',
+            email: nextUser.profile?.email || '',
+            isAdmin: nextUser.isAdmin === true,
+        } } });
     };
 
     const name = user?.profile?.name || '未登录';

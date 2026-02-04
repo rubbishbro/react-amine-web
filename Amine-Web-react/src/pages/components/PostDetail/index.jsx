@@ -83,18 +83,16 @@ const PostDetail = () => {
 
   const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  const getBackPath = () => {
-    if (location.state?.from) return location.state.from;
-    const referrer = document.referrer;
-    if (referrer) {
-      const url = new URL(referrer);
-      if (url.origin === window.location.origin) return url.pathname;
-    }
-    return '/';
-  };
-
   const handleBack = () => {
-    navigate(getBackPath());
+    if (location.state?.from) {
+      navigate(location.state.from);
+      return;
+    }
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
   };
 
   useEffect(() => {
@@ -193,7 +191,7 @@ const PostDetail = () => {
     if (!window.confirm('确定删除该帖子吗？此操作不可恢复。')) return;
     markPostDeleted(id);
     setPost(null);
-    navigate(getBackPath());
+    handleBack();
   };
 
   const handleTogglePinned = () => {

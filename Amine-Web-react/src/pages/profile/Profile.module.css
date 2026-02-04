@@ -28,6 +28,21 @@
     gap: 12px;
 }
 
+.coverRow {
+    display: grid;
+    gap: 12px;
+}
+
+.coverPreview {
+    width: 100%;
+    height: 120px;
+    border-radius: 12px;
+    background: linear-gradient(120deg, rgba(76, 111, 255, 0.35), rgba(236, 72, 153, 0.35));
+    background-size: cover;
+    background-position: center;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
 .avatar {
     width: 64px;
     height: 64px;

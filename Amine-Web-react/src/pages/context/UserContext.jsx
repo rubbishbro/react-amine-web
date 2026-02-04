@@ -11,6 +11,7 @@ const defaultProfile = {
     className: '',
     email: '',
     avatar: '',
+    cover: '',
 };
 
 export function UserProvider({ children }) {

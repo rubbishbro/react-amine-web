@@ -9,6 +9,7 @@ const emptyProfile = {
     className: '',
     email: '',
     avatar: '',
+    cover: '',
 };
 
 export default function Profile() {
@@ -36,6 +37,7 @@ export default function Profile() {
     };
 
     const [avatarError, setAvatarError] = useState('');
+    const [coverError, setCoverError] = useState('');
 
     const handleAvatar = (e) => {
         const file = e.target.files?.[0];
@@ -83,6 +85,50 @@ export default function Profile() {
         reader.readAsDataURL(file);
     };
 
+    const handleCover = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const maxFileSize = 2 * 1024 * 1024;
+        if (file.size > maxFileSize) {
+            setCoverError('图片大小不能超过 2MB');
+            e.target.value = '';
+            return;
+        }
+
+        setCoverError('');
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = () => {
+            img.onload = () => {
+                const maxWidth = 1200;
+                const scale = Math.min(maxWidth / img.width, 1);
+                const w = Math.round(img.width * scale);
+                const h = Math.round(img.height * scale);
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+                if (dataUrl.length > 200 * 1024) {
+                    setCoverError('图片压缩后仍过大，请选择更小的图片');
+                    return;
+                }
+
+                setForm((s) => ({ ...s, cover: dataUrl }));
+            };
+            img.onerror = () => {
+                setCoverError('图片加载失败，请选择有效的图片文件');
+            };
+            img.src = reader.result;
+        };
+        reader.onerror = () => {
+            setCoverError('读取文件失败');
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleSave = (e) => {
         e.preventDefault();
         updateProfile(form);
@@ -117,6 +163,18 @@ export default function Profile() {
                         <input type="file" accept="image/*" onChange={handleAvatar} />
                         <span className={styles.avatarHint}>支持 JPG/PNG，最大 2MB</span>
                         {avatarError && <span className={styles.avatarError}>{avatarError}</span>}
+                    </div>
+                </div>
+
+                <div className={styles.coverRow}>
+                    <div
+                        className={styles.coverPreview}
+                        style={form.cover ? { backgroundImage: `url(${form.cover})` } : undefined}
+                    />
+                    <div className={styles.avatarUpload}>
+                        <input type="file" accept="image/*" onChange={handleCover} />
+                        <span className={styles.avatarHint}>头图建议横向，最大 2MB</span>
+                        {coverError && <span className={styles.avatarError}>{coverError}</span>}
                     </div>
                 </div>
 

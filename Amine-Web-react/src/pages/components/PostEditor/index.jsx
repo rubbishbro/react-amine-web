@@ -163,9 +163,13 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
 
   // 准备保存数据
   const preparePostData = useCallback((status) => {
+    const authorName = user?.profile?.name || '匿名';
+    const authorId = authorName && authorName !== '匿名'
+      ? encodeURIComponent(authorName)
+      : (user?.id || 'local');
     const author = {
-      id: user?.id || 'local',
-      name: user?.profile?.name || '匿名',
+      id: authorId,
+      name: authorName,
       avatar: user?.profile?.avatar || '',
       school: user?.profile?.school || '',
       className: user?.profile?.className || '',
