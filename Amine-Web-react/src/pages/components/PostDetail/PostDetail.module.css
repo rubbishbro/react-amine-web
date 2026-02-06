@@ -146,6 +146,37 @@
   white-space: nowrap;
 }
 
+.followButton {
+  border: 1px solid rgba(236, 72, 153, 0.35);
+  background: rgba(236, 72, 153, 0.12);
+  color: #be185d;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.followButton:hover {
+  background: rgba(236, 72, 153, 0.2);
+}
+
+.followButtonActive {
+  background: rgba(76, 201, 240, 0.15);
+  border-color: rgba(76, 201, 240, 0.4);
+  color: #2563eb;
+}
+
+.followButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.followCount {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+}
+
 .postTitle {
   font-family: 'ZCOOL KuaiLe', cursive;
   color: var(--text-main);
@@ -298,13 +329,24 @@
 
 .adminBadge {
   margin-left: 6px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: #22c55e;
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
+  color: #fff;
+  background: linear-gradient(90deg, var(--md-accent), var(--md-accent-2));
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.28);
+}
+
+.userBadge {
+  background: linear-gradient(120deg, #ff8fb1, #ffc1d6);
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.22);
 }
 
 .replyBody {

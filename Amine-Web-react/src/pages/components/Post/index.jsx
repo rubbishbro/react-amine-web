@@ -3,8 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './Post.module.css';
 import { getCategoryColor } from '../../config';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getPostStats, onPostStatsUpdated } from '../../utils/postStats';
+import { buildTagInfo, readAdminMeta } from '../../utils/adminMeta';
 
 const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
   // 如果是预览模式，只显示摘要
@@ -53,7 +54,13 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     ? post.author
     : { name: post.author || '匿名' };
   const hasAuthorLink = !!authorInfo.id;
-  const isAuthorAdmin = authorInfo.isAdmin === true;
+  const [authorMeta, setAuthorMeta] = useState(() => readAdminMeta(authorInfo.id));
+
+  useEffect(() => {
+    setAuthorMeta(readAdminMeta(authorInfo.id));
+  }, [authorInfo.id]);
+
+  const tagInfo = useMemo(() => buildTagInfo(authorInfo, authorMeta), [authorInfo, authorMeta]);
 
   const baseStats = useMemo(() => ({
     views: post?.views ?? 0,
@@ -61,6 +68,8 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     favorites: post?.favorites ?? 0,
     replies: post?.replies ?? 0,
   }), [post?.views, post?.likes, post?.favorites, post?.replies]);
+
+  const navigate = useNavigate();
 
   const [stats, setStats] = useState(() => getPostStats(post?.id, baseStats));
 
@@ -105,12 +114,20 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
                 style={authorInfo.avatar ? { backgroundImage: `url(${authorInfo.avatar})` } : undefined}
               />
               <span className={styles.authorName}>{authorInfo.name || '匿名'}</span>
-              {isAuthorAdmin && <span className={styles.adminBadge}>管理员</span>}
+              {tagInfo && (
+                <span className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}>
+                  {tagInfo.label}
+                </span>
+              )}
             </Link>
           ) : (
             <span className={styles.author}>
               {authorInfo.name || '匿名'}
-              {isAuthorAdmin && <span className={styles.adminBadge}>管理员</span>}
+              {tagInfo && (
+                <span className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}>
+                  {tagInfo.label}
+                </span>
+              )}
             </span>
           )}
           {post.readTime && (
@@ -176,9 +193,16 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
           <div className={styles.readMore}>
             <button
               className={styles.readMoreButton}
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (onReadMore) onReadMore(post.id);
+                if (onReadMore) {
+                  onReadMore(post.id);
+                  return;
+                }
+                if (post?.id) {
+                  navigate(`/post/${post.id}`);
+                }
               }}
             >
               阅读全文 →

@@ -421,3 +421,64 @@ export const loadPostsByCategories = async (categories) => {
 export const getPostCategoryColor = (category) => {
   return getCategoryColor(category);
 };
+
+const normalizeValue = (value) => (value ?? '').toString().trim().toLowerCase();
+
+const matchesAuthor = (author, target) => {
+  if (!author || !target) return false;
+  const targetId = normalizeValue(target.id);
+  const targetName = normalizeValue(target.name);
+
+  if (typeof author === 'string') {
+    const authorName = normalizeValue(author);
+    return (targetName && authorName === targetName) || (targetId && authorName === targetId);
+  }
+
+  const authorId = normalizeValue(author.id);
+  const authorName = normalizeValue(author.name);
+  return (targetId && authorId && authorId === targetId) || (targetName && authorName && authorName === targetName);
+};
+
+export const updateAuthorInCaches = (target) => {
+  if (!target) return;
+  const updates = {
+    id: target.id,
+    name: target.name,
+    avatar: target.avatar || '',
+    cover: target.cover || '',
+    school: target.school || '',
+    className: target.className || '',
+    email: target.email || '',
+    isAdmin: target.isAdmin === true,
+  };
+
+  const updateList = (posts) => {
+    let changed = false;
+    const nextPosts = posts.map((post) => {
+      if (!post) return post;
+      if (!matchesAuthor(post.author, updates)) return post;
+      const normalized = normalizeAuthor(post.author);
+      changed = true;
+      return {
+        ...post,
+        author: {
+          ...normalized,
+          ...updates,
+        },
+      };
+    });
+    return { nextPosts, changed };
+  };
+
+  const localPosts = readLocalPosts();
+  const localResult = updateList(localPosts);
+  if (localResult.changed) {
+    writeLocalPosts(localResult.nextPosts);
+  }
+
+  const cachedPosts = readRemotePostsCache();
+  const cacheResult = updateList(cachedPosts);
+  if (cacheResult.changed) {
+    writeRemotePostsCache(cacheResult.nextPosts);
+  }
+};

@@ -100,33 +100,88 @@
 }
 
 .adminBadge {
-    background: rgba(249, 115, 22, 0.2);
-    color: #fdba74;
-    padding: 4px 10px;
-    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 6px;
     font-size: 12px;
-    border: 1px solid rgba(249, 115, 22, 0.5);
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, var(--md-accent), var(--md-accent-2));
+    box-shadow: 0 6px 16px rgba(255, 133, 161, 0.35);
+}
+
+.userBadge {
+    background: linear-gradient(120deg, #ff8fb1, #ffc1d6);
+    box-shadow: 0 6px 16px rgba(255, 133, 161, 0.28);
 }
 
 .heroActions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
 }
 
-.editBtn {
-    border: none;
-    background: rgba(255, 255, 255, 0.2);
+.actionStack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 140px;
+}
+
+.actionButton {
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.12);
     color: #fff;
-    padding: 10px 16px;
-    border-radius: 999px;
+    padding: 9px 14px;
+    border-radius: 12px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
+    text-align: center;
 }
 
-.editBtn:hover {
-    background: rgba(255, 255, 255, 0.35);
+.actionButton:hover {
+    background: rgba(255, 255, 255, 0.25);
     transform: translateY(-1px);
+}
+
+.actionButtonPrimary {
+    background: linear-gradient(120deg, #2563eb, #3b82f6);
+    border-color: rgba(59, 130, 246, 0.6);
+}
+
+.actionButtonPrimary:hover {
+    background: linear-gradient(120deg, #1d4ed8, #3b82f6);
+}
+
+.actionButtonAdmin {
+    background: rgba(249, 115, 22, 0.25);
+    border-color: rgba(249, 115, 22, 0.5);
+    color: #fed7aa;
+}
+
+.actionButtonFollow {
+    background: linear-gradient(120deg, #ec4899, #f97316);
+    border-color: rgba(236, 72, 153, 0.6);
+}
+
+.actionButtonFollow:hover {
+    background: linear-gradient(120deg, #db2777, #f97316);
+}
+
+.actionButtonMuted {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.actionButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
 }
 
 .statsBar {
@@ -258,6 +313,12 @@
 
     .heroActions {
         width: 100%;
+        justify-content: flex-start;
+    }
+
+    .actionStack {
+        width: 100%;
+        max-width: 240px;
     }
 }
 

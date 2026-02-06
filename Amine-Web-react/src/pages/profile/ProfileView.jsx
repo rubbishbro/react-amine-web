@@ -5,6 +5,8 @@ import { useUser } from '../context/UserContext';
 import Post from '../components/Post';
 import { loadAllPosts } from '../utils/postLoader';
 import { getPostStats } from '../utils/postStats';
+import { buildTagInfo, readAdminMeta } from '../utils/adminMeta';
+import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../utils/followStore';
 
 const normalizeText = (value) => (value ?? '').toString().trim();
 const decodeSafe = (value) => {
@@ -21,6 +23,30 @@ const buildCandidates = (value) => {
     const encoded = encodeURIComponent(decoded);
     return Array.from(new Set([raw, decoded, encoded].map((item) => item.toLowerCase())));
 };
+
+const formatDate = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('zh-CN');
+};
+
+const MOCK_BASE_TIME = Date.parse('2026-02-06T00:00:00Z');
+
+const fallbackStats = {
+    posts: 12,
+    views: 4200,
+    likes: 980,
+    favorites: 210,
+    replies: 85,
+};
+
+const fallbackActivities = [
+    { id: 'mock-activity-1', badge: '发布', text: '发布了《欢迎来到动漫社》', date: '2026-02-02' },
+    { id: 'mock-activity-2', badge: '更新', text: '更新了个人简介', date: '2026-01-29' },
+    { id: 'mock-activity-3', badge: '收藏', text: '收藏了《二创灵感合集》', date: '2026-01-24' },
+    { id: 'mock-activity-4', badge: '回复', text: '回复了《音游区推荐》', date: '2026-01-18' },
+    { id: 'mock-activity-5', badge: '发布', text: '发布了《社团活动回顾》', date: '2026-01-12' },
+];
 
 const isSamePerson = (left, right) => {
     if (!left || !right) return false;
@@ -50,6 +76,7 @@ export default function ProfileView() {
         favorites: 0,
         replies: 0,
     });
+    const [setFollowVersion] = useState(0);
 
     const authorFromState = state?.author;
     const authorFromUser = user?.id === id ? {
@@ -116,12 +143,6 @@ export default function ProfileView() {
         };
     }, [authorId, authorName, id]);
 
-    const recentActivities = useMemo(() => posts.slice(0, 5), [posts]);
-
-    const handleReadMore = (postId) => {
-        navigate(`/post/${postId}`, { state: { from: `/user/${id}` } });
-    };
-
     const displayAuthor = useMemo(() => {
         let resolved = author || null;
         if (!resolved) {
@@ -153,6 +174,87 @@ export default function ProfileView() {
         return resolved;
     }, [author, posts, user]);
 
+    const recentActivities = useMemo(() => posts.slice(0, 5), [posts]);
+
+    const hasRealPosts = posts.length > 0;
+    const showMock = !loading && !hasRealPosts;
+    const fallbackAuthor = useMemo(() => ({
+        id: displayAuthor?.id || id || 'local',
+        name: displayAuthor?.name || '匿名',
+        avatar: displayAuthor?.avatar || '',
+        cover: displayAuthor?.cover || '',
+        school: displayAuthor?.school || '',
+        className: displayAuthor?.className || '',
+        email: displayAuthor?.email || '',
+        isAdmin: displayAuthor?.isAdmin === true,
+    }), [displayAuthor, id]);
+
+    const mockPosts = useMemo(() => {
+        const base = {
+            author: fallbackAuthor,
+            category: '论坛闲聊',
+            summary: '这是一个用于展示个人主页布局的示例帖子内容。',
+            tags: ['社团', '记录'],
+        };
+        const makeDate = (daysAgo) => {
+            const safeDays = Number.isFinite(daysAgo) ? daysAgo : 0;
+            return new Date(MOCK_BASE_TIME - safeDays * 24 * 60 * 60 * 1000).toISOString();
+        };
+        return [
+            {
+                ...base,
+                id: `${fallbackAuthor.id}-mock-1`,
+                title: '欢迎来到动漫社的新成员介绍',
+                date: makeDate(2),
+                views: 320,
+                likes: 56,
+                favorites: 18,
+                replies: 9,
+            },
+            {
+                ...base,
+                id: `${fallbackAuthor.id}-mock-2`,
+                title: '社团活动回顾与下次预告',
+                date: makeDate(8),
+                views: 480,
+                likes: 72,
+                favorites: 25,
+                replies: 14,
+            },
+            {
+                ...base,
+                id: `${fallbackAuthor.id}-mock-3`,
+                title: '二创灵感分享：角色设定小技巧',
+                date: makeDate(15),
+                views: 260,
+                likes: 41,
+                favorites: 12,
+                replies: 6,
+            },
+        ];
+    }, [fallbackAuthor]);
+
+    const displayPosts = showMock ? mockPosts : posts;
+    const displayStats = showMock ? fallbackStats : stats;
+    const activityItems = useMemo(() => {
+        if (showMock) {
+            return fallbackActivities.map((item) => ({
+                ...item,
+                date: formatDate(item.date),
+            }));
+        }
+        return recentActivities.map((post) => ({
+            id: post.id,
+            badge: '发布',
+            text: `发布了《${post.title}》`,
+            date: formatDate(post.date),
+        }));
+    }, [showMock, recentActivities]);
+
+    const handleReadMore = (postId) => {
+        navigate(`/post/${postId}`, { state: { from: `/user/${id}` } });
+    };
+
     const isSelf = useMemo(() => {
         if (!displayAuthor || !user) return false;
         return isSamePerson(displayAuthor, {
@@ -160,6 +262,42 @@ export default function ProfileView() {
             name: user.profile?.name || '匿名'
         });
     }, [displayAuthor, user]);
+
+    const adminMeta = useMemo(() => readAdminMeta(displayAuthor?.id), [displayAuthor?.id]);
+    const tagInfo = useMemo(() => buildTagInfo(displayAuthor, adminMeta), [displayAuthor, adminMeta]);
+    const adminTarget = useMemo(() => (
+        displayAuthor || {
+            id: id || 'local',
+            name: authorName || '匿名',
+        }
+    ), [displayAuthor, id, authorName]);
+
+    const profileId = displayAuthor?.id || id || '';
+    const viewerId = user?.id || '';
+    const isFollowing = useMemo(
+        () => isFollowingUser(viewerId, profileId),
+        [viewerId, profileId]
+    );
+    const followerCount = useMemo(
+        () => getFollowerCount(profileId),
+        [profileId]
+    );
+
+    const handleToggleFollow = () => {
+        if (!viewerId) {
+            window.alert('请先登录');
+            return;
+        }
+        if (!profileId) return;
+        if (viewerId === profileId) {
+            window.alert('不能对自己执行操作');
+            return;
+        }
+        toggleFollowUser(viewerId, profileId);
+        setFollowVersion((prev) => prev + 1);
+    };
+
+    const canUseAdminTools = user?.isAdmin === true;
 
     const coverImage = displayAuthor?.cover || displayAuthor?.avatar;
     const coverStyle = coverImage
@@ -191,43 +329,77 @@ export default function ProfileView() {
                     <div className={styles.identity}>
                         <div className={styles.nameRow}>
                             <h2 className={styles.name}>{displayAuthor?.name || '匿名'}</h2>
-                            {displayAuthor?.isAdmin && <span className={styles.adminBadge}>管理员</span>}
+                            {tagInfo && (
+                                <span
+                                    className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}
+                                >
+                                    {tagInfo.label}
+                                </span>
+                            )}
                         </div>
                         <div className={styles.userId}>ID：{displayAuthor?.id || id}</div>
                         <div className={styles.meta}>{displayAuthor?.school} · {displayAuthor?.className}</div>
                         <div className={styles.meta}>{displayAuthor?.email}</div>
                     </div>
-                    {isSelf && (
-                        <div className={styles.heroActions}>
+                    <div className={styles.heroActions}>
+                        <div className={styles.actionStack}>
+                            {isSelf && (
+                                <button
+                                    type="button"
+                                    className={styles.actionButton}
+                                    onClick={() => navigate('/profile')}
+                                >
+                                    编辑资料
+                                </button>
+                            )}
+                            {profileId && viewerId && (
+                                <button
+                                    type="button"
+                                    className={`${styles.actionButton} ${styles.actionButtonFollow}`}
+                                    onClick={handleToggleFollow}
+                                    disabled={isSelf}
+                                >
+                                    {isFollowing ? '已关注' : '关注'}
+                                </button>
+                            )}
+                            <button type="button" className={`${styles.actionButton} ${styles.actionButtonPrimary}`}>
+                                私信
+                            </button>
                             <button
-                                className={styles.editBtn}
-                                onClick={() => navigate('/profile')}
+                                type="button"
+                                className={`${styles.actionButton} ${styles.actionButtonAdmin}`}
+                                disabled={!canUseAdminTools}
+                                onClick={() => {
+                                    if (canUseAdminTools) {
+                                        navigate('/admin', { state: { target: adminTarget } });
+                                    }
+                                }}
                             >
-                                编辑资料
+                                管理员
                             </button>
                         </div>
-                    )}
+                    </div>
                 </div>
                 <div className={styles.statsBar}>
                     <div className={styles.statCard}>
-                        <span className={styles.statValue}>{stats.posts}</span>
+                        <span className={styles.statValue}>{displayStats.posts}</span>
                         <span className={styles.statLabel}>帖子</span>
                     </div>
                     <div className={styles.statCard}>
-                        <span className={styles.statValue}>{stats.views}</span>
+                        <span className={styles.statValue}>{displayStats.views}</span>
                         <span className={styles.statLabel}>浏览</span>
                     </div>
                     <div className={styles.statCard}>
-                        <span className={styles.statValue}>{stats.likes}</span>
+                        <span className={styles.statValue}>{displayStats.likes}</span>
                         <span className={styles.statLabel}>获赞</span>
                     </div>
                     <div className={styles.statCard}>
-                        <span className={styles.statValue}>{stats.favorites}</span>
+                        <span className={styles.statValue}>{displayStats.favorites}</span>
                         <span className={styles.statLabel}>收藏</span>
                     </div>
                     <div className={styles.statCard}>
-                        <span className={styles.statValue}>{stats.replies}</span>
-                        <span className={styles.statLabel}>回复</span>
+                        <span className={styles.statValue}>{followerCount}</span>
+                        <span className={styles.statLabel}>粉丝</span>
                     </div>
                 </div>
             </section>
@@ -249,16 +421,14 @@ export default function ProfileView() {
                             {loading && (
                                 <li className={styles.activityItem}>正在加载动态...</li>
                             )}
-                            {!loading && recentActivities.length === 0 && (
+                            {!loading && activityItems.length === 0 && (
                                 <li className={styles.activityItem}>暂无动态</li>
                             )}
-                            {!loading && recentActivities.map((post) => (
-                                <li key={post.id} className={styles.activityItem}>
-                                    <span className={styles.activityBadge}>发布</span>
-                                    <span className={styles.activityText}>发布了《{post.title}》</span>
-                                    <span className={styles.activityDate}>
-                                        {new Date(post.date).toLocaleDateString('zh-CN')}
-                                    </span>
+                            {!loading && activityItems.map((item) => (
+                                <li key={item.id} className={styles.activityItem}>
+                                    <span className={styles.activityBadge}>{item.badge}</span>
+                                    <span className={styles.activityText}>{item.text}</span>
+                                    <span className={styles.activityDate}>{item.date}</span>
                                 </li>
                             ))}
                         </ul>
@@ -272,15 +442,15 @@ export default function ProfileView() {
                             {loading && (
                                 <div className={styles.loading}>正在加载帖子...</div>
                             )}
-                            {!loading && posts.length === 0 && (
+                            {!loading && displayPosts.length === 0 && (
                                 <div className={styles.empty}>暂无发布内容</div>
                             )}
-                            {!loading && posts.map((post) => (
+                            {!loading && displayPosts.map((post) => (
                                 <Post
                                     key={post.id}
                                     post={post}
                                     preview
-                                    onReadMore={handleReadMore}
+                                    onReadMore={showMock ? undefined : handleReadMore}
                                 />
                             ))}
                         </div>

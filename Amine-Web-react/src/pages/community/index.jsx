@@ -15,6 +15,7 @@ import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import UserPanel from '../components/UserPanel'
 import Profile from '../profile';
 import PublicProfile from '../profile/PublicProfile';
+import AdminPanel from '../admin';
 
 //帖子编辑器组件
 import PostEditor from '../components/PostEditor';
@@ -164,6 +165,7 @@ export default function CommunityBoard() {
             <Route path="/editor" element={<PostEditor />} />
             <Route path="/editor/:id" element={<PostEditor isEditMode={true} />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/admin" element={<AdminPanel />} />
           </Routes>
         </section>
       </main>

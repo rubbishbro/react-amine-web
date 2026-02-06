@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from './Profile.module.css';
 import { useUser } from '../context/UserContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const emptyProfile = {
     name: '',
@@ -14,6 +14,7 @@ const emptyProfile = {
 
 export default function Profile() {
     const { user, login, updateProfile, logout, setAdmin } = useUser();
+    const location = useLocation();
     const navigate = useNavigate();
 
     const isLoggedIn = user?.loggedIn === true;
@@ -23,11 +24,17 @@ export default function Profile() {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }, [isLoggedIn, login]);
 
+    useEffect(() => {
+        if (location.state?.openAdmin) {
+            setAdminOpen(true);
+        }
+    }, [location.state?.openAdmin]);
+
     const [form, setForm] = useState(() => ({
         ...emptyProfile,
         ...(user?.profile || {})
     }));
-    const [adminOpen, setAdminOpen] = useState(false);
+    const [adminOpen, setAdminOpen] = useState(location.state?.openAdmin === true);
     const [adminKey, setAdminKey] = useState('');
     const [adminError, setAdminError] = useState('');
     const isAdmin = user?.isAdmin === true;
@@ -132,7 +139,25 @@ export default function Profile() {
     const handleSave = (e) => {
         e.preventDefault();
         updateProfile(form);
-        navigate('/'); // 回主界面
+        const nextUser = {
+            id: user?.id || 'local',
+            profile: { ...form },
+            isAdmin: user?.isAdmin === true,
+        };
+        navigate(`/user/${nextUser.id}`, {
+            state: {
+                author: {
+                    id: nextUser.id,
+                    name: nextUser.profile?.name || '匿名',
+                    avatar: nextUser.profile?.avatar || '',
+                    cover: nextUser.profile?.cover || '',
+                    school: nextUser.profile?.school || '',
+                    className: nextUser.profile?.className || '',
+                    email: nextUser.profile?.email || '',
+                    isAdmin: nextUser.isAdmin === true,
+                },
+            },
+        });
     };
 
     const handleAdminKey = () => {

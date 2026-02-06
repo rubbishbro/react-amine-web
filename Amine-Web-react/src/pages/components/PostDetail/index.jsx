@@ -19,6 +19,18 @@ import {
   updatePostFavorites,
   updatePostLikes,
 } from '../../utils/postStats';
+import { buildTagInfo, readAdminMeta } from '../../utils/adminMeta';
+import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../../utils/followStore';
+
+const isSameUser = (left, right) => {
+  if (!left || !right) return false;
+  const leftId = (left.id ?? '').toString().trim();
+  const rightId = (right.id ?? '').toString().trim();
+  if (leftId && rightId && leftId === rightId) return true;
+  const leftName = (left.name ?? '').toString().trim();
+  const rightName = (right.name ?? '').toString().trim();
+  return !!(leftName && rightName && leftName === rightName);
+};
 
 const PostDetail = () => {
   const { id } = useParams();
@@ -33,6 +45,7 @@ const PostDetail = () => {
   const [replies, setReplies] = useState([]);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
+  const [followVersion, setFollowVersion] = useState(0);
   const adminMenuRef = useRef(null);
   const viewTrackedRef = useRef(null);
   const LOCAL_REPLIES_KEY = 'aw_local_replies';
@@ -80,6 +93,8 @@ const PostDetail = () => {
     email: user?.profile?.email || '',
     isAdmin: user?.isAdmin === true,
   };
+
+  const authorMeta = useMemo(() => readAdminMeta(post?.author?.id), [post?.author?.id]);
 
   const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -300,6 +315,37 @@ const PostDetail = () => {
     linkAccept: '.*',
   };
 
+  const author = post?.author;
+  const authorInfo = typeof author === 'object' && author !== null
+    ? author
+    : { name: author || '匿名' };
+  const hasAuthorLink = !!authorInfo.id;
+  const authorTagInfo = useMemo(() => buildTagInfo(authorInfo, authorMeta), [authorInfo, authorMeta]);
+  const authorId = authorInfo?.id || '';
+  const viewerId = user?.id || '';
+  const isSelfAuthor = useMemo(() => isSameUser(authorInfo, currentUser), [authorInfo, currentUser]);
+  const isFollowing = useMemo(
+    () => isFollowingUser(viewerId, authorId),
+    [viewerId, authorId, followVersion]
+  );
+  const followerCount = useMemo(
+    () => getFollowerCount(authorId),
+    [authorId, followVersion]
+  );
+  const replyTagMap = useMemo(() => {
+    const map = new Map();
+    replies.forEach((reply) => {
+      if (!reply?.author?.id) return;
+      const meta = readAdminMeta(reply.author.id);
+      const info = buildTagInfo(reply.author, meta);
+      if (info) {
+        map.set(reply.id, info);
+      }
+    });
+    return map;
+  }, [replies]);
+  const canDeletePost = currentUser.isAdmin || (authorInfo.id && currentUser.id === authorInfo.id);
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -320,14 +366,6 @@ const PostDetail = () => {
       </div>
     );
   }
-
-  const author = post?.author;
-  const authorInfo = typeof author === 'object' && author !== null
-    ? author
-    : { name: author || '匿名' };
-  const hasAuthorLink = !!authorInfo.id;
-  const isAuthorAdmin = authorInfo.isAdmin === true;
-  const canDeletePost = currentUser.isAdmin || (authorInfo.id && currentUser.id === authorInfo.id);
 
   const modalNode = isReplyOpen && typeof document !== 'undefined'
     ? createPortal(
@@ -399,13 +437,40 @@ const PostDetail = () => {
                     style={authorInfo.avatar ? { backgroundImage: `url(${authorInfo.avatar})` } : undefined}
                   />
                   <span className={styles.authorName}>{authorInfo.name || '匿名'}</span>
-                  {isAuthorAdmin && <span className={styles.adminBadge}>管理员</span>}
+                  {authorTagInfo && (
+                    <span className={`${styles.adminBadge} ${authorTagInfo.variant === 'user' ? styles.userBadge : ''}`}>
+                      {authorTagInfo.label}
+                    </span>
+                  )}
                 </Link>
               ) : (
                 <span className={styles.author}>
                   {authorInfo.name || '匿名'}
-                  {isAuthorAdmin && <span className={styles.adminBadge}>管理员</span>}
+                  {authorTagInfo && (
+                    <span className={`${styles.adminBadge} ${authorTagInfo.variant === 'user' ? styles.userBadge : ''}`}>
+                      {authorTagInfo.label}
+                    </span>
+                  )}
                 </span>
+              )}
+              {authorId && viewerId && (
+                <button
+                  type="button"
+                  className={`${styles.followButton} ${isFollowing ? styles.followButtonActive : ''}`}
+                  onClick={() => {
+                    if (isSelfAuthor) {
+                      return;
+                    }
+                    toggleFollowUser(viewerId, authorId);
+                    setFollowVersion((prev) => prev + 1);
+                  }}
+                  disabled={isSelfAuthor}
+                >
+                  {isFollowing ? '已关注' : '关注'}
+                </button>
+              )}
+              {authorId && (
+                <span className={styles.followCount}>粉丝 {followerCount}</span>
               )}
               {post.readTime && (
                 <span className={styles.readTime}>⏱️ {post.readTime}</span>
@@ -518,8 +583,10 @@ const PostDetail = () => {
                                   style={reply.author.avatar ? { backgroundImage: `url(${reply.author.avatar})` } : undefined}
                                 />
                                 <span className={styles.replyName}>{reply.author.name}</span>
-                                {reply.author?.isAdmin && (
-                                  <span className={styles.adminBadge}>管理员</span>
+                                {replyTagMap.get(reply.id) && (
+                                  <span className={`${styles.adminBadge} ${replyTagMap.get(reply.id).variant === 'user' ? styles.userBadge : ''}`}>
+                                    {replyTagMap.get(reply.id).label}
+                                  </span>
                                 )}
                               </Link>
                             ) : (
@@ -529,8 +596,10 @@ const PostDetail = () => {
                                   style={reply.author.avatar ? { backgroundImage: `url(${reply.author.avatar})` } : undefined}
                                 />
                                 <span className={styles.replyName}>{reply.author.name}</span>
-                                {reply.author?.isAdmin && (
-                                  <span className={styles.adminBadge}>管理员</span>
+                                {replyTagMap.get(reply.id) && (
+                                  <span className={`${styles.adminBadge} ${replyTagMap.get(reply.id).variant === 'user' ? styles.userBadge : ''}`}>
+                                    {replyTagMap.get(reply.id).label}
+                                  </span>
                                 )}
                               </>
                             )}
