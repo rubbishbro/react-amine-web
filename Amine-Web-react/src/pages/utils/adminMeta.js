@@ -52,8 +52,30 @@ export const deleteAdminMeta = (userId) => {
     }
 };
 
+const resolveAuthorTag = (author) => {
+    if (!author) return null;
+    const raw = author.tagInfo || author.tag;
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+        const label = raw.trim();
+        if (!label) return null;
+        return { label, variant: author.isAdmin === true ? 'admin' : 'user' };
+    }
+    if (typeof raw === 'object') {
+        const label = (raw.label || raw.title || '').trim();
+        if (!label) return null;
+        return {
+            label,
+            variant: raw.variant || (author.isAdmin === true ? 'admin' : 'user'),
+        };
+    }
+    return null;
+};
+
 export const buildTagInfo = (author, meta) => {
     if (!author && !meta) return null;
+    const fromAuthor = resolveAuthorTag(author);
+    if (fromAuthor) return fromAuthor;
     const role = meta?.role;
     const isAdmin = role ? role === 'admin' : author?.isAdmin === true;
     const title = (meta?.title || '').trim();

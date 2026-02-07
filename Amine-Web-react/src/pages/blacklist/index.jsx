@@ -30,7 +30,7 @@ export default function Blacklist() {
                 <div className={styles.card}>
                     <div className={styles.title}>黑名单管理</div>
                     <div className={styles.notice}>请先登录后查看黑名单。</div>
-                    <button className={styles.backButton} onClick={() => navigate('/profile')}>去登录</button>
+                    <button className={styles.backButton} onClick={() => navigate('/login')}>去登录</button>
                 </div>
             </div>
         );

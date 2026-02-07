@@ -206,3 +206,27 @@
 .label input:-webkit-autofill {
     border: 1px solid #ddd !important;
 }
+
+.placeholderRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    color: var(--text-sub, #666);
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+.placeholderValue {
+    color: var(--text-main, #333);
+    font-weight: 600;
+}
+
+.loginForm {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.loginError {
+    color: #e11d48;
+    font-size: 0.85rem;
+}

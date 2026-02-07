@@ -6,8 +6,12 @@ import { getCategoryColor } from '../../config';
 import { Link, useNavigate } from 'react-router-dom';
 import { getPostStats, onPostStatsUpdated } from '../../utils/postStats';
 import { buildTagInfo, readAdminMeta } from '../../utils/adminMeta';
+import { useUser } from '../../context/UserContext';
+import { getMappedUserId } from '../../utils/userId';
 
 const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
+  const { user } = useUser();
+  const isViewerLoggedIn = user?.loggedIn === true;
   // 如果是预览模式，只显示摘要
   const displayContent = preview
     ? (post?.summary || '')
@@ -53,12 +57,14 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
   const authorInfo = typeof post.author === 'object' && post.author !== null
     ? post.author
     : { name: post.author || '匿名' };
-  const hasAuthorLink = !!authorInfo.id;
-  const [authorMeta, setAuthorMeta] = useState(() => readAdminMeta(authorInfo.id));
+  const authorLinkId = getMappedUserId(authorInfo.id || '');
+  const hasAuthorLink = !!authorLinkId;
+  const authorMetaId = authorLinkId || authorInfo.id || '';
+  const [authorMeta, setAuthorMeta] = useState(() => readAdminMeta(authorMetaId));
 
   useEffect(() => {
-    setAuthorMeta(readAdminMeta(authorInfo.id));
-  }, [authorInfo.id]);
+    setAuthorMeta(readAdminMeta(authorMetaId));
+  }, [authorMetaId]);
 
   const tagInfo = useMemo(() => buildTagInfo(authorInfo, authorMeta), [authorInfo, authorMeta]);
 
@@ -105,8 +111,8 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
           </span>
           {hasAuthorLink ? (
             <Link
-              to={`/user/${authorInfo.id}`}
-              state={{ author: authorInfo }}
+              to={`/user/${authorLinkId}`}
+              state={{ author: { ...authorInfo, id: authorLinkId } }}
               className={styles.authorLink}
             >
               <div
@@ -114,7 +120,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
                 style={authorInfo.avatar ? { backgroundImage: `url(${authorInfo.avatar})` } : undefined}
               />
               <span className={styles.authorName}>{authorInfo.name || '匿名'}</span>
-              {tagInfo && (
+              {isViewerLoggedIn && tagInfo && (
                 <span className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}>
                   {tagInfo.label}
                 </span>
@@ -123,7 +129,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
           ) : (
             <span className={styles.author}>
               {authorInfo.name || '匿名'}
-              {tagInfo && (
+              {isViewerLoggedIn && tagInfo && (
                 <span className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}>
                   {tagInfo.label}
                 </span>
@@ -183,10 +189,10 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
 
       <div className={styles.postFooter}>
         <div className={styles.postStats}>
-          <span className={styles.statItem}>👀 {stats.views}</span>
-          <span className={styles.statItem}>❤️ {stats.likes}</span>
-          <span className={styles.statItem}>⭐ {stats.favorites}</span>
-          <span className={styles.statItem}>💬 {stats.replies}</span>
+          <span className={styles.statItem}>👀 {isViewerLoggedIn ? stats.views : '-'}</span>
+          <span className={styles.statItem}>❤️ {isViewerLoggedIn ? stats.likes : '-'}</span>
+          <span className={styles.statItem}>⭐ {isViewerLoggedIn ? stats.favorites : '-'}</span>
+          <span className={styles.statItem}>💬 {isViewerLoggedIn ? stats.replies : '-'}</span>
         </div>
 
         {preview && (

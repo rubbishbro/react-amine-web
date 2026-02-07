@@ -18,6 +18,7 @@ import PublicProfile from '../profile/PublicProfile';
 import AdminPanel from '../admin';
 import Messages from '../messages';
 import Blacklist from '../blacklist';
+import Login from '../login';
 
 //帖子编辑器组件
 import PostEditor from '../components/PostEditor';
@@ -61,6 +62,7 @@ export default function CommunityBoard() {
       '/favorites': '动漫社基地 | 我的收藏夹',
       '/messages': '动漫社基地 | 私信'
       , '/blacklist': '动漫社基地 | 黑名单'
+      , '/login': '动漫社基地 | 登录'
     };
 
     if (pageTitles[location.pathname]) {
@@ -174,6 +176,7 @@ export default function CommunityBoard() {
             <Route path="/editor" element={<PostEditor />} />
             <Route path="/editor/:id" element={<PostEditor isEditMode={true} />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:id" element={<Messages />} />

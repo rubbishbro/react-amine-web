@@ -15,7 +15,7 @@ const CreatePostButton = () => {
     // 检查用户是否登录
     if (!user?.loggedIn) {
       window.alert('请先登录后再发帖！');
-      navigate('/profile');
+      navigate('/login');
       return;
     }
 
