@@ -84,9 +84,14 @@ const PostDetail = () => {
   const [activeReplyId, setActiveReplyId] = useState(null);
   const [nestedDraft, setNestedDraft] = useState('');
 
+  // 构建当前用户信息，ID生成方式与帖子作者一致
+  const currentUserName = user?.profile?.name || '游客';
+  const currentUserId = currentUserName && currentUserName !== '游客' && currentUserName !== '匿名'
+    ? encodeURIComponent(currentUserName)
+    : (user?.id || 'guest');
   const currentUser = {
-    id: user?.id || 'guest',
-    name: user?.profile?.name || '游客',
+    id: currentUserId,
+    name: currentUserName,
     avatar: user?.profile?.avatar || '',
     school: user?.profile?.school || '',
     className: user?.profile?.className || '',
@@ -229,7 +234,9 @@ const PostDetail = () => {
   };
 
   const handleEditPost = () => {
-    if (!currentUser.isAdmin) return;
+    // 只有自己可以编辑自己的帖子
+    const canEdit = authorInfo.id && currentUser.id === authorInfo.id;
+    if (!canEdit) return;
     navigate(`/editor/${id}`);
   };
 
@@ -480,29 +487,12 @@ const PostDetail = () => {
                   <button
                     type="button"
                     className={styles.adminToolButton}
-                    onClick={() => setAdminMenuOpen((prev) => !prev)}
-                    aria-label="管理员工具"
+                    onClick={handleTogglePinned}
+                    aria-label={isPinned ? '取消置顶' : '置顶帖子'}
+                    title={isPinned ? '取消置顶' : '置顶帖子'}
                   >
-                    ⚒️
+                    {isPinned ? '📌' : '📍'}
                   </button>
-                  {adminMenuOpen && (
-                    <div className={styles.adminMenu}>
-                      <button
-                        type="button"
-                        className={styles.adminMenuItem}
-                        onClick={handleTogglePinned}
-                      >
-                        {isPinned ? '取消置顶' : '置顶帖子'}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.adminMenuItem}
-                        onClick={handleEditPost}
-                      >
-                        编辑帖子
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -553,8 +543,13 @@ const PostDetail = () => {
               💬 回复
             </button>
             {canDeletePost && (
-              <button className={`${styles.actionButton} ${styles.dangerButton}`} onClick={handleDeletePost}>
-                🗑 删除帖子
+              <button className={`${styles.actionButton} ${styles.dangerButton}`} onClick={handleDeletePost} title="删除帖子">
+                🗑️
+              </button>
+            )}
+            {isSelfAuthor && (
+              <button className={styles.actionButton} onClick={handleEditPost} title="编辑帖子">
+                ✏️
               </button>
             )}
           </div>

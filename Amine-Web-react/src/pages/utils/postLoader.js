@@ -373,27 +373,23 @@ export const getCategoryDisplayName = (category) => {
 };
 
 /**
- * 获取所有可用的分类（中文）
+ * 获取所有可用的分类（中文）- 固定列表
  */
 export const getAllCategories = async () => {
-  try {
-    const allPosts = await loadAllPosts();
-    const categories = new Set();
+  const fixedCategories = [
+    '季度新番',
+    '论坛闲聊',
+    '社团活动',
+    '同人/杂谈',
+    '前沿技术',
+    '网络资源',
+    '音游区'
+  ];
 
-    allPosts.forEach((post) => {
-      if (post.category) {
-        categories.add(post.category);
-      }
-    });
-
-    return Array.from(categories).map((cat) => ({
-      id: cat,
-      name: cat
-    }));
-  } catch (error) {
-    console.error('Error getting categories:', error);
-    return [];
-  }
+  return fixedCategories.map((cat) => ({
+    id: cat,
+    name: cat
+  }));
 };
 
 /**
