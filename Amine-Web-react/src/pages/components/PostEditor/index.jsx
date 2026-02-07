@@ -11,6 +11,7 @@ import styles from './PostEditor.module.css';
 import { getAllCategories, loadPostContent, upsertLocalPost } from '../../utils/postLoader';
 import { getCategoryTextColor } from '../../config';
 import { useUser } from '../../context/UserContext';
+import { buildUserId } from '../../utils/userId';
 
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
@@ -164,9 +165,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
   // 准备保存数据
   const preparePostData = useCallback((status) => {
     const authorName = user?.profile?.name || '匿名';
-    const authorId = authorName && authorName !== '匿名'
-      ? encodeURIComponent(authorName)
-      : (user?.id || 'local');
+    const authorId = buildUserId(authorName, user?.id || 'local');
     const author = {
       id: authorId,
       name: authorName,

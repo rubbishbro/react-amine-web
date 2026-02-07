@@ -19,7 +19,8 @@ import {
   updatePostFavorites,
   updatePostLikes,
 } from '../../utils/postStats';
-import { buildTagInfo, readAdminMeta } from '../../utils/adminMeta';
+import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../../utils/adminMeta';
+import { buildUserId } from '../../utils/userId';
 import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../../utils/followStore';
 
 const isSameUser = (left, right) => {
@@ -86,9 +87,7 @@ const PostDetail = () => {
 
   // 构建当前用户信息，ID生成方式与帖子作者一致
   const currentUserName = user?.profile?.name || '游客';
-  const currentUserId = currentUserName && currentUserName !== '游客' && currentUserName !== '匿名'
-    ? encodeURIComponent(currentUserName)
-    : (user?.id || 'guest');
+  const currentUserId = buildUserId(currentUserName, user?.id || 'guest');
   const currentUser = {
     id: currentUserId,
     name: currentUserName,
@@ -98,6 +97,9 @@ const PostDetail = () => {
     email: user?.profile?.email || '',
     isAdmin: user?.isAdmin === true,
   };
+
+  // 获取当前用户的禁言/封禁状态
+  const userRestrictions = useMemo(() => getUserRestrictions(currentUserId), [currentUserId]);
 
   const authorMeta = useMemo(() => readAdminMeta(post?.author?.id), [post?.author?.id]);
 
@@ -159,6 +161,15 @@ const PostDetail = () => {
   }, [id]);
 
   const handleSubmitReply = () => {
+    // 检查禁言/封禁状态
+    if (userRestrictions.isBanned) {
+      window.alert('您的账号已被封禁，无法发布回复。');
+      return;
+    }
+    if (userRestrictions.isMuted) {
+      window.alert('您已被禁言，暂时无法发布回复。');
+      return;
+    }
     if (!replyDraft.trim()) return;
     const newReply = {
       id: createId(),
@@ -178,11 +189,29 @@ const PostDetail = () => {
   };
 
   const handleOpenNestedReply = (replyId) => {
+    // 检查禁言/封禁状态
+    if (userRestrictions.isBanned) {
+      window.alert('您的账号已被封禁，无法发布回复。');
+      return;
+    }
+    if (userRestrictions.isMuted) {
+      window.alert('您已被禁言，暂时无法发布回复。');
+      return;
+    }
     setActiveReplyId(replyId);
     setNestedDraft('');
   };
 
   const handleSubmitNestedReply = (replyId) => {
+    // 检查禁言/封禁状态
+    if (userRestrictions.isBanned) {
+      window.alert('您的账号已被封禁，无法发布回复。');
+      return;
+    }
+    if (userRestrictions.isMuted) {
+      window.alert('您已被禁言，暂时无法发布回复。');
+      return;
+    }
     if (!nestedDraft.trim()) return;
     const target = replies.find((item) => item.id === replyId);
     const newReply = {
@@ -291,12 +320,30 @@ const PostDetail = () => {
   }, [id, replies.length]);
 
   const handleToggleLike = () => {
+    // 检查禁言/封禁状态
+    if (userRestrictions.isBanned) {
+      window.alert('您的账号已被封禁，无法进行点赞操作。');
+      return;
+    }
+    if (userRestrictions.isMuted) {
+      window.alert('您已被禁言，暂时无法进行点赞操作。');
+      return;
+    }
     const wasLiked = isLiked(id);
     toggleLike(id);
     updatePostLikes(id, wasLiked ? -1 : 1);
   };
 
   const handleToggleFavorite = () => {
+    // 检查禁言/封禁状态
+    if (userRestrictions.isBanned) {
+      window.alert('您的账号已被封禁，无法进行收藏操作。');
+      return;
+    }
+    if (userRestrictions.isMuted) {
+      window.alert('您已被禁言，暂时无法进行收藏操作。');
+      return;
+    }
     const wasFavorited = isFavorited(id);
     toggleFavorite(id);
     updatePostFavorites(id, wasFavorited ? -1 : 1);

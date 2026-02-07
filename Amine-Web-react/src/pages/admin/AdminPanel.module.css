@@ -183,7 +183,8 @@
 .primaryButton,
 .secondaryButton,
 .warningButton,
-.dangerButton {
+.dangerButton,
+.successButton {
     border-radius: 10px;
     padding: 8px 14px;
     border: none;
@@ -206,13 +207,19 @@
     color: #fff;
 }
 
+.successButton {
+    background: #10b981;
+    color: #fff;
+}
+
 .dangerButton {
     background: #ef4444;
     color: #fff;
 }
 
 .warningButton:disabled,
-.dangerButton:disabled {
+.dangerButton:disabled,
+.successButton:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }

@@ -7,6 +7,7 @@ import {
     deleteAdminMeta,
     readAdminMeta,
     writeAdminMeta,
+    verifyAdminKey,
 } from '../utils/adminMeta';
 import { updateAuthorInCaches } from '../utils/postLoader';
 
@@ -94,9 +95,29 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
     }, [target, title, role]);
 
     const isTargetAdmin = role === 'admin';
+    const isSelf = targetId === user?.id;
+    const originalRole = meta.role || (target?.isAdmin ? 'admin' : 'user');
+    const originalTitle = meta.title || '';
+    const isRoleChanged = role !== originalRole;
+    const isTitleChanged = title.trim() !== originalTitle;
 
     const handleSave = () => {
         if (!targetId) return;
+
+        // 如果修改了他人的权限或头衔，需要验证管理员密钥
+        if (!isSelf && (isRoleChanged || isTitleChanged)) {
+            const inputKey = window.prompt('修改他人信息需要验证管理员密钥，请输入：');
+            if (!inputKey) {
+                setMessage('操作已取消');
+                return;
+            }
+            if (!verifyAdminKey(inputKey)) {
+                window.alert('管理员密钥错误，操作被拒绝。');
+                setMessage('密钥验证失败');
+                return;
+            }
+        }
+
         const nextMeta = {
             ...meta,
             title: title.trim(),
@@ -121,32 +142,41 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
         setMessage('已保存');
     };
 
+    const isMuted = meta.isMuted === true;
+    const isBanned = meta.isBanned === true;
+
     const handleMute = () => {
         if (!targetId) return;
         if (isTargetAdmin) return;
-        if (!window.confirm('确定要禁言该用户吗？')) return;
+        const nextMuted = !isMuted;
+        const confirmMsg = nextMuted ? '确定要禁言该用户吗？' : '确定要取消禁言吗？';
+        if (!window.confirm(confirmMsg)) return;
         const nextMeta = {
             ...meta,
-            muteCount: (meta.muteCount || 0) + 1,
+            isMuted: nextMuted,
+            muteCount: nextMuted ? (meta.muteCount || 0) + 1 : meta.muteCount,
             lastActiveAt: new Date().toISOString(),
         };
         writeAdminMeta(targetId, nextMeta);
         setMeta(nextMeta);
-        setMessage('已禁言');
+        setMessage(nextMuted ? '已禁言' : '已取消禁言');
     };
 
     const handleBan = () => {
         if (!targetId) return;
         if (isTargetAdmin) return;
-        if (!window.confirm('确定要封禁该用户吗？')) return;
+        const nextBanned = !isBanned;
+        const confirmMsg = nextBanned ? '确定要封禁该用户吗？' : '确定要取消封禁吗？';
+        if (!window.confirm(confirmMsg)) return;
         const nextMeta = {
             ...meta,
-            banCount: (meta.banCount || 0) + 1,
+            isBanned: nextBanned,
+            banCount: nextBanned ? (meta.banCount || 0) + 1 : meta.banCount,
             lastActiveAt: new Date().toISOString(),
         };
         writeAdminMeta(targetId, nextMeta);
         setMeta(nextMeta);
-        setMessage('已封禁');
+        setMessage(nextBanned ? '已封禁' : '已取消封禁');
     };
 
     const handleDelete = () => {
@@ -260,8 +290,12 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
                         <div className={styles.restrictNote}>你无法对管理员进行操作</div>
                     )}
                     <div className={styles.actions}>
-                        <button className={styles.warningButton} onClick={handleMute} disabled={isTargetAdmin}>禁言用户</button>
-                        <button className={styles.warningButton} onClick={handleBan} disabled={isTargetAdmin}>封禁用户</button>
+                        <button className={isMuted ? styles.successButton : styles.warningButton} onClick={handleMute} disabled={isTargetAdmin}>
+                            {isMuted ? '取消禁言' : '禁言用户'}
+                        </button>
+                        <button className={isBanned ? styles.successButton : styles.warningButton} onClick={handleBan} disabled={isTargetAdmin}>
+                            {isBanned ? '取消封禁' : '封禁用户'}
+                        </button>
                         <button className={styles.dangerButton} onClick={handleDelete} disabled={isTargetAdmin}>删除用户</button>
                     </div>
                 </div>

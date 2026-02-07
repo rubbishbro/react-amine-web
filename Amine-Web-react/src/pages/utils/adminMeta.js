@@ -9,6 +9,8 @@ const DEFAULT_META = {
     reportsSubmitted: 0,
     muteCount: 0,
     banCount: 0,
+    isMuted: false,
+    isBanned: false,
 };
 
 const safeNumber = (value) => (Number.isFinite(value) ? value : 0);
@@ -65,4 +67,46 @@ export const buildTagInfo = (author, meta) => {
         return { label: '管理员', variant: 'admin' };
     }
     return null;
+};
+
+/**
+ * 检查用户是否被禁言
+ */
+export const isUserMuted = (userId) => {
+    if (!userId) return false;
+    const meta = readAdminMeta(userId);
+    return meta.isMuted === true;
+};
+
+/**
+ * 检查用户是否被封禁
+ */
+export const isUserBanned = (userId) => {
+    if (!userId) return false;
+    const meta = readAdminMeta(userId);
+    return meta.isBanned === true;
+};
+
+/**
+ * 获取用户的禁言/封禁状态
+ */
+export const getUserRestrictions = (userId) => {
+    if (!userId) return { isMuted: false, isBanned: false };
+    const meta = readAdminMeta(userId);
+    return {
+        isMuted: meta.isMuted === true,
+        isBanned: meta.isBanned === true,
+    };
+};
+
+/**
+ * 管理员密钥
+ */
+const ADMIN_SECRET_KEY = 'E动漫社forever';
+
+/**
+ * 验证管理员密钥
+ */
+export const verifyAdminKey = (inputKey) => {
+    return inputKey && inputKey.trim() === ADMIN_SECRET_KEY;
 };

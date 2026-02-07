@@ -1,6 +1,7 @@
 //实现用户状态/登录登出上下文
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { buildUserId } from '../utils/userId';
 
 const UserContext = createContext(null);
 export const useUser = () => useContext(UserContext);
@@ -33,7 +34,10 @@ export function UserProvider({ children }) {
             const raw = localStorage.getItem('aw_user');
             if (!raw) return null;
             const parsed = JSON.parse(raw);
-            return parsed?.loggedIn === true ? parsed : null;
+            if (parsed?.loggedIn !== true) return null;
+            const profileName = parsed?.profile?.name || '游客';
+            const normalizedId = buildUserId(profileName, parsed?.id || 'local');
+            return { ...parsed, id: normalizedId };
         } catch {
             return null;
         }
@@ -87,26 +91,37 @@ export function UserProvider({ children }) {
         }
     }, [favorites, user?.id]);
 
-    const login = async () => {
-        setUser({ id: 'local', loggedIn: true, isAdmin: false, profile: { ...defaultProfile } });
+    const login = async (payload) => {
+        const name = payload?.username?.trim() || '';
+        const profile = { ...defaultProfile, ...(name ? { name } : {}) };
+        const nextId = buildUserId(profile.name, 'local');
+        setUser({ id: nextId, loggedIn: true, isAdmin: false, profile });
     };
 
     const updateProfile = (profile) => {
-        setUser((prev) => ({
-            id: prev?.id || 'local',
-            loggedIn: true,
-            isAdmin: prev?.isAdmin === true,
-            profile: { ...defaultProfile, ...profile },
-        }));
+        setUser((prev) => {
+            const mergedProfile = { ...defaultProfile, ...profile };
+            const nextId = buildUserId(mergedProfile.name, prev?.id || 'local');
+            return {
+                id: nextId,
+                loggedIn: true,
+                isAdmin: prev?.isAdmin === true,
+                profile: mergedProfile,
+            };
+        });
     };
 
     const setAdmin = (isAdmin) => {
-        setUser((prev) => ({
-            id: prev?.id || 'local',
-            loggedIn: true,
-            isAdmin: !!isAdmin,
-            profile: { ...defaultProfile, ...(prev?.profile || {}) },
-        }));
+        setUser((prev) => {
+            const mergedProfile = { ...defaultProfile, ...(prev?.profile || {}) };
+            const nextId = buildUserId(mergedProfile.name, prev?.id || 'local');
+            return {
+                id: nextId,
+                loggedIn: true,
+                isAdmin: !!isAdmin,
+                profile: mergedProfile,
+            };
+        });
     };
 
     const logout = () => setUser(null);

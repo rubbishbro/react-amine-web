@@ -5,7 +5,8 @@ import { useUser } from '../context/UserContext';
 import Post from '../components/Post';
 import { loadAllPosts } from '../utils/postLoader';
 import { getPostStats } from '../utils/postStats';
-import { buildTagInfo, readAdminMeta } from '../utils/adminMeta';
+import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../utils/adminMeta';
+import { buildUserId } from '../utils/userId';
 import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../utils/followStore';
 
 const normalizeText = (value) => (value ?? '').toString().trim();
@@ -76,11 +77,11 @@ export default function ProfileView() {
         favorites: 0,
         replies: 0,
     });
-    const [setFollowVersion] = useState(0);
+    const [followVersion, setFollowVersion] = useState(0);
 
     const authorFromState = state?.author;
     const authorFromUser = user?.id === id ? {
-        id: user.id,
+        id: buildUserId(user?.profile?.name, user?.id || 'local'),
         name: user.profile?.name || '匿名',
         avatar: user.profile?.avatar || '',
         cover: user.profile?.cover || '',
@@ -150,17 +151,17 @@ export default function ProfileView() {
             if (first && typeof first === 'object') {
                 resolved = first;
             } else if (typeof first === 'string' && first.trim()) {
-                resolved = { id: encodeURIComponent(first.trim()), name: first.trim() };
+                resolved = { id: buildUserId(first.trim(), 'local'), name: first.trim() };
             }
         }
 
         if (resolved && user && isSamePerson(resolved, {
-            id: user.id,
+            id: buildUserId(user?.profile?.name, user?.id || 'local'),
             name: user.profile?.name || '匿名'
         })) {
             resolved = {
                 ...resolved,
-                id: resolved.id || user.id,
+                id: resolved.id || buildUserId(user?.profile?.name, user?.id || 'local'),
                 name: resolved.name || user.profile?.name || '匿名',
                 avatar: resolved.avatar || user.profile?.avatar || '',
                 cover: resolved.cover || user.profile?.cover || '',
@@ -258,13 +259,14 @@ export default function ProfileView() {
     const isSelf = useMemo(() => {
         if (!displayAuthor || !user) return false;
         return isSamePerson(displayAuthor, {
-            id: user.id,
+            id: buildUserId(user?.profile?.name, user?.id || 'local'),
             name: user.profile?.name || '匿名'
         });
     }, [displayAuthor, user]);
 
     const adminMeta = useMemo(() => readAdminMeta(displayAuthor?.id), [displayAuthor?.id]);
     const tagInfo = useMemo(() => buildTagInfo(displayAuthor, adminMeta), [displayAuthor, adminMeta]);
+    const userRestrictions = useMemo(() => getUserRestrictions(displayAuthor?.id), [displayAuthor?.id]);
     const adminTarget = useMemo(() => (
         displayAuthor || {
             id: id || 'local',
@@ -273,14 +275,14 @@ export default function ProfileView() {
     ), [displayAuthor, id, authorName]);
 
     const profileId = displayAuthor?.id || id || '';
-    const viewerId = user?.id || '';
+    const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
     const isFollowing = useMemo(
         () => isFollowingUser(viewerId, profileId),
-        [viewerId, profileId]
+        [viewerId, profileId, followVersion]
     );
     const followerCount = useMemo(
         () => getFollowerCount(profileId),
-        [profileId]
+        [profileId, followVersion]
     );
 
     const handleToggleFollow = () => {
@@ -334,6 +336,16 @@ export default function ProfileView() {
                                     className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}
                                 >
                                     {tagInfo.label}
+                                </span>
+                            )}
+                            {userRestrictions.isBanned && (
+                                <span className={styles.bannedBadge}>
+                                    🚫 账号已被管理员封禁
+                                </span>
+                            )}
+                            {userRestrictions.isMuted && !userRestrictions.isBanned && (
+                                <span className={styles.mutedBadge}>
+                                    🔇 已被禁言
                                 </span>
                             )}
                         </div>

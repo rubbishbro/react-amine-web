@@ -119,6 +119,34 @@
     box-shadow: 0 6px 16px rgba(255, 133, 161, 0.28);
 }
 
+.bannedBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.mutedBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
 .heroActions {
     display: flex;
     align-items: center;
