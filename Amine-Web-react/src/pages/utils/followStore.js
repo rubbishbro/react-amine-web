@@ -60,3 +60,15 @@ export const toggleFollowUser = (followerId, targetId) => {
 
   return { isFollowing: list.includes(safeFollower), count: list.length };
 };
+
+export const removeFollowRelation = (viewerId, targetId) => {
+  const safeViewer = normalizeId(viewerId);
+  const safeTarget = normalizeId(targetId);
+  if (!safeViewer || !safeTarget || safeViewer === safeTarget) return;
+  const graph = readGraph();
+  const targetFollowers = Array.isArray(graph[safeTarget]) ? [...graph[safeTarget]] : [];
+  const viewerFollowers = Array.isArray(graph[safeViewer]) ? [...graph[safeViewer]] : [];
+  graph[safeTarget] = targetFollowers.filter((id) => id !== safeViewer);
+  graph[safeViewer] = viewerFollowers.filter((id) => id !== safeTarget);
+  writeGraph(graph);
+};

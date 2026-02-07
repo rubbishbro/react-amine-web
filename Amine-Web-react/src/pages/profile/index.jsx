@@ -11,6 +11,7 @@ const emptyProfile = {
     email: '',
     avatar: '',
     cover: '',
+    bio: '',
 };
 
 export default function Profile() {
@@ -156,6 +157,7 @@ export default function Profile() {
                     school: nextUser.profile?.school || '',
                     className: nextUser.profile?.className || '',
                     email: nextUser.profile?.email || '',
+                    bio: nextUser.profile?.bio || '',
                     isAdmin: nextUser.isAdmin === true,
                 },
             },
@@ -220,6 +222,16 @@ export default function Profile() {
                 <label className={styles.label}>
                     邮箱
                     <input name="email" value={form.email} onChange={handleChange} />
+                </label>
+                <label className={styles.label}>
+                    个人简介（支持 Markdown）
+                    <textarea
+                        name="bio"
+                        value={form.bio}
+                        onChange={handleChange}
+                        rows={4}
+                        placeholder="介绍一下你自己，比如兴趣、擅长领域等..."
+                    />
                 </label>
 
                 <div className={styles.adminSection}>
