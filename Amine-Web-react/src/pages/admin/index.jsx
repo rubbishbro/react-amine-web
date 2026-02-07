@@ -129,6 +129,7 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
         if (targetId === user?.id) {
             onSetAdmin(role === 'admin');
         }
+        const nextTagInfo = buildTagInfo({ ...target, isAdmin: role === 'admin' }, nextMeta);
         updateAuthorInCaches({
             id: targetId,
             name: target?.name || '匿名',
@@ -138,6 +139,7 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
             className: target?.className || '',
             email: target?.email || '',
             isAdmin: role === 'admin',
+            tagInfo: nextTagInfo,
         });
         setMessage('已保存');
     };

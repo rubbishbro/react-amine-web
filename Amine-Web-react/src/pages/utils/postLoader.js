@@ -35,6 +35,7 @@ const normalizeAuthor = (author) => {
     ? normalizedId
     : '';
   const id = safeId || encodeURIComponent(name) || defaultAuthor.id;
+  const tagInfo = author.tagInfo || author.tag || null;
 
   return {
     ...defaultAuthor,
@@ -47,6 +48,7 @@ const normalizeAuthor = (author) => {
     className: author.className || author.class || author.grade || '',
     email: author.email || '',
     isAdmin: author.isAdmin === true,
+    tagInfo,
   };
 };
 
@@ -464,6 +466,7 @@ export const updateAuthorInCaches = (target) => {
     className: target.className || '',
     email: target.email || '',
     isAdmin: target.isAdmin === true,
+    tagInfo: target.tagInfo || target.tag || null,
   };
 
   const updateList = (posts) => {

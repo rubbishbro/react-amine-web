@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from './Profile.module.css';
 import { useUser } from '../context/UserContext';
-import { buildUserId } from '../utils/userId';
+import { buildUserId, getMappedUserId } from '../utils/userId';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const emptyProfile = {
@@ -15,16 +15,15 @@ const emptyProfile = {
 };
 
 export default function Profile() {
-    const { user, login, updateProfile, logout, setAdmin } = useUser();
+    const { user, updateProfile, logout, setAdmin } = useUser();
     const location = useLocation();
     const navigate = useNavigate();
 
     const isLoggedIn = user?.loggedIn === true;
 
     useEffect(() => {
-        if (!isLoggedIn) login();
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    }, [isLoggedIn, login]);
+    }, []);
 
     useEffect(() => {
         if (location.state?.openAdmin) {
@@ -32,14 +31,29 @@ export default function Profile() {
         }
     }, [location.state?.openAdmin]);
 
+    useEffect(() => {
+        if (!isLoggedIn) {
+            navigate('/login');
+        }
+    }, [isLoggedIn, navigate]);
+
     const [form, setForm] = useState(() => ({
         ...emptyProfile,
         ...(user?.profile || {})
     }));
+    const [password, setPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
     const [adminOpen, setAdminOpen] = useState(location.state?.openAdmin === true);
     const [adminKey, setAdminKey] = useState('');
     const [adminError, setAdminError] = useState('');
     const isAdmin = user?.isAdmin === true;
+
+    useEffect(() => {
+        setForm({
+            ...emptyProfile,
+            ...(user?.profile || {})
+        });
+    }, [user?.profile]);
 
     const handleChange = (e) => {
         setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
@@ -138,15 +152,21 @@ export default function Profile() {
         reader.readAsDataURL(file);
     };
 
-    const handleSave = (e) => {
+    const handleSave = async (e) => {
         e.preventDefault();
-        updateProfile(form);
-        const derivedId = buildUserId(form.name, user?.id || 'local');
+        if (password && password.length < 8) {
+            setPasswordError('密码至少8位');
+            return;
+        }
+        setPasswordError('');
+        await updateProfile({ ...form, password: password || '' });
+        const derivedId = getMappedUserId(user?.id || buildUserId(form.name, user?.id || 'local'));
         const nextUser = {
             id: user?.id || 'local',
             profile: { ...form },
             isAdmin: user?.isAdmin === true,
         };
+        setPassword('');
         navigate(`/user/${derivedId}`, {
             state: {
                 author: {
@@ -178,6 +198,8 @@ export default function Profile() {
         logout();
         navigate('/'); // 回主界面
     };
+
+    if (!isLoggedIn) return null;
 
     return (
         <div className={styles.page}>
@@ -233,6 +255,17 @@ export default function Profile() {
                         placeholder="介绍一下你自己，比如兴趣、擅长领域等..."
                     />
                 </label>
+                <label className={styles.label}>
+                    密码（留空则不修改）
+                    <input
+                        name="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="至少8位"
+                    />
+                </label>
+                {passwordError && <span className={styles.loginError}>{passwordError}</span>}
 
                 <div className={styles.adminSection}>
                     <button

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import styles from './Messages.module.css';
 import { useUser } from '../context/UserContext';
-import { buildUserId } from '../utils/userId';
+import { buildUserId, getMappedUserId } from '../utils/userId';
 import { getUserRestrictions } from '../utils/adminMeta';
 import { isBlocked, toggleBlock, readBlockedList } from '../utils/blockStore';
 
@@ -35,7 +35,9 @@ export default function Messages() {
 
     const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
     const targetId = id || '';
+    const mappedTargetId = getMappedUserId(targetId) || targetId;
     const target = state?.author || { id: targetId, name: '对方', avatar: '' };
+    const mappedTarget = target ? { ...target, id: getMappedUserId(target.id || targetId) || target.id } : target;
     const viewerName = user?.profile?.name || '我';
     const viewerAvatar = user?.profile?.avatar || '';
 
@@ -96,7 +98,7 @@ export default function Messages() {
         if (!draft.trim()) return;
         if (!viewerId) {
             window.alert('请先登录');
-            navigate('/profile');
+            navigate('/login');
             return;
         }
         if (blockedByTarget) {
@@ -137,7 +139,7 @@ export default function Messages() {
     const handleToggleBlock = () => {
         if (!viewerId) {
             window.alert('请先登录');
-            navigate('/profile');
+            navigate('/login');
             return;
         }
         if (!targetId) return;
@@ -172,7 +174,7 @@ export default function Messages() {
                     <div className={styles.card}>
                         <div className={styles.title}>私信</div>
                         <div className={styles.notice}>请先登录后查看私信。</div>
-                        <button className={styles.backButton} onClick={() => navigate('/profile')}>去登录</button>
+                        <button className={styles.backButton} onClick={() => navigate('/login')}>去登录</button>
                     </div>
                 </div>
             );
@@ -231,7 +233,7 @@ export default function Messages() {
                             <button
                                 type="button"
                                 className={styles.avatarButton}
-                                onClick={() => navigate(`/user/${targetId}`, { state: { author: target } })}
+                                onClick={() => navigate(`/user/${mappedTargetId}`, { state: { author: mappedTarget } })}
                                 aria-label="查看对方主页"
                             >
                                 <div
@@ -278,9 +280,9 @@ export default function Messages() {
                                     className={styles.avatarButton}
                                     onClick={() => {
                                         if (!isSelf) {
-                                            navigate(`/user/${targetId}`, { state: { author: target } });
+                                            navigate(`/user/${mappedTargetId}`, { state: { author: mappedTarget } });
                                         } else {
-                                            navigate('/profile');
+                                            navigate('/login');
                                         }
                                     }}
                                     aria-label={isSelf ? '查看我的主页' : '查看对方主页'}

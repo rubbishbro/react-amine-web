@@ -20,7 +20,7 @@ import {
   updatePostLikes,
 } from '../../utils/postStats';
 import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../../utils/adminMeta';
-import { buildUserId } from '../../utils/userId';
+import { buildUserId, getMappedUserId } from '../../utils/userId';
 import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../../utils/followStore';
 
 const isSameUser = (left, right) => {
@@ -38,6 +38,7 @@ const PostDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, toggleLike, toggleFavorite, isLiked, isFavorited } = useUser();
+  const isViewerLoggedIn = user?.loggedIn === true;
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,7 +102,8 @@ const PostDetail = () => {
   // 获取当前用户的禁言/封禁状态
   const userRestrictions = useMemo(() => getUserRestrictions(currentUserId), [currentUserId]);
 
-  const authorMeta = useMemo(() => readAdminMeta(post?.author?.id), [post?.author?.id]);
+  const authorMetaId = getMappedUserId(post?.author?.id || '');
+  const authorMeta = useMemo(() => readAdminMeta(authorMetaId), [authorMetaId]);
 
   const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -161,9 +163,9 @@ const PostDetail = () => {
   }, [id]);
 
   const handleSubmitReply = () => {
-    if (!user?.loggedIn) {
-      window.alert('请先登录后再评论');
-      navigate('/profile');
+    if (!isViewerLoggedIn) {
+      window.alert('请先登录后再发帖！');
+      navigate('/login');
       return;
     }
     // 检查禁言/封禁状态
@@ -194,9 +196,9 @@ const PostDetail = () => {
   };
 
   const handleOpenNestedReply = (replyId) => {
-    if (!user?.loggedIn) {
-      window.alert('请先登录后再评论');
-      navigate('/profile');
+    if (!isViewerLoggedIn) {
+      window.alert('请先登录后再发帖！');
+      navigate('/login');
       return;
     }
     // 检查禁言/封禁状态
@@ -213,9 +215,9 @@ const PostDetail = () => {
   };
 
   const handleSubmitNestedReply = (replyId) => {
-    if (!user?.loggedIn) {
-      window.alert('请先登录后再评论');
-      navigate('/profile');
+    if (!isViewerLoggedIn) {
+      window.alert('请先登录后再发帖！');
+      navigate('/login');
       return;
     }
     // 检查禁言/封禁状态
@@ -247,7 +249,8 @@ const PostDetail = () => {
   };
 
   const handleDeletePost = () => {
-    const canDeletePost = currentUser.isAdmin || (post?.author?.id && currentUser.id === post.author.id);
+    const authorId = getMappedUserId(post?.author?.id || '');
+    const canDeletePost = currentUser.isAdmin || (authorId && currentUser.id === authorId);
     if (!canDeletePost) {
       window.alert('你没有权限删除该帖子。');
       return;
@@ -279,14 +282,16 @@ const PostDetail = () => {
 
   const handleEditPost = () => {
     // 只有自己可以编辑自己的帖子
-    const canEdit = authorInfo.id && currentUser.id === authorInfo.id;
+    const authorId = getMappedUserId(authorInfo.id || '');
+    const canEdit = authorId && currentUser.id === authorId;
     if (!canEdit) return;
     navigate(`/editor/${id}`);
   };
 
   const handleDeleteReply = (replyId) => {
     const target = replies.find((reply) => reply.id === replyId);
-    const canDeleteReply = currentUser.isAdmin || (target?.author?.id && currentUser.id === target.author.id);
+    const replyAuthorId = getMappedUserId(target?.author?.id || '');
+    const canDeleteReply = currentUser.isAdmin || (replyAuthorId && currentUser.id === replyAuthorId);
     if (!canDeleteReply) {
       window.alert('你没有权限删除该回复。');
       return;
@@ -326,18 +331,20 @@ const PostDetail = () => {
     if (!post?.id) return;
     if (viewTrackedRef.current === post.id) return;
     viewTrackedRef.current = post.id;
-    incrementPostViews(post.id);
-  }, [post?.id]);
+    if (isViewerLoggedIn) {
+      incrementPostViews(post.id);
+    }
+  }, [post?.id, isViewerLoggedIn]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !isViewerLoggedIn) return;
     syncPostReplies(id, replies.length);
-  }, [id, replies.length]);
+  }, [id, replies.length, isViewerLoggedIn]);
 
   const handleToggleLike = () => {
-    if (!user?.loggedIn) {
-      window.alert('请先登录后再点赞');
-      navigate('/profile');
+    if (!isViewerLoggedIn) {
+      window.alert('请先登录后再发帖！');
+      navigate('/login');
       return;
     }
     // 检查禁言/封禁状态
@@ -355,9 +362,9 @@ const PostDetail = () => {
   };
 
   const handleToggleFavorite = () => {
-    if (!user?.loggedIn) {
-      window.alert('请先登录后再收藏');
-      navigate('/profile');
+    if (!isViewerLoggedIn) {
+      window.alert('请先登录后再发帖！');
+      navigate('/login');
       return;
     }
     // 检查禁言/封禁状态
@@ -398,9 +405,10 @@ const PostDetail = () => {
   const authorInfo = typeof author === 'object' && author !== null
     ? author
     : { name: author || '匿名' };
-  const hasAuthorLink = !!authorInfo.id;
+  const mappedAuthorId = getMappedUserId(authorInfo.id || '');
+  const hasAuthorLink = !!mappedAuthorId;
   const authorTagInfo = useMemo(() => buildTagInfo(authorInfo, authorMeta), [authorInfo, authorMeta]);
-  const authorId = authorInfo?.id || '';
+  const authorId = mappedAuthorId || '';
   const viewerId = user?.id || '';
   const isSelfAuthor = useMemo(() => isSameUser(authorInfo, currentUser), [authorInfo, currentUser]);
   const isFollowing = useMemo(
@@ -411,19 +419,21 @@ const PostDetail = () => {
     () => getFollowerCount(authorId),
     [authorId, followVersion]
   );
+  const displayFollowerCount = isViewerLoggedIn ? followerCount : '-';
   const replyTagMap = useMemo(() => {
+    if (!isViewerLoggedIn) return new Map();
     const map = new Map();
     replies.forEach((reply) => {
       if (!reply?.author?.id) return;
-      const meta = readAdminMeta(reply.author.id);
+      const meta = readAdminMeta(getMappedUserId(reply.author.id));
       const info = buildTagInfo(reply.author, meta);
       if (info) {
         map.set(reply.id, info);
       }
     });
     return map;
-  }, [replies]);
-  const canDeletePost = currentUser.isAdmin || (authorInfo.id && currentUser.id === authorInfo.id);
+  }, [replies, isViewerLoggedIn]);
+  const canDeletePost = currentUser.isAdmin || (authorId && currentUser.id === authorId);
 
   if (loading) {
     return (
@@ -507,8 +517,8 @@ const PostDetail = () => {
               </span>
               {hasAuthorLink ? (
                 <Link
-                  to={`/user/${authorInfo.id}`}
-                  state={{ author: authorInfo }}
+                  to={`/user/${mappedAuthorId}`}
+                  state={{ author: { ...authorInfo, id: mappedAuthorId } }}
                   className={styles.authorLink}
                 >
                   <div
@@ -516,7 +526,7 @@ const PostDetail = () => {
                     style={authorInfo.avatar ? { backgroundImage: `url(${authorInfo.avatar})` } : undefined}
                   />
                   <span className={styles.authorName}>{authorInfo.name || '匿名'}</span>
-                  {authorTagInfo && (
+                  {isViewerLoggedIn && authorTagInfo && (
                     <span className={`${styles.adminBadge} ${authorTagInfo.variant === 'user' ? styles.userBadge : ''}`}>
                       {authorTagInfo.label}
                     </span>
@@ -525,7 +535,7 @@ const PostDetail = () => {
               ) : (
                 <span className={styles.author}>
                   {authorInfo.name || '匿名'}
-                  {authorTagInfo && (
+                  {isViewerLoggedIn && authorTagInfo && (
                     <span className={`${styles.adminBadge} ${authorTagInfo.variant === 'user' ? styles.userBadge : ''}`}>
                       {authorTagInfo.label}
                     </span>
@@ -549,7 +559,7 @@ const PostDetail = () => {
                 </button>
               )}
               {authorId && (
-                <span className={styles.followCount}>粉丝 {followerCount}</span>
+                <span className={styles.followCount}>粉丝 {displayFollowerCount}</span>
               )}
               {post.readTime && (
                 <span className={styles.readTime}>⏱️ {post.readTime}</span>
@@ -570,10 +580,10 @@ const PostDetail = () => {
             </div>
 
             <div className={styles.postStats}>
-              <span className={styles.statItem}>👀 {stats.views}</span>
-              <span className={styles.statItem}>❤️ {stats.likes}</span>
-              <span className={styles.statItem}>⭐ {stats.favorites}</span>
-              <span className={styles.statItem}>💬 {stats.replies}</span>
+              <span className={styles.statItem}>👀 {isViewerLoggedIn ? stats.views : '-'}</span>
+              <span className={styles.statItem}>❤️ {isViewerLoggedIn ? stats.likes : '-'}</span>
+              <span className={styles.statItem}>⭐ {isViewerLoggedIn ? stats.favorites : '-'}</span>
+              <span className={styles.statItem}>💬 {isViewerLoggedIn ? stats.replies : '-'}</span>
             </div>
 
             <h1 className={styles.postTitle}>{post.title}</h1>
@@ -611,7 +621,17 @@ const PostDetail = () => {
             >
               {isFavorited(id) ? '⭐' : '☆'} 收藏
             </button>
-            <button className={styles.actionButton} onClick={() => setIsReplyOpen(true)}>
+            <button
+              className={styles.actionButton}
+              onClick={() => {
+                if (!isViewerLoggedIn) {
+                  window.alert('请先登录后再发帖！');
+                  navigate('/login');
+                  return;
+                }
+                setIsReplyOpen(true);
+              }}
+            >
               💬 回复
             </button>
             {canDeletePost && (
@@ -641,8 +661,8 @@ const PostDetail = () => {
                           <div className={styles.replyAuthor}>
                             {reply.author?.id ? (
                               <Link
-                                to={`/user/${reply.author.id}`}
-                                state={{ author: reply.author }}
+                                to={`/user/${getMappedUserId(reply.author.id)}`}
+                                state={{ author: { ...reply.author, id: getMappedUserId(reply.author.id) } }}
                                 className={styles.replyAuthorLink}
                               >
                                 <div
@@ -696,7 +716,7 @@ const PostDetail = () => {
                           >
                             回复
                           </button>
-                          {(currentUser.isAdmin || (reply.author?.id && currentUser.id === reply.author.id)) && (
+                          {(currentUser.isAdmin || (reply.author?.id && currentUser.id === getMappedUserId(reply.author.id))) && (
                             <button
                               className={styles.replyDeleteButton}
                               onClick={() => handleDeleteReply(reply.id)}
@@ -752,7 +772,7 @@ const PostDetail = () => {
 
       {hasAuthorLink && (
         <div className={styles.author}>
-          <Link to={`/user/${authorInfo.id}`} state={{ author: authorInfo }} className={styles.authorLink}>
+          <Link to={`/user/${mappedAuthorId}`} state={{ author: { ...authorInfo, id: mappedAuthorId } }} className={styles.authorLink}>
             <div
               className={styles.authorAvatar}
               style={authorInfo.avatar ? { backgroundImage: `url(${authorInfo.avatar})` } : undefined}

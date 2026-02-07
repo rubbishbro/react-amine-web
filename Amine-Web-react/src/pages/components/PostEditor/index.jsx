@@ -167,6 +167,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       className: user?.profile?.className || '',
       email: user?.profile?.email || '',
       isAdmin: user?.isAdmin === true,
+      tagInfo: user?.tagInfo || null,
     };
 
     const postData = {
