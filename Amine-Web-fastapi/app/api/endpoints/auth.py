@@ -1,3 +1,4 @@
+# 登录换token的API端点
 from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,13 +18,15 @@ def login_access_token(
     db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
-    OAuth2 compatible token login, get an access token for future requests
+    用OAuth2密码模式登录以获取访问token
+    支持邮箱或用户名登录，调用crud_user.authenticate_flexible验证用户凭据
+    成功后创建并返回JWT访问token，失败则抛出HTTP 400错误
     """
-    user = crud_user.authenticate(
-        db, email=form_data.username, password=form_data.password
+    user = crud_user.authenticate_flexible(
+        db, identifier=form_data.username, password=form_data.password
     )
     if not user:
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        raise HTTPException(status_code=400, detail="Incorrect email/username or password")
     elif not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

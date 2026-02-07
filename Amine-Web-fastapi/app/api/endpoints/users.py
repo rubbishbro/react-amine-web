@@ -17,7 +17,7 @@ def create_user(
     user_in: UserCreate,
 ) -> Any:
     """
-    Create new user.
+    创建用户
     """
     user = crud_user.get_by_email(db, email=user_in.email)
     if user:
@@ -33,27 +33,22 @@ def read_user_me(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get current user.
+    获取当前用户
     """
     return current_user
 
-@router.get("/{user_id}", response_model=UserSchema)
-def read_user_by_id(
-    user_id: int,
-    current_user: User = Depends(deps.get_current_active_user),
+@router.get("/username/{username}", response_model=UserSchema)
+def read_user_by_username(
+    username: str,
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """
-    Get a specific user by id.
+    根据用户名获取用户公开信息（无需登录）
     """
-    user = db.get(User, user_id)
-    if user == current_user:
-        return user
+    user = crud_user.get_by_username(db, username=username)
     if not user:
-         raise HTTPException(
+        raise HTTPException(
             status_code=404,
-            detail="The user with this id does not exist in the system",
+            detail="该用户名不存在",
         )
-    # Only superuser or the user themselves can view full details? 
-    # For now allow reading public info (UserSchema filters sensitive data if configured right, but here we return full UserSchema)
     return user
