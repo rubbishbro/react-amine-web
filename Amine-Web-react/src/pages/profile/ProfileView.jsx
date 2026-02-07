@@ -77,7 +77,7 @@ export default function ProfileView() {
         favorites: 0,
         replies: 0,
     });
-    const [followVersion, setFollowVersion] = useState(0);
+    const [setFollowVersion] = useState(0);
 
     const authorFromState = state?.author;
     const authorFromUser = user?.id === id ? {
@@ -278,11 +278,11 @@ export default function ProfileView() {
     const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
     const isFollowing = useMemo(
         () => isFollowingUser(viewerId, profileId),
-        [viewerId, profileId, followVersion]
+        [viewerId, profileId]
     );
     const followerCount = useMemo(
         () => getFollowerCount(profileId),
-        [profileId, followVersion]
+        [profileId]
     );
 
     const handleToggleFollow = () => {

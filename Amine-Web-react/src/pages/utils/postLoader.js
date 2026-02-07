@@ -391,7 +391,8 @@ export const getAllCategories = async () => {
     '同人/杂谈',
     '前沿技术',
     '网络资源',
-    '音游区'
+    '音游区',
+    '网站开发'
   ];
 
   return fixedCategories.map((cat) => ({
