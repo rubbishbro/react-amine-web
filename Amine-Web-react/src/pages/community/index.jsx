@@ -16,6 +16,8 @@ import UserPanel from '../components/UserPanel'
 import Profile from '../profile';
 import PublicProfile from '../profile/PublicProfile';
 import AdminPanel from '../admin';
+import Messages from '../messages';
+import Blacklist from '../blacklist';
 
 //帖子编辑器组件
 import PostEditor from '../components/PostEditor';
@@ -56,13 +58,19 @@ export default function CommunityBoard() {
       '/tech': '动漫社基地 | 前沿技术',
       '/resources': '动漫社基地 | 网络资源',
       '/musicgames': '动漫社基地 | 音游区',
-      '/favorites': '动漫社基地 | 我的收藏夹'
+      '/favorites': '动漫社基地 | 我的收藏夹',
+      '/messages': '动漫社基地 | 私信'
+      , '/blacklist': '动漫社基地 | 黑名单'
     };
 
     if (pageTitles[location.pathname]) {
       setTitle(pageTitles[location.pathname]);
     } else if (location.pathname.startsWith('/post/')) {
       setTitle('动漫社基地 | 帖子详情');
+    } else if (location.pathname.startsWith('/messages/')) {
+      setTitle('动漫社基地 | 私信');
+    } else if (location.pathname.startsWith('/blacklist')) {
+      setTitle('动漫社基地 | 黑名单');
     }
   }, [location, setTitle]);
 
@@ -117,6 +125,7 @@ export default function CommunityBoard() {
         <Link to="/resources" className="nav-item" onClick={closeSidebar}><span>💾 网络资源</span></Link>
         <Link to="/musicgames" className="nav-item" onClick={closeSidebar}><span>🎵 音游区</span></Link>
         <Link to="/favorites" className="nav-item" onClick={closeSidebar}><span>⭐ 收藏夹</span></Link>
+        <Link to="/messages" className="nav-item" onClick={closeSidebar}><span>✉️ 消息</span></Link>
       </nav>
 
       {/*主内容区*/}
@@ -166,6 +175,9 @@ export default function CommunityBoard() {
             <Route path="/editor/:id" element={<PostEditor isEditMode={true} />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/messages/:id" element={<Messages />} />
+            <Route path="/blacklist" element={<Blacklist />} />
           </Routes>
         </section>
       </main>

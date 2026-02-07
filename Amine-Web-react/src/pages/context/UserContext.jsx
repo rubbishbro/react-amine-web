@@ -13,6 +13,7 @@ const defaultProfile = {
     email: '',
     avatar: '',
     cover: '',
+    bio: '',
 };
 
 export function UserProvider({ children }) {
