@@ -2,12 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import styles from './PublicProfile.module.css';
 import { useUser } from '../context/UserContext';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Post from '../components/Post';
 import { loadAllPosts } from '../utils/postLoader';
 import { getPostStats } from '../utils/postStats';
 import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../utils/adminMeta';
 import { buildUserId } from '../utils/userId';
 import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../utils/followStore';
+import { isBlocked } from '../utils/blockStore';
 
 const normalizeText = (value) => (value ?? '').toString().trim();
 const decodeSafe = (value) => {
@@ -88,6 +91,7 @@ export default function ProfileView() {
         school: user.profile?.school || '',
         className: user.profile?.className || '',
         email: user.profile?.email || '',
+        bio: user.profile?.bio || '',
         isAdmin: user.isAdmin === true,
     } : null;
 
@@ -168,6 +172,7 @@ export default function ProfileView() {
                 school: resolved.school || user.profile?.school || '',
                 className: resolved.className || user.profile?.className || '',
                 email: resolved.email || user.profile?.email || '',
+                bio: resolved.bio || user.profile?.bio || '',
                 isAdmin: resolved.isAdmin ?? user.isAdmin === true,
             };
         }
@@ -187,6 +192,7 @@ export default function ProfileView() {
         school: displayAuthor?.school || '',
         className: displayAuthor?.className || '',
         email: displayAuthor?.email || '',
+        bio: displayAuthor?.bio || '',
         isAdmin: displayAuthor?.isAdmin === true,
     }), [displayAuthor, id]);
 
@@ -276,6 +282,8 @@ export default function ProfileView() {
 
     const profileId = displayAuthor?.id || id || '';
     const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
+    const blockedByAuthor = useMemo(() => isBlocked(profileId, viewerId), [profileId, viewerId]);
+    const blockedByViewer = useMemo(() => isBlocked(viewerId, profileId), [profileId, viewerId]);
     const isFollowing = useMemo(
         () => isFollowingUser(viewerId, profileId),
         [viewerId, profileId]
@@ -284,6 +292,7 @@ export default function ProfileView() {
         () => getFollowerCount(profileId),
         [profileId]
     );
+
 
     const handleToggleFollow = () => {
         if (!viewerId) {
@@ -297,6 +306,35 @@ export default function ProfileView() {
         }
         toggleFollowUser(viewerId, profileId);
         setFollowVersion((prev) => prev + 1);
+    };
+
+    const handleOpenDm = () => {
+        if (!viewerId) {
+            window.alert('请先登录后再私信');
+            return;
+        }
+        if (!profileId || viewerId === profileId) {
+            return;
+        }
+        if (userRestrictions.isBanned) {
+            window.alert('你的账号已被封禁，无法发送私信。');
+            return;
+        }
+        if (userRestrictions.isMuted) {
+            window.alert('你已被禁言，暂时无法发送私信。');
+            return;
+        }
+        if (isBlocked(viewerId, profileId)) {
+            window.alert('你已拉黑对方，无法发送私信。');
+            return;
+        }
+        if (isBlocked(profileId, viewerId)) {
+            window.alert('对方已拉黑你，无法发送私信。');
+            return;
+        }
+        navigate(`/messages/${profileId}`, {
+            state: { author: displayAuthor || { id: profileId, name: authorName || '匿名' } },
+        });
     };
 
     const canUseAdminTools = user?.isAdmin === true;
@@ -364,6 +402,15 @@ export default function ProfileView() {
                                     编辑资料
                                 </button>
                             )}
+                            {isSelf && (
+                                <button
+                                    type="button"
+                                    className={styles.actionButton}
+                                    onClick={() => navigate('/blacklist')}
+                                >
+                                    黑名单
+                                </button>
+                            )}
                             {profileId && viewerId && (
                                 <button
                                     type="button"
@@ -374,7 +421,12 @@ export default function ProfileView() {
                                     {isFollowing ? '已关注' : '关注'}
                                 </button>
                             )}
-                            <button type="button" className={`${styles.actionButton} ${styles.actionButtonPrimary}`}>
+                            <button
+                                type="button"
+                                className={`${styles.actionButton} ${styles.actionButtonPrimary}`}
+                                onClick={handleOpenDm}
+                                disabled={!profileId || viewerId === profileId}
+                            >
                                 私信
                             </button>
                             <button
@@ -421,9 +473,17 @@ export default function ProfileView() {
                     <div className={styles.section}>
                         <div className={styles.sectionHeader}>个人简介</div>
                         <div className={styles.sectionBody}>
-                            {displayAuthor?.school || displayAuthor?.className || displayAuthor?.email
-                                ? '认真创作、热爱分享，一起交流动漫与创作灵感！'
-                                : '这个人很神秘，还没有填写资料。'}
+                            {displayAuthor?.bio
+                                ? (
+                                    <div className={styles.bioMarkdown}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {displayAuthor.bio}
+                                        </ReactMarkdown>
+                                    </div>
+                                )
+                                : (displayAuthor?.school || displayAuthor?.className || displayAuthor?.email
+                                    ? '认真创作、热爱分享，一起交流动漫与创作灵感！'
+                                    : '这个人很神秘，还没有填写资料。')}
                         </div>
                     </div>
 
@@ -450,6 +510,13 @@ export default function ProfileView() {
                 <div className={styles.rightColumn}>
                     <div className={styles.section}>
                         <div className={styles.sectionHeader}>TA 的帖子</div>
+                        {(blockedByAuthor || blockedByViewer) && (
+                            <div className={styles.sectionNotice}>
+                                {blockedByAuthor
+                                    ? '你已被该用户拉黑，无法查看对方发布的帖子。'
+                                    : '你已拉黑该用户，帖子已隐藏。'}
+                            </div>
+                        )}
                         <div className={styles.postsWrap}>
                             {loading && (
                                 <div className={styles.loading}>正在加载帖子...</div>

@@ -1,5 +1,7 @@
 import { getCategoryColor } from '../config/colors.js';
 import { isUserBanned } from './adminMeta.js';
+import { isBlocked } from './blockStore.js';
+import { buildUserId, getCurrentViewerId } from './userId.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
 const REMOTE_POSTS_CACHE_KEY = 'aw_posts_cache';
@@ -275,13 +277,19 @@ export const loadPostContent = async (postId) => {
  */
 export const loadAllPosts = async () => {
   try {
+    const viewerId = getCurrentViewerId();
     const deletedIds = readDeletedPosts();
     const validPosts = buildMergedPosts()
       .filter((post) => {
         if (post === null) return false;
         if (deletedIds.includes(post.id)) return false;
-        // 过滤被封禁用户的帖子
-        const authorId = typeof post.author === 'object' ? post.author?.id : null;
+        // 过滤被封禁/拉黑用户的帖子
+        const normalizedAuthor = normalizeAuthor(post.author);
+        const authorId = normalizedAuthor?.id || buildUserId(normalizedAuthor?.name || '', '');
+        if (viewerId && authorId) {
+          if (isBlocked(authorId, viewerId)) return false;
+          if (isBlocked(viewerId, authorId)) return false;
+        }
         if (authorId && isUserBanned(authorId)) return false;
         return true;
       });

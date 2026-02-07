@@ -161,6 +161,11 @@ const PostDetail = () => {
   }, [id]);
 
   const handleSubmitReply = () => {
+    if (!user?.loggedIn) {
+      window.alert('请先登录后再评论');
+      navigate('/profile');
+      return;
+    }
     // 检查禁言/封禁状态
     if (userRestrictions.isBanned) {
       window.alert('您的账号已被封禁，无法发布回复。');
@@ -189,6 +194,11 @@ const PostDetail = () => {
   };
 
   const handleOpenNestedReply = (replyId) => {
+    if (!user?.loggedIn) {
+      window.alert('请先登录后再评论');
+      navigate('/profile');
+      return;
+    }
     // 检查禁言/封禁状态
     if (userRestrictions.isBanned) {
       window.alert('您的账号已被封禁，无法发布回复。');
@@ -203,6 +213,11 @@ const PostDetail = () => {
   };
 
   const handleSubmitNestedReply = (replyId) => {
+    if (!user?.loggedIn) {
+      window.alert('请先登录后再评论');
+      navigate('/profile');
+      return;
+    }
     // 检查禁言/封禁状态
     if (userRestrictions.isBanned) {
       window.alert('您的账号已被封禁，无法发布回复。');
@@ -320,6 +335,11 @@ const PostDetail = () => {
   }, [id, replies.length]);
 
   const handleToggleLike = () => {
+    if (!user?.loggedIn) {
+      window.alert('请先登录后再点赞');
+      navigate('/profile');
+      return;
+    }
     // 检查禁言/封禁状态
     if (userRestrictions.isBanned) {
       window.alert('您的账号已被封禁，无法进行点赞操作。');
@@ -335,6 +355,11 @@ const PostDetail = () => {
   };
 
   const handleToggleFavorite = () => {
+    if (!user?.loggedIn) {
+      window.alert('请先登录后再收藏');
+      navigate('/profile');
+      return;
+    }
     // 检查禁言/封禁状态
     if (userRestrictions.isBanned) {
       window.alert('您的账号已被封禁，无法进行收藏操作。');

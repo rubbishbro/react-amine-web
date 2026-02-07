@@ -81,6 +81,17 @@
     background: #fff;
 }
 
+.label textarea {
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    resize: vertical;
+    min-height: 92px;
+    color: #333;
+    font-family: inherit;
+}
+
 .actions {
     display: flex;
     gap: 12px;
