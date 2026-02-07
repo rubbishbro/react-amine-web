@@ -19,11 +19,19 @@ def create_user(
     """
     创建用户
     """
+    # 检查邮箱是否已存在
     user = crud_user.get_by_email(db, email=user_in.email)
     if user:
         raise HTTPException(
             status_code=400,
-            detail="The user with this username already exists in the system.",
+            detail="该邮箱已被注册",
+        )
+    # 检查用户名是否已存在
+    user = crud_user.get_by_username(db, username=user_in.username)
+    if user:
+        raise HTTPException(
+            status_code=400,
+            detail="该用户名已被占用",
         )
     user = crud_user.create(db, obj_in=user_in)
     return user
