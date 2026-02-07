@@ -12,6 +12,7 @@ import { getAllCategories, loadPostContent, upsertLocalPost } from '../../utils/
 import { getCategoryTextColor } from '../../config';
 import { useUser } from '../../context/UserContext';
 import { buildUserId } from '../../utils/userId';
+import { calculatePostReadTime, getPostWordCount } from '../../utils/postReadTime';
 
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
@@ -127,14 +128,6 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   }, [tags]);
 
-  // 自动计算阅读时间
-  const calculateReadTime = useCallback((content) => {
-    if (!content) return '0 min read';
-    const words = content.trim().split(/\s+/).length;
-    const minutes = Math.max(1, Math.ceil(words / 200));
-    return `${minutes} min read`;
-  }, []);
-
   // 自动生成摘要
   const generateSummary = useCallback((content) => {
     if (!content) return '';
@@ -181,7 +174,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       tags: tags,
       date: new Date().toISOString().split('T')[0],
       author,
-      readTime: calculateReadTime(formData.content),
+      readTime: calculatePostReadTime(formData.content),
       status: status
     };
 
@@ -196,7 +189,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     }
 
     return postData;
-  }, [formData, tags, calculateReadTime, generateSummary, isEditMode, user]);
+  }, [formData, tags, generateSummary, isEditMode, user]);
 
   // 保存函数（不包含状态管理）
   const savePostData = useCallback(async (postData, status) => {
@@ -525,6 +518,9 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         <div className={styles.formGroup}>
           <label className={styles.label}>内容 *</label>
           <div className={styles.markdownContainer}>
+            <div className={styles.editorStatsBadge}>
+              字数: {getPostWordCount(formData.content)}
+            </div>
             <MarkdownEditor
               value={formData.content}
               style={{ height: '500px' }}
@@ -549,7 +545,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         {/* 阅读时间预览 */}
         <div className={styles.previewInfo}>
           <div className={styles.readTimePreview}>
-            ⏱️ 预计阅读时间: {calculateReadTime(formData.content)}
+            ⏱️ 预计阅读时间: {calculatePostReadTime(formData.content)}
           </div>
         </div>
       </div>

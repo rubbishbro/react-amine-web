@@ -1,6 +1,7 @@
 import { getCategoryColor } from '../config/colors.js';
 import { isUserBanned } from './adminMeta.js';
 import { isBlocked } from './blockStore.js';
+import { ensurePostReadTime } from './postReadTime.js';
 import { buildUserId, getCurrentViewerId } from './userId.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
@@ -211,7 +212,7 @@ const getLocalPublishedPosts = () => {
   return posts.filter((item) => item.status === 'published');
 };
 
-const applyPinned = (post, pinnedIds) => ({
+const applyPinned = (post, pinnedIds) => ensurePostReadTime({
   ...post,
   author: normalizeAuthor(post.author),
   isPinnedGlobally: post.isPinnedGlobally === true || pinnedIds.includes(post.id),
