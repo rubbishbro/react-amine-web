@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from './Profile.module.css';
 import { useUser } from '../context/UserContext';
+import { buildUserId } from '../utils/userId';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const emptyProfile = {
@@ -139,15 +140,16 @@ export default function Profile() {
     const handleSave = (e) => {
         e.preventDefault();
         updateProfile(form);
+        const derivedId = buildUserId(form.name, user?.id || 'local');
         const nextUser = {
             id: user?.id || 'local',
             profile: { ...form },
             isAdmin: user?.isAdmin === true,
         };
-        navigate(`/user/${nextUser.id}`, {
+        navigate(`/user/${derivedId}`, {
             state: {
                 author: {
-                    id: nextUser.id,
+                    id: derivedId,
                     name: nextUser.profile?.name || '匿名',
                     avatar: nextUser.profile?.avatar || '',
                     cover: nextUser.profile?.cover || '',

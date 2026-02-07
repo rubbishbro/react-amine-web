@@ -3,6 +3,7 @@ import styles from './UserPanel.module.css';
 import { useUser } from '../../context/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { closeSidebar } from '../../community';
+import { buildUserId } from '../../utils/userId';
 
 export default function UserPanel() {
     const { user, login } = useUser();
@@ -22,24 +23,29 @@ export default function UserPanel() {
         if (closeSidebar) {
             await closeSidebar();
         }
-        
+
         // 如果需要登录且用户未登录，先执行登录
         if (!user) {
             await login(); // 等待登录完成
         }
-        
+
         const nextUser = user || { id: 'local', profile: {} };
+        const derivedId = buildUserId(nextUser.profile?.name, nextUser.id || 'local');
         // 然后导航到个人主页
-        navigate(`/user/${nextUser.id}`, { state: { author: {
-            id: nextUser.id,
-            name: nextUser.profile?.name || '匿名',
-            avatar: nextUser.profile?.avatar || '',
-            cover: nextUser.profile?.cover || '',
-            school: nextUser.profile?.school || '',
-            className: nextUser.profile?.className || '',
-            email: nextUser.profile?.email || '',
-            isAdmin: nextUser.isAdmin === true,
-        } } });
+        navigate(`/user/${derivedId}`, {
+            state: {
+                author: {
+                    id: derivedId,
+                    name: nextUser.profile?.name || '匿名',
+                    avatar: nextUser.profile?.avatar || '',
+                    cover: nextUser.profile?.cover || '',
+                    school: nextUser.profile?.school || '',
+                    className: nextUser.profile?.className || '',
+                    email: nextUser.profile?.email || '',
+                    isAdmin: nextUser.isAdmin === true,
+                }
+            }
+        });
     };
 
     const handleProfileClick = async () => {
@@ -48,17 +54,22 @@ export default function UserPanel() {
             await closeSidebar();
         }
         const nextUser = user || { id: 'local', profile: {} };
+        const derivedId = buildUserId(nextUser.profile?.name, nextUser.id || 'local');
         // 然后导航到个人主页
-        navigate(`/user/${nextUser.id}`, { state: { author: {
-            id: nextUser.id,
-            name: nextUser.profile?.name || '匿名',
-            avatar: nextUser.profile?.avatar || '',
-            cover: nextUser.profile?.cover || '',
-            school: nextUser.profile?.school || '',
-            className: nextUser.profile?.className || '',
-            email: nextUser.profile?.email || '',
-            isAdmin: nextUser.isAdmin === true,
-        } } });
+        navigate(`/user/${derivedId}`, {
+            state: {
+                author: {
+                    id: derivedId,
+                    name: nextUser.profile?.name || '匿名',
+                    avatar: nextUser.profile?.avatar || '',
+                    cover: nextUser.profile?.cover || '',
+                    school: nextUser.profile?.school || '',
+                    className: nextUser.profile?.className || '',
+                    email: nextUser.profile?.email || '',
+                    isAdmin: nextUser.isAdmin === true,
+                }
+            }
+        });
     };
 
     const name = user?.profile?.name || '未登录';

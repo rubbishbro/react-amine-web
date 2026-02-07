@@ -1,4 +1,5 @@
 import { getCategoryColor } from '../config/colors.js';
+import { isUserBanned } from './adminMeta.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
 const REMOTE_POSTS_CACHE_KEY = 'aw_posts_cache';
@@ -276,7 +277,14 @@ export const loadAllPosts = async () => {
   try {
     const deletedIds = readDeletedPosts();
     const validPosts = buildMergedPosts()
-      .filter((post) => post !== null && !deletedIds.includes(post.id));
+      .filter((post) => {
+        if (post === null) return false;
+        if (deletedIds.includes(post.id)) return false;
+        // 过滤被封禁用户的帖子
+        const authorId = typeof post.author === 'object' ? post.author?.id : null;
+        if (authorId && isUserBanned(authorId)) return false;
+        return true;
+      });
 
     const sortedPosts = validPosts.sort((a, b) => {
       if (a.isPinnedGlobally && !b.isPinnedGlobally) return -1;
