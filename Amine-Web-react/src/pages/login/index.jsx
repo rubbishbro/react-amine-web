@@ -81,19 +81,17 @@ export default function Login() {
                             autoComplete={isNewAccount ? 'new-password' : 'current-password'}
                         />
                     </label>
-                    {isNewAccount && (
-                        <label className={styles.label}>
-                            再次输入密码
-                            <input
-                                name="confirmPassword"
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(event) => setConfirmPassword(event.target.value)}
-                                placeholder="请再次输入密码"
-                                autoComplete="new-password"
-                            />
-                        </label>
-                    )}
+                    <label className={styles.label}>
+                        再次输入密码
+                        <input
+                            name="confirmPassword"
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(event) => setConfirmPassword(event.target.value)}
+                            placeholder="请再次输入密码"
+                            autoComplete="new-password"
+                        />
+                    </label>
                     {error && <div className={styles.error}>{error}</div>}
                     <button type="submit" className={styles.submit} disabled={submitting}>
                         {submitting ? '登录中...' : '登录'}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from './Profile.module.css';
 import { useUser } from '../context/UserContext';
 import { buildUserId, getMappedUserId } from '../utils/userId';
@@ -41,6 +41,8 @@ export default function Profile() {
         ...emptyProfile,
         ...(user?.profile || {})
     }));
+    const formDirtyRef = useRef(false);
+    const lastUserIdRef = useRef(user?.id || '');
     const [password, setPassword] = useState('');
     const [passwordError, setPasswordError] = useState('');
     const [adminOpen, setAdminOpen] = useState(location.state?.openAdmin === true);
@@ -49,13 +51,27 @@ export default function Profile() {
     const isAdmin = user?.isAdmin === true;
 
     useEffect(() => {
-        setForm({
-            ...emptyProfile,
-            ...(user?.profile || {})
-        });
-    }, [user?.profile]);
+        const currentUserId = user?.id || '';
+        if (currentUserId !== lastUserIdRef.current) {
+            lastUserIdRef.current = currentUserId;
+            formDirtyRef.current = false;
+            setForm({
+                ...emptyProfile,
+                ...(user?.profile || {})
+            });
+            return;
+        }
+
+        if (!formDirtyRef.current) {
+            setForm({
+                ...emptyProfile,
+                ...(user?.profile || {})
+            });
+        }
+    }, [user?.profile, user?.id]);
 
     const handleChange = (e) => {
+        formDirtyRef.current = true;
         setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
     };
 
@@ -95,6 +111,7 @@ export default function Profile() {
                     return;
                 }
 
+                formDirtyRef.current = true;
                 setForm((s) => ({ ...s, avatar: dataUrl }));
             };
             img.onerror = () => {
@@ -139,6 +156,7 @@ export default function Profile() {
                     return;
                 }
 
+                formDirtyRef.current = true;
                 setForm((s) => ({ ...s, cover: dataUrl }));
             };
             img.onerror = () => {
@@ -167,6 +185,7 @@ export default function Profile() {
             isAdmin: user?.isAdmin === true,
         };
         setPassword('');
+        formDirtyRef.current = false;
         navigate(`/user/${derivedId}`, {
             state: {
                 author: {
