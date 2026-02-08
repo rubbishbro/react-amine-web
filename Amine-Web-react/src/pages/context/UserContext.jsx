@@ -27,6 +27,21 @@ const isValidLoginId = (value) => {
     return !!trimmed && trimmed.length <= 64 && !/\s/.test(trimmed);
 };
 
+const coerceProfileWithLoginId = (profile, loginId) => {
+    const next = { ...defaultProfile, ...(profile || {}) };
+    const normalizedLoginId = normalizeLoginId(loginId);
+    if (!normalizedLoginId) return next;
+    const name = (next.name || '').trim();
+    const email = (next.email || '').trim();
+    if (!name) {
+        next.name = normalizedLoginId;
+        if (email === normalizedLoginId) {
+            next.email = '';
+        }
+    }
+    return next;
+};
+
 const readAccounts = () => {
     try {
         const raw = localStorage.getItem(ACCOUNTS_KEY);
@@ -229,11 +244,11 @@ export function UserProvider({ children }) {
                 migrateUserId(legacyAccountId, nextId, profileName);
             }
 
-            const mergedProfile = {
+            const mergedProfile = coerceProfileWithLoginId({
                 ...defaultProfile,
                 ...(parsed.profile || {}),
                 ...(existing.profile || {}),
-            };
+            }, loginId);
             const isAdmin = existing.isAdmin === true || parsed.isAdmin === true;
 
             accounts[loginId] = {
@@ -352,20 +367,24 @@ export function UserProvider({ children }) {
                 id: mappedId,
                 passwordHash: existing.passwordHash || passwordHash,
             };
-            accounts[loginId] = nextAccount;
+            const resolvedProfile = coerceProfileWithLoginId({
+                ...defaultProfile,
+                ...(nextAccount.profile || {}),
+            }, loginId);
+            accounts[loginId] = { ...nextAccount, profile: resolvedProfile };
             writeAccounts(accounts);
             setUser(attachTagInfo({
                 id: mappedId,
                 loginId,
                 loggedIn: true,
                 isAdmin: nextAccount.isAdmin === true,
-                profile: { ...defaultProfile, ...(nextAccount.profile || {}) },
+                profile: resolvedProfile,
             }));
             return { ok: true };
         }
 
         const nextId = createUuid();
-        const profile = { ...defaultProfile };
+        const profile = coerceProfileWithLoginId(defaultProfile, loginId);
         accounts[loginId] = {
             id: nextId,
             loginId,

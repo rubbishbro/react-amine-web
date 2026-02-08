@@ -8,20 +8,50 @@ export default function Login() {
     const navigate = useNavigate();
     const [loginId, setLoginId] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+
+    const readAccount = (id) => {
+        if (!id) return null;
+        try {
+            const raw = localStorage.getItem('aw_accounts');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            return parsed[id] || null;
+        } catch {
+            return null;
+        }
+    };
+
+    const trimmedLoginId = loginId.trim();
+    const isNewAccount = !!trimmedLoginId && !readAccount(trimmedLoginId);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
         if (submitting) return;
         setSubmitting(true);
         setError('');
-        const result = await login({ loginId: loginId.trim(), password });
+        if (isNewAccount) {
+            if (!confirmPassword) {
+                setError('请再次输入密码');
+                setSubmitting(false);
+                return;
+            }
+            if (password !== confirmPassword) {
+                setError('两次密码不一致');
+                setSubmitting(false);
+                return;
+            }
+        }
+        const result = await login({ loginId: trimmedLoginId, password });
         if (!result?.ok) {
             setError(result?.message || '登录失败');
             setSubmitting(false);
             return;
         }
+        setConfirmPassword('');
         navigate('/profile');
     };
 
@@ -48,9 +78,22 @@ export default function Login() {
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
                             placeholder="至少8位"
-                            autoComplete="current-password"
+                            autoComplete={isNewAccount ? 'new-password' : 'current-password'}
                         />
                     </label>
+                    {isNewAccount && (
+                        <label className={styles.label}>
+                            再次输入密码
+                            <input
+                                name="confirmPassword"
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(event) => setConfirmPassword(event.target.value)}
+                                placeholder="请再次输入密码"
+                                autoComplete="new-password"
+                            />
+                        </label>
+                    )}
                     {error && <div className={styles.error}>{error}</div>}
                     <button type="submit" className={styles.submit} disabled={submitting}>
                         {submitting ? '登录中...' : '登录'}
