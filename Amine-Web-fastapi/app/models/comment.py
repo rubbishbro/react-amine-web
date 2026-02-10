@@ -1,9 +1,10 @@
-"""
-评论模型
-"""
-from typing import Optional, List
+# 评论模型
+from typing import Optional, List, TYPE_CHECKING
 from sqlmodel import Field, Relationship, SQLModel
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 class Comment(SQLModel, table=True):
     """
