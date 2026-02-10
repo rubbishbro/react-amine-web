@@ -188,6 +188,27 @@
   position: relative;
 }
 
+.community-root .search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  padding: 8px 14px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  transition: var(--transition-base);
+}
+
+.community-root .search-bar .tag-mode {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--secondary-color);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .community-root .logo-area {
   min-height: 40px;
   display: flex;

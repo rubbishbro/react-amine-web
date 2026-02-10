@@ -1,5 +1,7 @@
+import { API_BASE_URL } from '../pages/config';
+
 class PostAPI{
-    constructor(baseUrl = 'http://192.168.33.158:8000/api/v1'){
+    constructor(baseUrl = API_BASE_URL){
         this.baseUrl = baseUrl;
     }
 

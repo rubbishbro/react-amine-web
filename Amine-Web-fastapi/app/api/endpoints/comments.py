@@ -62,14 +62,16 @@ def get_post_comments(
     
     comments = crud_comment.get_by_post(db, post_id=post_id, skip=skip, limit=limit)
     
-    # 附加作者信息
+    # 附加作者信息（避免误用email作为头像）
+    # 使用 ORM 预加载的 author 对象
     result = []
     for comment in comments:
-        author = db.get(User, comment.author_id)
+        author = comment.author
         result.append({
             **comment.dict(),
             "author_name": author.username if author else "匿名",
-            "author_avatar": author.email if author else None,  # 可以改为 avatar 字段
+            # 如果 author 不存在，使用默认头像或 None
+            "author_avatar": None, 
         })
     
     return result
@@ -93,7 +95,7 @@ def get_comment_replies(
         result.append({
             **comment.dict(),
             "author_name": author.username if author else "匿名",
-            "author_avatar": author.email if author else None,
+            "author_avatar": None,
         })
     
     return result
@@ -155,11 +157,11 @@ def like_comment(
     """
     点赞评论
     """
-    comment = crud_comment.increment_likes(db, comment_id=comment_id)
+    comment = crud_comment.add_like(db, comment_id=comment_id, user_id=current_user.id)
     if not comment:
         raise HTTPException(status_code=404, detail="评论不存在")
     
-    return {"message": "点赞成功", "likes": comment.likes}
+    return {"success": True, "likes": comment.likes}
 
 @router.get("/post/{post_id}/count")
 def get_comment_count(

@@ -2,8 +2,10 @@
 评论 CRUD 操作
 """
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
+from sqlalchemy.orm import joinedload
 from app.models.comment import Comment
+from app.models.comment_like import CommentLike
 from app.schemas.comment import CommentCreate, CommentUpdate
 
 def create(db: Session, *, obj_in: CommentCreate, author_id: int) -> Comment:
@@ -42,6 +44,10 @@ def get_by_post(
     if not include_deleted:
         statement = statement.where(Comment.is_deleted == False)
     
+    # 消除 N+1：预加载作者信息
+    # 注意：需要导入 User 模型以支持 relationship
+    # 消除 N+1
+    statement = statement.options(joinedload(Comment.author))
     statement = statement.offset(skip).limit(limit).order_by(Comment.created_at.desc())
     return list(db.exec(statement).all())
 
@@ -104,12 +110,36 @@ def increment_likes(db: Session, comment_id: int) -> Optional[Comment]:
         db.refresh(comment)
     return comment
 
+def add_like(db: Session, *, comment_id: int, user_id: int) -> Optional[Comment]:
+    """
+    给评论点赞（用户唯一）
+    """
+    comment = db.get(Comment, comment_id)
+    if not comment:
+        return None
+
+    statement = select(CommentLike).where(
+        CommentLike.comment_id == comment_id,
+        CommentLike.user_id == user_id
+    )
+    existing = db.exec(statement).first()
+    if existing:
+        return comment
+
+    like = CommentLike(comment_id=comment_id, user_id=user_id)
+    db.add(like)
+    comment.likes += 1
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
 def get_comment_count(db: Session, post_id: int) -> int:
     """
     获取帖子的评论总数
     """
-    statement = select(Comment).where(
+    statement = select(func.count(Comment.id)).where(
         Comment.post_id == post_id,
         Comment.is_deleted == False
     )
-    return len(list(db.exec(statement).all()))
+    return int(db.exec(statement).one())

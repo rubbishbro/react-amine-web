@@ -30,3 +30,8 @@ class RelationStatus(BaseModel):
     is_blocked: bool = False
     is_muted: bool = False
     is_followed_by: bool = False  # 对方是否关注了你
+
+# 关系操作统一返回
+class RelationActionResponse(BaseModel):
+    success: bool
+    relation: Optional[UserRelation] = None
