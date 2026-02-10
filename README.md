@@ -93,9 +93,9 @@ API 文档：http://localhost:8000/docs
 ### 👥 开发团队
 
 **核心开发者**
-- [@rubbishbro](https://github.com/rubbishbro) - 项目负责人
+- [@rubbishbro](https://github.com/rubbishbro) - 项目负责人/后端开发
 - [@Lilizi-ovo](https://github.com/Lilizi-ovo) - 前端开发
-- [@kondaidaidaisuki-dot](https://github.com/kondaidaidaisuki-dot) - 后端开发
+- [@kondaidaidaisuki-dot](https://github.com/kondaidaidaisuki-dot) - 前端开发
 
 ### 📝 贡献指南
 

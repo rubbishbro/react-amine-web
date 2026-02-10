@@ -4,7 +4,7 @@
   改为使用router进行页面导航和内容切换
 */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './index.css'
 import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle } from './index.js'
 import PostList from '../components/PostList'
@@ -22,6 +22,9 @@ import Login from '../login';
 
 //帖子编辑器组件
 import PostEditor from '../components/PostEditor';
+
+//搜索结果组件
+import SearchResults from '../components/SearchResults';
 
 //社团介绍页面
 import { Content as AboutContent } from '../about/about.jsx'
@@ -46,6 +49,7 @@ export default function CommunityBoard() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setTitle } = usePageTitle();
+  const [searchQuery, setSearchQuery] = useState('');
 
   // 根据当前路径设置标题
   useEffect(() => {
@@ -63,6 +67,7 @@ export default function CommunityBoard() {
       '/messages': '动漫社基地 | 私信'
       , '/blacklist': '动漫社基地 | 黑名单'
       , '/login': '动漫社基地 | 登录'
+      , '/search': '动漫社基地 | 搜索结果'
     };
 
     if (pageTitles[location.pathname]) {
@@ -88,6 +93,15 @@ export default function CommunityBoard() {
       state: { from: location.pathname }
     });
     closeSidebar();
+  };
+
+  // 处理搜索
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      closeSidebar();
+    }
   };
 
   useEffect(() => {
@@ -139,10 +153,15 @@ export default function CommunityBoard() {
             <img className="logo-image" src="/e.jpg" alt="E=mc²动漫社" />
             <h1 className="logo-text">E=mc²动漫社·基地</h1>
           </div>
-          <div className="search-bar">
+          <form className="search-bar" onSubmit={handleSearch}>
             <span>🔍</span>
-            <input type="text" placeholder="搜索帖子、番剧..." />
-          </div>
+            <input 
+              type="text" 
+              placeholder="搜索帖子、用户... (以 # 开头搜索标签)" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </form>
         </header>
 
         <section className="card-content" style={{ position: 'relative', minHeight: '200px' }}>
@@ -181,6 +200,7 @@ export default function CommunityBoard() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:id" element={<Messages />} />
             <Route path="/blacklist" element={<Blacklist />} />
+            <Route path="/search" element={<SearchResults />} />
           </Routes>
         </section>
       </main>
