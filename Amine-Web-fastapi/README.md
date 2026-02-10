@@ -90,6 +90,33 @@ uvicorn app.main:app --reload
 ### 上传模块 (`/api/v1/upload`)
 - `POST /` - 上传文件（需登录，支持图片/音频，最大10MB）
 
+### 用户关系模块 (`/api/v1/users`)
+- `POST /{user_id}/follow` - 关注用户
+- `DELETE /{user_id}/follow` - 取消关注
+- `POST /{user_id}/block` - 拉黑用户
+- `DELETE /{user_id}/block` - 取消拉黑
+- `GET /{user_id}/followers` - 获取粉丝列表
+- `GET /{user_id}/following` - 获取关注列表
+- `GET /me/blocked` - 获取拉黑列表
+- `GET /{user_id}/relation` - 查询关系状态
+- `GET /{user_id}/stats` - 获取关注/粉丝统计
+
+### 评论模块 (`/api/v1/comments`)
+- `POST /` - 创建评论（支持嵌套回复）
+- `GET /post/{post_id}` - 获取帖子评论列表
+- `GET /{comment_id}/replies` - 获取评论的回复
+- `PUT /{comment_id}` - 更新评论（仅作者）
+- `DELETE /{comment_id}` - 删除评论（软删除）
+- `POST /{comment_id}/like` - 点赞评论
+- `GET /post/{post_id}/count` - 获取评论总数
+
+### 搜索模块 (`/api/v1/search`)
+- `GET /posts?q=关键词` - 搜索帖子（关键词或Tag）
+- `GET /users?q=关键词` - 搜索用户
+- `GET /all?q=关键词` - 综合搜索（同时搜索帖子和用户）
+  - 以 `#` 开头进行Tag搜索（如：`#动漫`）
+  - 普通关键词搜索标题和内容
+
 ## 🔐 认证流程
 
 1. **注册/登录** → 获取 JWT Token
@@ -262,24 +289,25 @@ psql -U postgres
 ## 📝 TODO
 
 ### 核心功能
-- [ ] 用户关系系统
-  - [ ] 创建 `UserRelation` 表（关注/拉黑/屏蔽）
-  - [ ] 实现关注/取消关注 API
-  - [ ] 实现拉黑/取消拉黑 API
-  - [ ] 获取粉丝列表/关注列表
+- [x] 用户关系系统
+  - [x] 创建 `UserRelation` 表（关注/拉黑/屏蔽）
+  - [x] 实现关注/取消关注 API
+  - [x] 实现拉黑/取消拉黑 API
+  - [x] 获取粉丝列表/关注列表
   - [ ] 前端迁移 `localStorage` 到后端 API
   
-- [ ] 搜索功能
-  - [ ] 帖子全文搜索（标题/内容）
-  - [ ] Tag 标签搜索
-  - [ ] 用户名搜索
-  - [ ] 搜索结果分页和排序
+- [x] 搜索功能
+  - [x] 帖子全文搜索（标题/内容）
+  - [x] Tag 标签搜索（以 # 开头）
+  - [x] 用户名搜索
+  - [x] 搜索结果分页和排序
+  - [x] 前端搜索页面和路由
   
-- [ ] 评论系统
-  - [ ] 创建 `Comment` 表
-  - [ ] 评论 CRUD API
-  - [ ] 评论点赞功能
-  - [ ] 评论嵌套回复
+- [x] 评论系统
+  - [x] 创建 `Comment` 表
+  - [x] 评论 CRUD API
+  - [x] 评论点赞功能
+  - [x] 评论嵌套回复
 
 ### 优化改进
 - [ ] 接入对象存储（阿里云 OSS / 七牛云）
