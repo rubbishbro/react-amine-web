@@ -42,7 +42,7 @@ def search_posts(
         statement = (
             select(Post)
             .where(Post.is_published == True)
-            .where(col(Post.tags).contains([tag]))  # ARRAY contains
+            .where(Post.tags.any(tag))  # 任一标签匹配
             .order_by(Post.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -126,7 +126,7 @@ def search_all(
             post_statement = (
                 select(Post)
                 .where(Post.is_published == True)
-                .where(col(Post.tags).contains([tag]))
+                .where(Post.tags.any(tag))
                 .order_by(Post.created_at.desc())
                 .limit(post_limit)
             )

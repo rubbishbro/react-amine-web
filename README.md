@@ -19,7 +19,7 @@
 
 ## 📖 项目简介
 
-Amine Web 是由 **LNSY 动漫社** 开发的开源社区平台，致力于为动漫爱好者提供一个分享创作、交流想法的空间。
+本项目是由 **辽宁省实验中学动漫社的同学们呢** 开发的开源社区平台，致力于为动漫爱好者提供一个分享创作、交流想法的空间。
 
 ### ✨ 核心特性
 
@@ -114,7 +114,7 @@ API 文档：http://localhost:8000/docs
 
 ## 📖 About
 
-Amine Web is an open-source community platform developed by **LNSY Anime Club**, dedicated to providing anime enthusiasts with a space to share creations and exchange ideas.
+This project is an open-source community platform developed by **students from liaoning province shiyan high school amine club**, dedicated to providing anime enthusiasts with a space to share creations and exchange ideas.
 
 ### ✨ Key Features
 
@@ -168,9 +168,9 @@ For detailed documentation:
 ### 👥 Team
 
 **Core Developers**
-- [@rubbishbro](https://github.com/rubbishbro) - Project Lead
+- [@rubbishbro](https://github.com/rubbishbro) - Project Lead/Backend Developer
 - [@Lilizi-ovo](https://github.com/Lilizi-ovo) - Frontend Developer
-- [@kondaidaidaisuki-dot](https://github.com/kondaidaidaisuki-dot) - Backend Developer
+- [@kondaidaidaisuki-dot](https://github.com/kondaidaidaisuki-dot) - Frontend Developer
 
 ### 📝 Contributing
 

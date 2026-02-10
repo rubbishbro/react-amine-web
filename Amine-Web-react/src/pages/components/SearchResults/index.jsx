@@ -26,7 +26,7 @@ const SearchResults = () => {
       setError(null);
       
       try {
-        const response = await fetch(`http://localhost:8000/api/v1/search/all?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/v1/search/all?q=${encodeURIComponent(query)}`);
         
         if (!response.ok) {
           throw new Error('搜索请求失败');

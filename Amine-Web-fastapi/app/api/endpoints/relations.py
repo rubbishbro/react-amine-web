@@ -9,12 +9,12 @@ from app.api import deps
 from app.crud import crud_relation
 from app.models.user import User
 from app.models.user_relation import RelationType
-from app.schemas.user_relation import UserRelation, RelationStatus
+from app.schemas.user_relation import RelationActionResponse, RelationStatus
 from app.schemas.user import User as UserSchema
 
 router = APIRouter()
 
-@router.post("/{user_id}/follow", response_model=UserRelation)
+@router.post("/{user_id}/follow", response_model=RelationActionResponse)
 def follow_user(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -31,16 +31,25 @@ def follow_user(
     if not target_user:
         raise HTTPException(status_code=404, detail="用户不存在")
     
+    # 不允许在拉黑关系存在时关注（双向检查）
+    if crud_relation.check_relation(db, current_user.id, user_id, RelationType.BLOCK) or \
+       crud_relation.check_relation(db, user_id, current_user.id, RelationType.BLOCK):
+        raise HTTPException(status_code=403, detail="存在拉黑关系，无法关注")
+
+    # 已关注返回冲突
+    if crud_relation.check_relation(db, current_user.id, user_id, RelationType.FOLLOW):
+        raise HTTPException(status_code=409, detail="已关注，无需重复操作")
+
     # 添加关注关系
     relation = crud_relation.add_relation(
-        db, 
+        db,
         from_user_id=current_user.id,
         to_user_id=user_id,
-        relation_type=RelationType.FOLLOW
+        relation_type=RelationType.FOLLOW,
     )
-    return relation
+    return {"success": True, "relation": relation}
 
-@router.delete("/{user_id}/follow")
+@router.delete("/{user_id}/follow", response_model=RelationActionResponse)
 def unfollow_user(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -58,9 +67,9 @@ def unfollow_user(
     if not success:
         raise HTTPException(status_code=404, detail="关注关系不存在")
     
-    return {"message": "已取消关注"}
+    return {"success": True, "relation": None}
 
-@router.post("/{user_id}/block", response_model=UserRelation)
+@router.post("/{user_id}/block", response_model=RelationActionResponse)
 def block_user(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -76,6 +85,10 @@ def block_user(
     if not target_user:
         raise HTTPException(status_code=404, detail="用户不存在")
     
+    # 已拉黑返回冲突
+    if crud_relation.check_relation(db, current_user.id, user_id, RelationType.BLOCK):
+        raise HTTPException(status_code=409, detail="已拉黑，无需重复操作")
+
     # 拉黑时自动取消关注
     crud_relation.remove_relation(
         db,
@@ -90,9 +103,9 @@ def block_user(
         to_user_id=user_id,
         relation_type=RelationType.BLOCK
     )
-    return relation
+    return {"success": True, "relation": relation}
 
-@router.delete("/{user_id}/block")
+@router.delete("/{user_id}/block", response_model=RelationActionResponse)
 def unblock_user(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -110,7 +123,7 @@ def unblock_user(
     if not success:
         raise HTTPException(status_code=404, detail="拉黑关系不存在")
     
-    return {"message": "已取消拉黑"}
+    return {"success": True, "relation": None}
 
 @router.get("/{user_id}/followers", response_model=List[UserSchema])
 def get_followers(
@@ -118,11 +131,12 @@ def get_followers(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
+    order: str = "desc",
 ) -> Any:
     """
     获取用户的粉丝列表
     """
-    followers = crud_relation.get_followers(db, user_id=user_id, skip=skip, limit=limit)
+    followers = crud_relation.get_followers(db, user_id=user_id, skip=skip, limit=limit, order=order)
     return followers
 
 @router.get("/{user_id}/following", response_model=List[UserSchema])
@@ -131,11 +145,12 @@ def get_following(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
+    order: str = "desc",
 ) -> Any:
     """
     获取用户关注的人列表
     """
-    following = crud_relation.get_following(db, user_id=user_id, skip=skip, limit=limit)
+    following = crud_relation.get_following(db, user_id=user_id, skip=skip, limit=limit, order=order)
     return following
 
 @router.get("/me/blocked", response_model=List[UserSchema])

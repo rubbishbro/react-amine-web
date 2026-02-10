@@ -161,6 +161,9 @@ export default function CommunityBoard() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            {searchQuery.trim().startsWith('#') && (
+              <span className="tag-mode">标签模式</span>
+            )}
           </form>
         </header>
 

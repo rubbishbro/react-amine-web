@@ -1,6 +1,4 @@
-"""
-用户关系 CRUD 操作
-"""
+# 用户关系 CRUD 操作
 from typing import Optional, List
 from sqlmodel import Session, select
 from app.models.user_relation import UserRelation, RelationType
@@ -79,11 +77,13 @@ def get_followers(
     db: Session,
     user_id: int,
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    order: str = "desc"
 ) -> List[User]:
     """
     获取用户的粉丝列表
     """
+    order_by = UserRelation.created_at.desc() if order.lower() == "desc" else UserRelation.created_at.asc()
     statement = (
         select(User)
         .join(UserRelation, UserRelation.from_user_id == User.id)
@@ -91,6 +91,7 @@ def get_followers(
             UserRelation.to_user_id == user_id,
             UserRelation.relation_type == RelationType.FOLLOW
         )
+        .order_by(order_by)
         .offset(skip)
         .limit(limit)
     )
@@ -100,11 +101,13 @@ def get_following(
     db: Session,
     user_id: int,
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    order: str = "desc"
 ) -> List[User]:
     """
     获取用户关注的人列表
     """
+    order_by = UserRelation.created_at.desc() if order.lower() == "desc" else UserRelation.created_at.asc()
     statement = (
         select(User)
         .join(UserRelation, UserRelation.to_user_id == User.id)
@@ -112,6 +115,7 @@ def get_following(
             UserRelation.from_user_id == user_id,
             UserRelation.relation_type == RelationType.FOLLOW
         )
+        .order_by(order_by)
         .offset(skip)
         .limit(limit)
     )
