@@ -67,6 +67,22 @@
   flex-shrink: 0;
   /* 提前声明transform */
   transform: translateY(0);
+  overflow: hidden;
+}
+
+.community-root .menu-trigger::after,
+.community-root .home-button::after {
+  content: '';
+  position: absolute;
+  inset: -50% auto auto -25%;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.3s ease, transform 0.35s ease;
+  pointer-events: none;
 }
 
 .community-root .menu-trigger {
@@ -82,15 +98,50 @@
 
 /* 悬停效果 */
 .community-root .menu-trigger:hover {
-  transform: scale(1.1) rotate(90deg);
+  transform: scale(1.08) rotate(90deg);
   background: var(--primary-color);
   color: #fff;
 }
 
+.community-root .menu-trigger:hover::after {
+  opacity: 0.9;
+  transform: scale(1);
+}
+
 .community-root .home-button:hover {
-  transform: translateY(-4px);
+  transform: translateY(-3px) scale(1.05);
   background: var(--secondary-color);
   color: #fff;
+}
+
+.community-root .home-button:hover::after {
+  opacity: 0.9;
+  transform: scale(1);
+}
+
+.community-root .menu-trigger:active,
+.community-root .home-button:active {
+  transform: translateY(0) scale(0.94);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+  animation: jelly-bounce 0.45s ease;
+}
+
+@keyframes jelly-bounce {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.06, 0.95);
+  }
+
+  70% {
+    transform: scale(0.98, 1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* 汉堡菜单图标 */
