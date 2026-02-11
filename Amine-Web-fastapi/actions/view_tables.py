@@ -33,25 +33,27 @@ def view_table_data(table_name, limit=100):
             query = text(f"SELECT * FROM {table_name} LIMIT {limit}")
             result = session.execute(query)
             rows = result.fetchall()
-            columns = result.keys()
+            columns = list(result.keys())
             
-            print(f"\n{'='*50}")
+            print(f"\n{'='*80}")
             print(f"表 '{table_name}' 的数据 (最多 {limit} 条):")
-            print(f"{'='*50}")
+            print(f"{'='*80}")
             print(f"总记录数: {len(rows)}")
             
             if rows:
                 # 打印列名
-                print("\n" + " | ".join(columns))
-                print("-" * 80)
+                col_header = " | ".join(str(col).ljust(15)[:15] for col in columns)
+                print(f"\n{col_header}")
+                print("-" * len(col_header))
                 
                 # 打印数据
                 for row in rows:
-                    print(" | ".join(str(value) for value in row))
+                    row_str = " | ".join(str(value).ljust(15)[:15] if value is not None else "NULL".ljust(15) for value in row)
+                    print(row_str)
             else:
                 print("\n该表没有数据")
             
-            print(f"{'='*50}\n")
+            print(f"{'='*80}\n")
             
     except Exception as e:
         print(f"❌ 查询表 '{table_name}' 时出错: {e}\n")

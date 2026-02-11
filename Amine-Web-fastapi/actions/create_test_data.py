@@ -110,11 +110,15 @@ test_posts = [
 def create_test_data():
     """生成测试数据"""
     with Session(engine) as session:
-        # 检查是否已有数据
-        existing_users = session.exec(select(User)).first()
-        if existing_users:
-            print("⚠️  数据库中已存在用户，跳过测试数据生成")
-            print("如需重新生成，请先清空数据库")
+        # 检查现有数据
+        existing_user_count = len(session.exec(select(User)).all())
+        existing_post_count = len(session.exec(select(Post)).all())
+        
+        if existing_user_count > 0 or existing_post_count > 0:
+            print(f"⚠️  数据库中已有数据:")
+            print(f"   - 用户数: {existing_user_count}")
+            print(f"   - 帖子数: {existing_post_count}")
+            print("\n如需重新生成测试数据，请先运行: python actions/reset_db.py")
             return
         
         print("📝 开始生成测试数据...")
@@ -132,21 +136,20 @@ def create_test_data():
                     is_superuser=user_data.get("is_superuser", False),
                 )
                 session.add(user)
+                session.flush()  # 立即刷新到数据库，但不提交事务
                 created_users.append(user)
                 role = "管理员" if user.is_superuser else "用户"
-                print(f"  ✓ {user.username} ({user.email}) - {role}")
+                print(f"  ✓ {user.username} ({user.email}) [ID: {user.id}] - {role}")
             except Exception as e:
                 print(f"  ❌ 创建用户 {user_data['username']} 失败: {e}")
-                raise
+                session.rollback()
+                import traceback
+                traceback.print_exc()
+                return
         
         print("\n💾 提交用户数据...")
         session.commit()
-        print(f"  ✓ 已提交 {len(created_users)} 个用户")
-        
-        # 刷新用户以获取ID
-        for user in created_users:
-            session.refresh(user)
-            print(f"  ✓ 用户 {user.username} ID: {user.id}")
+        print(f"  ✓ 已成功提交 {len(created_users)} 个用户")
         
         # 创建测试帖子
         print("\n📄 创建测试帖子...")
