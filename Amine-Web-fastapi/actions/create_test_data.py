@@ -111,105 +111,51 @@ def create_test_data():
     """生成测试数据"""
     with Session(engine) as session:
         # 检查现有数据
-        existing_user_count = len(session.exec(select(User)).all())
-        existing_post_count = len(session.exec(select(Post)).all())
-        
-        if existing_user_count > 0 or existing_post_count > 0:
-            print(f"⚠️  数据库中已有数据:")
-            print(f"   - 用户数: {existing_user_count}")
-            print(f"   - 帖子数: {existing_post_count}")
-            print("\n如需重新生成测试数据，请先运行: python actions/reset_db.py")
+        if session.exec(select(User)).first():
+            print("⚠️  数据库已有数据，请先运行: python actions/reset_db.py")
             return
         
-        print("📝 开始生成测试数据...")
+        print("📝 生成测试数据...\n")
         
-        # 创建测试用户
+        # 创建用户
         created_users = []
-        print("\n👤 创建测试用户...")
         for user_data in test_users:
-            try:
-                user = User(
-                    email=user_data["email"],
-                    username=user_data["username"],
-                    hashed_password=get_password_hash(user_data["password"]),
-                    is_active=True,
-                    is_superuser=user_data.get("is_superuser", False),
-                )
-                session.add(user)
-                session.flush()  # 立即刷新到数据库，但不提交事务
-                created_users.append(user)
-                role = "管理员" if user.is_superuser else "用户"
-                print(f"  ✓ {user.username} ({user.email}) [ID: {user.id}] - {role}")
-            except Exception as e:
-                print(f"  ❌ 创建用户 {user_data['username']} 失败: {e}")
-                session.rollback()
-                import traceback
-                traceback.print_exc()
-                return
+            user = User(
+                email=user_data["email"],
+                username=user_data["username"],
+                hashed_password=get_password_hash(user_data["password"]),
+                is_active=True,
+                is_superuser=user_data.get("is_superuser", False),
+            )
+            session.add(user)
+            session.flush()
+            created_users.append(user)
+            print(f"  ✓ {user.username}")
         
-        print("\n💾 提交用户数据...")
-        session.commit()
-        print(f"  ✓ 已成功提交 {len(created_users)} 个用户")
-        
-        # 创建测试帖子
-        print("\n📄 创建测试帖子...")
-        created_posts = []
+        # 创建帖子
         base_time = datetime.utcnow() - timedelta(days=10)
-        
         for i, post_data in enumerate(test_posts):
-            try:
-                # 随机分配作者，但第一篇由管理员发布
-                if i == 0:
-                    author = created_users[-1]  # 管理员
-                else:
-                    author = random.choice(created_users[:-1])  # 普通用户
-                
-                # 设置不同的发布时间
-                post_time = base_time + timedelta(days=i, hours=random.randint(0, 23))
-                
-                post = Post(
-                    title=post_data["title"],
-                    content=post_data["content"],
-                    summary=post_data["summary"],
-                    category=post_data["category"],
-                    tags=post_data["tags"],
-                    is_published=post_data["is_published"],
-                    author_id=author.id,
-                    created_at=post_time,
-                    updated_at=post_time,
-                )
-                session.add(post)
-                created_posts.append(post)
-                status = "✓ 已发布" if post.is_published else "📝 草稿"
-                print(f"  {status} 《{post.title}》 - 作者: {author.username}")
-            except Exception as e:
-                print(f"  ❌ 创建帖子 《{post_data['title']}》 失败: {e}")
-                raise
+            author = created_users[-1] if i == 0 else random.choice(created_users[:-1])
+            post = Post(
+                **post_data,
+                author_id=author.id,
+                created_at=base_time + timedelta(days=i, hours=random.randint(0, 23)),
+                updated_at=base_time + timedelta(days=i, hours=random.randint(0, 23)),
+            )
+            session.add(post)
+            print(f"  ✓ 《{post.title}》")
         
-        print("\n💾 提交帖子数据...")
         session.commit()
-        print(f"  ✓ 已提交 {len(created_posts)} 个帖子")
         
-        print("\n✅ 测试数据生成完成！")
-        print(f"\n📊 统计:")
-        print(f"  • 用户数: {len(created_users)}")
-        print(f"  • 帖子数: {len(created_posts)}")
-        print(f"  • 已发布: {sum(1 for p in created_posts if p.is_published)}")
-        print(f"  • 草稿: {sum(1 for p in created_posts if not p.is_published)}")
-        
+        print(f"\n✅ 完成！用户: {len(created_users)}, 帖子: {len(test_posts)}")
         print("\n🔑 测试账号:")
-        print("  普通用户:")
-        for user_data in test_users[:-1]:
-            print(f"    用户名: {user_data['username']}, 密码: {user_data['password']}")
-        print("  管理员:")
-        admin = test_users[-1]
-        print(f"    用户名: {admin['username']}, 密码: {admin['password']}")
+        for user_data in test_users:
+            role = "管理员" if user_data.get("is_superuser") else "普通用户"
+            print(f"  {role} - {user_data['username']}: {user_data['password']}")
 
 
 if __name__ == "__main__":
     try:
         create_test_data()
     except Exception as e:
-        print(f"\n❌ 生成测试数据失败: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n❌ 失败: {e}")
