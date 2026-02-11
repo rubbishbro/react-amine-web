@@ -24,7 +24,7 @@ def create_comment(
     *,
     db: Session = Depends(deps.get_db),
     comment_in: CommentCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.check_not_muted),
 ) -> Any:
     """
     创建评论

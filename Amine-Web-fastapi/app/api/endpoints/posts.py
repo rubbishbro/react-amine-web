@@ -27,7 +27,7 @@ def create_post(
     *,
     db: Session = Depends(deps.get_db),
     post_in: PostCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.check_not_muted),
 ) -> Any:
     """
     Create new post.

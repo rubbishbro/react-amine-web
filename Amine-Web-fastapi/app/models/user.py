@@ -10,10 +10,19 @@ class UserBase(SQLModel):
 
 class User(UserBase, table=True): # 继承UserBase，并指定表名
     '''
-    id, hashed_password, posts, interactions定义
+    用户模型：包含基础信息和管理字段
     '''
     id: Optional[int] = Field(default=None, primary_key=True) 
     hashed_password: str
+    
+    # 管理字段
+    title: Optional[str] = None  # 用户头衔
+    is_muted: bool = False  # 是否被禁言
+    is_banned: bool = False  # 是否被封禁
+    mute_count: int = 0  # 被禁言次数
+    ban_count: int = 0  # 被封禁次数
+    created_at: datetime = Field(default_factory=datetime.utcnow)  # 创建时间
+    updated_at: datetime = Field(default_factory=datetime.utcnow)  # 更新时间
     
     posts: List["Post"] = Relationship(back_populates="author", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     # 用户与帖子的一对多关系，级联删除

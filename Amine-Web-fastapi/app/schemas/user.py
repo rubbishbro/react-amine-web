@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 # Shared properties
@@ -20,6 +21,13 @@ class UserUpdate(UserBase):
 class UserInDBBase(UserBase):
     id: Optional[int] = None
     is_superuser: bool = False
+    title: Optional[str] = None
+    is_muted: bool = False
+    is_banned: bool = False
+    mute_count: int = 0
+    ban_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -30,3 +38,16 @@ class User(UserInDBBase):
 
 class UserInDB(UserInDBBase):
     hashed_password: str
+
+# Admin operations schemas
+class SetTitleRequest(BaseModel):
+    title: str
+
+class SetRoleRequest(BaseModel):
+    is_superuser: bool
+
+class MuteUserRequest(BaseModel):
+    reason: Optional[str] = None
+
+class BanUserRequest(BaseModel):
+    reason: str
