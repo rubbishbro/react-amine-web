@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
 # 公共基类
@@ -30,3 +31,16 @@ class User(UserInDBBase):
 
 class UserInDB(UserInDBBase):
     hashed_password: str
+
+# Admin operations schemas
+class SetTitleRequest(BaseModel):
+    title: str
+
+class SetRoleRequest(BaseModel):
+    is_superuser: bool
+
+class MuteUserRequest(BaseModel):
+    reason: Optional[str] = None
+
+class BanUserRequest(BaseModel):
+    reason: str

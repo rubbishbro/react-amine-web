@@ -44,3 +44,36 @@ def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+def get_current_superuser(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """验证当前用户是否为管理员"""
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="没有管理员权限"
+        )
+    return current_user
+
+def check_not_banned(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """验证用户是否被封禁"""
+    if current_user.is_banned:
+        raise HTTPException(
+            status_code=403,
+            detail="账号已被封禁，无法访问"
+        )
+    return current_user
+
+def check_not_muted(
+    current_user: User = Depends(check_not_banned),
+) -> User:
+    """验证用户是否被禁言"""
+    if current_user.is_muted:
+        raise HTTPException(
+            status_code=403,
+            detail="账号已被禁言，无法发布内容"
+        )
+    return current_user
