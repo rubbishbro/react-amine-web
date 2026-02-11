@@ -95,7 +95,7 @@ def search_users(
     statement = (
         select(User)
         .where(User.username.ilike(search_pattern))
-        .order_by(User.created_at.desc())
+        .order_by(User.id.desc())  # 使用 id 排序
         .offset(skip)
         .limit(limit)
     )
@@ -156,7 +156,7 @@ def search_all(
         user_statement = (
             select(User)
             .where(User.username.ilike(user_pattern))
-            .order_by(User.created_at.desc())
+            .order_by(User.id.desc())  # 使用 id 排序
             .limit(user_limit)
         )
         users = db.exec(user_statement).all()
