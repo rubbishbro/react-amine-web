@@ -30,7 +30,8 @@ def view_table_data(table_name, limit=100):
     """查看指定表的数据"""
     try:
         with Session(engine) as session:
-            query = text(f"SELECT * FROM {table_name} LIMIT {limit}")
+            # 使用双引号避免 PostgreSQL 保留字问题
+            query = text(f'SELECT * FROM "{table_name}" LIMIT {limit}')
             result = session.execute(query)
             rows = result.fetchall()
             columns = list(result.keys())
