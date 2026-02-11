@@ -10,6 +10,8 @@ import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle 
 import PostList from '../components/PostList'
 import PostDetail from '../components/PostDetail'
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useUser } from '../context/UserContext'
+import { buildUserId } from '../utils/userId'
 
 //用户面板组件
 import UserPanel from '../components/UserPanel'
@@ -50,6 +52,60 @@ export default function CommunityBoard() {
   const navigate = useNavigate();
   const { setTitle } = usePageTitle();
   const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useUser();
+  const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const readThread = (key) => {
+    if (!key) return [];
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const readThreadReadAt = (viewer, other) => {
+    if (!viewer || !other) return '';
+    try {
+      return localStorage.getItem(`aw_dm_read_${viewer}_${other}`) || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const getUnreadCount = (messages, viewer, other) => {
+    if (!messages.length || !viewer || !other) return 0;
+    const readAt = readThreadReadAt(viewer, other);
+    const readTime = readAt ? new Date(readAt).getTime() : 0;
+    return messages.reduce((count, msg) => {
+      if (msg.from !== other) return count;
+      const msgTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
+      return msgTime > readTime ? count + 1 : count;
+    }, 0);
+  };
+
+  const refreshUnreadCount = () => {
+    if (!viewerId) {
+      setUnreadCount(0);
+      return;
+    }
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('aw_dm_')) continue;
+      if (!key.includes(viewerId)) continue;
+      const list = readThread(key);
+      if (!list.length) continue;
+      const last = list[list.length - 1];
+      const otherId = last.from === viewerId ? last.to : last.from;
+      total += getUnreadCount(list, viewerId, otherId);
+    }
+    setUnreadCount(total);
+  };
 
   // 根据当前路径设置标题
   useEffect(() => {
@@ -86,6 +142,17 @@ export default function CommunityBoard() {
     initCommunityBoard();
     return () => teardownCommunityBoard();
   }, []);
+
+  useEffect(() => {
+    refreshUnreadCount();
+    const handleUpdate = () => refreshUnreadCount();
+    window.addEventListener('aw-messages-updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('aw-messages-updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [viewerId, location.key]);
 
   // 处理阅读全文点击
   const handleReadMore = (postId) => {
@@ -141,7 +208,14 @@ export default function CommunityBoard() {
         <Link to="/resources" className="nav-item" onClick={closeSidebar}><span>💾 网络资源</span></Link>
         <Link to="/musicgames" className="nav-item" onClick={closeSidebar}><span>🎵 音游区</span></Link>
         <Link to="/favorites" className="nav-item" onClick={closeSidebar}><span>⭐ 收藏夹</span></Link>
-        <Link to="/messages" className="nav-item" onClick={closeSidebar}><span>✉️ 消息</span></Link>
+        <Link to="/messages" className="nav-item nav-item--with-badge" onClick={closeSidebar}>
+          <span>✉️ 消息</span>
+          {unreadCount > 0 && (
+            <span className="nav-badge" aria-label={`未读消息 ${unreadCount} 条`}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </Link>
       </nav>
 
       {/*主内容区*/}
@@ -155,9 +229,9 @@ export default function CommunityBoard() {
           </div>
           <form className="search-bar" onSubmit={handleSearch}>
             <span>🔍</span>
-            <input 
-              type="text" 
-              placeholder="搜索帖子、用户... (以 # 开头搜索标签)" 
+            <input
+              type="text"
+              placeholder="搜索帖子、用户... (以 # 开头搜索标签)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

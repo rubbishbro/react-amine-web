@@ -36,7 +36,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       title: '',
       category: '',
       summary: '',
-      content: '# 请输入内容\n\n从这里开始编辑...',
+      content: '',
       status: 'draft'
     }
   });
@@ -80,7 +80,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
               title: postData.title || '',
               category: postData.category || '',
               summary: postData.summary || '',
-              content: postData.content || postData.summary || '# 请输入内容\n\n从这里开始编辑...',
+              content: postData.content || '',
               status: postData.status || 'draft',
               id: postData.id,
               tags: postData.tags || [],
@@ -147,7 +147,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       return false;
     }
 
-    if (!formData.content.trim() || formData.content.trim() === '# 请输入内容\n\n从这里开始编辑...') {
+    if (!formData.content.trim()) {
       logMessage('请输入帖子内容', 'warn');
       return false;
     }
@@ -535,7 +535,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                 </ReactMarkdown>
               )}
               config={mdEditorConfig}
-              placeholder="在这里输入Markdown格式的内容..."
+              placeholder="# 请输入内容..."
             />
           </div>
           {errors.content && (
