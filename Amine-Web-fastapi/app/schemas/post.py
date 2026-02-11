@@ -8,17 +8,18 @@ class PostBase(BaseModel):
     content: str
     summary: Optional[str] = None
     category: Optional[str] = None
+    # 去除可变默认值陷阱
     tags: List[str] = Field(default_factory=list)
 
-# Properties to receive on creation
+# 帖子创建输入
 class PostCreate(PostBase):
     pass
 
-# Properties to receive on update
+# 帖子更新输入
 class PostUpdate(PostBase):
     pass
 
-# Properties shared by models stored in DB
+# 数据库中存储的模型共享属性
 class PostInDBBase(PostBase):
     id: int
     author_id: int
@@ -28,6 +29,6 @@ class PostInDBBase(PostBase):
     class Config:
         from_attributes = True
 
-# Properties to return to client
+# 返回给客户端的属性
 class Post(PostInDBBase):
     pass

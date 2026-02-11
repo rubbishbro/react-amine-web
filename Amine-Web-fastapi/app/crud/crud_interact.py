@@ -14,9 +14,10 @@ def create(db: Session, *, obj_in: InteractionCreate, user_id: int) -> Optional[
         )
         existing_like = db.exec(statement).first()
         if existing_like:
-            # 已经点赞，可能在这里处理取消点赞的逻辑，或者直接返回 None/已有的点赞
-            # 目前，我们将其视为幂等操作：如果存在，则返回已有的点赞
-            return existing_like
+            # 如果已经点赞了，把它删掉
+            db.delete(existing_like)
+            db.commit()
+            return None # 或者返回一个特殊标记告诉前端已取消
 
     db_obj = Interaction(
         type=obj_in.type,

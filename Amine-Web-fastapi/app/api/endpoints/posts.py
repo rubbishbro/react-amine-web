@@ -17,7 +17,8 @@ def read_posts(
     limit: int = 1000,
 ) -> Any:
     """
-    Retrieve posts.
+    读取已发布的帖子列表
+    目前前端使用假分页，实际上是一次性获取大量数据，故limit设置较大，后续需要更改前端
     """
     posts = crud_post.get_multi(db, skip=skip, limit=limit)
     return posts
@@ -30,7 +31,7 @@ def create_post(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Create new post.
+    创建新帖子
     """
     post = crud_post.create(db, obj_in=post_in, author_id=current_user.id)
     return post
@@ -42,7 +43,7 @@ def read_post(
     id: int,
 ) -> Any:
     """
-    Get post by ID.
+    读取指定ID的帖子
     """
     post = crud_post.get(db, id=id)
     if not post:
@@ -57,7 +58,8 @@ def delete_post(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Delete a post.
+    删除指定ID的帖子
+    只有超级用户或帖子作者本人可以删除帖子
     """
     post = crud_post.get(db, id=id)
     if not post:
@@ -76,7 +78,8 @@ def update_post(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Update a post.
+    更新指定ID的帖子
+    只有超级用户或帖子作者本人可以更新帖子
     """
     post = crud_post.get(db, id=id)
     if not post:

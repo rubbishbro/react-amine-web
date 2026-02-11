@@ -37,6 +37,7 @@ def get_current_user(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+# 是否激活当前用户
 def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
