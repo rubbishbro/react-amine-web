@@ -72,22 +72,32 @@ const resolveAuthorTag = (author) => {
     return null;
 };
 
-export const buildTagInfo = (author, meta) => {
-    if (!author && !meta) return null;
-    const fromAuthor = resolveAuthorTag(author);
-    if (fromAuthor) return fromAuthor;
-    const role = meta?.role;
-    const isAdmin = role ? role === 'admin' : author?.isAdmin === true;
-    const title = (meta?.title || '').trim();
+export const buildTagInfo = (author, meta = null) => {
+    if (!author) return null;
+    
+    // 如果已有预构建的 tagInfo
+    if (author.tagInfo) {
+        return typeof author.tagInfo === 'object' 
+            ? author.tagInfo 
+            : { label: author.tagInfo, variant: 'user' };
+    }
+    
+    // 从后端用户对象构建（使用后端字段名）
+    const isAdmin = author.is_superuser === true;
+    const title = (author.title || '').trim();
+    
     if (title) {
         return {
             label: title,
             variant: isAdmin ? 'admin' : 'user',
         };
     }
+    
+    // 管理员默认显示"管理员"
     if (isAdmin) {
         return { label: '管理员', variant: 'admin' };
     }
+    
     return null;
 };
 
