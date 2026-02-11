@@ -5,7 +5,7 @@ import styles from './Post.module.css';
 import { getCategoryColor } from '../../config';
 import { Link, useNavigate } from 'react-router-dom';
 import { getPostStats, onPostStatsUpdated } from '../../utils/postStats';
-import { buildTagInfo, readAdminMeta } from '../../utils/adminMeta';
+import { buildTagInfo } from '../../utils/adminMeta';
 import { useUser } from '../../context/UserContext';
 import { getMappedUserId } from '../../utils/userId';
 
@@ -59,14 +59,9 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     : { name: post.author || '匿名' };
   const authorLinkId = getMappedUserId(authorInfo.id || '');
   const hasAuthorLink = !!authorLinkId;
-  const authorMetaId = authorLinkId || authorInfo.id || '';
-  const [authorMeta, setAuthorMeta] = useState(() => readAdminMeta(authorMetaId));
 
-  useEffect(() => {
-    setAuthorMeta(readAdminMeta(authorMetaId));
-  }, [authorMetaId]);
-
-  const tagInfo = useMemo(() => buildTagInfo(authorInfo, authorMeta), [authorInfo, authorMeta]);
+  // 直接从后端数据构建 tagInfo，不依赖 localStorage
+  const tagInfo = useMemo(() => buildTagInfo(authorInfo), [authorInfo]);
 
   const baseStats = useMemo(() => ({
     views: post?.views ?? 0,
