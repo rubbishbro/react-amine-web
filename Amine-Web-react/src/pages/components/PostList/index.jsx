@@ -4,6 +4,7 @@ import styles from './PostList.module.css';
 import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config/colors';
 import { getContrastTextColor, generateGradient } from '../../utils/colorUtils';
+import { getPostStats } from '../../utils/postStats';
 
 const PostList = ({ onReadMore, category = null }) => {
   const [posts, setPosts] = useState([]);
@@ -12,31 +13,61 @@ const PostList = ({ onReadMore, category = null }) => {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [error, setError] = useState(null);
+  const [sortMode, setSortMode] = useState('time');
   const loaderRef = useRef(null);
   const observerRef = useRef(null);
   const allPostsRef = useRef([]);
+  const allPostsRawRef = useRef([]);
   const postsPerPage = 5;
 
+  const applySort = useCallback((inputPosts, mode, categoryParam) => {
+    const posts = [...inputPosts];
+    const isPinnedPost = (post) => {
+      if (categoryParam && categoryParam !== 'all') {
+        return post.isPinnedInCurrentCategory;
+      }
+      return post.isPinnedGlobally;
+    };
+    const getLikeCount = (post) => {
+      const baseStats = { likes: post?.likes ?? 0 };
+      return getPostStats(post?.id, baseStats).likes;
+    };
+
+    return posts.sort((a, b) => {
+      const aPinned = isPinnedPost(a);
+      const bPinned = isPinnedPost(b);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      if (aPinned && bPinned && a.order !== b.order) return a.order - b.order;
+      if (mode === 'likes') {
+        const likeDiff = getLikeCount(b) - getLikeCount(a);
+        if (likeDiff !== 0) return likeDiff;
+      }
+      return new Date(b.date) - new Date(a.date);
+    });
+  }, []);
+
   // 根据分类加载帖子
-  const loadPosts = useCallback(async (pageNum = 1, categoryParam = null) => {
+  const loadPosts = useCallback(async (pageNum = 1, categoryParam = null, sortModeParam = 'time') => {
     try {
       setLoading(true);
-      
+
       let allPosts;
       if (categoryParam && categoryParam !== 'all') {
         allPosts = await loadPostsByCategory(categoryParam);
       } else {
         allPosts = await loadAllPosts();
       }
-      
+      const sortedPosts = applySort(allPosts, sortModeParam, categoryParam);
       // 存储总帖子数 & 缓存所有帖子
-      allPostsRef.current = allPosts;
-      setAllPostsCount(allPosts.length);
+      allPostsRawRef.current = allPosts;
+      allPostsRef.current = sortedPosts;
+      setAllPostsCount(sortedPosts.length);
 
       // 计算当前页的帖子
       const startIndex = 0;
       const endIndex = pageNum * postsPerPage;
-      const currentPosts = allPosts.slice(startIndex, endIndex);
+      const currentPosts = sortedPosts.slice(startIndex, endIndex);
 
       setPosts(currentPosts);
       setPage(pageNum);
@@ -51,12 +82,23 @@ const PostList = ({ onReadMore, category = null }) => {
     } finally {
       setLoading(false);
     }
-  }, [postsPerPage]);
+  }, [postsPerPage, applySort]);
 
   // 初始加载帖子
   useEffect(() => {
-    loadPosts(1, category);
-  }, [category, loadPosts]);
+    loadPosts(1, category, sortMode);
+  }, [category, sortMode, loadPosts]);
+
+  useEffect(() => {
+    const rawPosts = allPostsRawRef.current || [];
+    if (!rawPosts.length) return;
+    const sortedPosts = applySort(rawPosts, sortMode, category);
+    allPostsRef.current = sortedPosts;
+    const endIndex = page * postsPerPage;
+    setPosts(sortedPosts.slice(0, endIndex));
+    setHasMore(endIndex < sortedPosts.length);
+    setAllPostsCount(sortedPosts.length);
+  }, [sortMode, category, page, postsPerPage, applySort]);
 
   // 加载更多帖子
   const loadMorePosts = useCallback(async () => {
@@ -184,27 +226,40 @@ const PostList = ({ onReadMore, category = null }) => {
       {/* 分类标题 - 使用动态样式 */}
       <div className={styles.categoryHeader} style={getHeaderStyles()}>
         <h2>
-          {category && category !== 'all' 
-            ? getCategoryLabel() 
+          {category && category !== 'all'
+            ? getCategoryLabel()
             : '最新帖子'
           }
         </h2>
-        <div className={styles.categoryBadge} style={getBadgeStyles()}>
-          {getCategoryBadgeText()}
+        <div className={styles.headerActions}>
+          <div className={styles.categoryBadge} style={getBadgeStyles()}>
+            {getCategoryBadgeText()}
+          </div>
+          <button
+            type="button"
+            className={`${styles.sortToggle} ${sortMode === 'likes' ? styles.sortToggleActive : ''}`}
+            onClick={() => setSortMode((prev) => (prev === 'time' ? 'likes' : 'time'))}
+          >
+            <span className={styles.sortIcon}>{sortMode === 'time' ? '🕒' : '💖'}</span>
+            <span className={styles.sortText}>
+              {sortMode === 'time' ? '时间排序' : '点赞排序'}
+            </span>
+            <span className={styles.sortHint}>点击切换</span>
+          </button>
         </div>
       </div>
 
       {/* 帖子列表 */}
       <div className={styles.postsContainer}>
         {posts.map((post) => (
-          <Post 
-            key={post.id} 
-            post={post} 
-            preview={true} 
+          <Post
+            key={post.id}
+            post={post}
+            preview={true}
             onReadMore={onReadMore}
             isPinned={
-              category && category !== 'all' 
-                ? post.isPinnedInCurrentCategory 
+              category && category !== 'all'
+                ? post.isPinnedInCurrentCategory
                 : post.isPinnedGlobally
             }
             currentCategory={category}

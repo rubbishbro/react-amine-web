@@ -12,6 +12,7 @@ import PostDetail from '../components/PostDetail'
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import { buildUserId } from '../utils/userId'
+import { getUnreadNotificationCount } from '../utils/notifications'
 
 //用户面板组件
 import UserPanel from '../components/UserPanel'
@@ -104,6 +105,7 @@ export default function CommunityBoard() {
       const otherId = last.from === viewerId ? last.to : last.from;
       total += getUnreadCount(list, viewerId, otherId);
     }
+    total += getUnreadNotificationCount(viewerId);
     setUnreadCount(total);
   };
 
@@ -147,9 +149,11 @@ export default function CommunityBoard() {
     refreshUnreadCount();
     const handleUpdate = () => refreshUnreadCount();
     window.addEventListener('aw-messages-updated', handleUpdate);
+    window.addEventListener('aw-notifications-updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener('aw-messages-updated', handleUpdate);
+      window.removeEventListener('aw-notifications-updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
   }, [viewerId, location.key]);

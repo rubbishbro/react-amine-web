@@ -5,6 +5,13 @@ import { useUser } from '../context/UserContext';
 import { buildUserId, getMappedUserId } from '../utils/userId';
 import { getUserRestrictions } from '../utils/adminMeta';
 import { isBlocked, toggleBlock, readBlockedList } from '../utils/blockStore';
+import {
+    getUserNotifications,
+    markNotificationRead,
+    onNotificationsUpdated,
+    clearReadNotifications,
+    markAllNotificationsRead,
+} from '../utils/notifications';
 
 const readThread = (key) => {
     if (!key) return [];
@@ -90,6 +97,7 @@ export default function Messages() {
     const isListView = !targetId;
     const [blocked, setBlocked] = useState(false);
     const [blockedByTarget, setBlockedByTarget] = useState(false);
+    const [notifications, setNotifications] = useState([]);
 
     useEffect(() => {
         setMessages(readThread(threadKey));
@@ -126,6 +134,18 @@ export default function Messages() {
     }, [isListView, viewerId]);
 
     useEffect(() => {
+        if (!viewerId) return;
+        const updateNotifications = () => {
+            const list = getUserNotifications(viewerId);
+            list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            setNotifications(list);
+        };
+        updateNotifications();
+        const unsubscribe = onNotificationsUpdated(updateNotifications);
+        return unsubscribe;
+    }, [viewerId]);
+
+    useEffect(() => {
         if (!viewerId || !targetId) return;
         setBlocked(isBlocked(viewerId, targetId));
         setBlockedByTarget(isBlocked(targetId, viewerId));
@@ -142,6 +162,25 @@ export default function Messages() {
 
     const restrictions = useMemo(() => getUserRestrictions(viewerId), [viewerId]);
     const dmDisabled = !viewerId || restrictions.isBanned || restrictions.isMuted || blocked || blockedByTarget;
+
+    const combinedItems = useMemo(() => {
+        if (!isListView) return [];
+        const noticeItems = notifications.map((item) => ({
+            type: 'notification',
+            id: item.id,
+            createdAt: item.createdAt,
+            read: item.read === true,
+            payload: item,
+        }));
+        const threadItems = threads.map((item) => ({
+            type: 'thread',
+            id: item.key,
+            createdAt: item.lastAt,
+            read: item.unreadCount === 0,
+            payload: item,
+        }));
+        return [...noticeItems, ...threadItems].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }, [notifications, threads, isListView]);
 
     const handleSend = () => {
         if (!draft.trim()) return;
@@ -216,6 +255,22 @@ export default function Messages() {
         writeThread(threadKey, next);
     };
 
+    const markAllThreadsRead = () => {
+        if (!viewerId) return;
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (!key || !key.startsWith('aw_dm_')) continue;
+            if (!key.includes(viewerId)) continue;
+            const list = readThread(key);
+            if (!list.length) continue;
+            const last = list[list.length - 1];
+            const otherId = last.from === viewerId ? last.to : last.from;
+            if (!otherId) continue;
+            writeThreadReadAt(viewerId, otherId, last.createdAt || new Date().toISOString());
+        }
+        window.dispatchEvent(new Event('aw-messages-updated'));
+    };
+
     if (!targetId) {
         if (!viewerId) {
             return (
@@ -235,38 +290,99 @@ export default function Messages() {
                     {(restrictions.isBanned || restrictions.isMuted) && (
                         <div className={styles.notice}>你的账号当前无法使用私信功能。</div>
                     )}
-                    {threads.length === 0 ? (
-                        <div className={styles.notice}>暂无私信记录。</div>
+                    <div className={styles.listHeader}>
+                        <div className={styles.listTitle}>消息列表</div>
+                        <div className={styles.listActions}>
+                            <button
+                                className={styles.clearButton}
+                                type="button"
+                                onClick={() => {
+                                    markAllNotificationsRead(viewerId);
+                                    markAllThreadsRead();
+                                }}
+                            >
+                                清除未读
+                            </button>
+                            <button
+                                className={styles.clearButton}
+                                type="button"
+                                onClick={() => clearReadNotifications(viewerId)}
+                            >
+                                清空已读通知
+                            </button>
+                        </div>
+                    </div>
+                    {combinedItems.length === 0 ? (
+                        <div className={styles.notice}>暂无消息记录。</div>
                     ) : (
                         <div className={styles.threadList}>
-                            {threads.map((item) => (
-                                <button
-                                    key={item.key}
-                                    className={styles.threadItem}
-                                    onClick={() => navigate(`/messages/${item.otherId}`, {
-                                        state: { author: { id: item.otherId, name: item.otherName, avatar: item.otherAvatar } }
-                                    })}
-                                >
-                                    <div
-                                        className={styles.threadAvatar}
-                                        style={item.otherAvatar ? { backgroundImage: `url(${item.otherAvatar})` } : undefined}
-                                    />
-                                    <div className={styles.threadMeta}>
-                                        <div className={styles.threadTop}>
-                                            <span className={styles.threadName}>{item.otherName}</span>
-                                            <div className={styles.threadMetaRight}>
-                                                {item.unreadCount > 0 && (
-                                                    <span className={styles.unreadBadge} aria-label={`未读 ${item.unreadCount} 条`}>
-                                                        {item.unreadCount > 99 ? '99+' : item.unreadCount}
-                                                    </span>
-                                                )}
-                                                <span className={styles.threadTime}>{new Date(item.lastAt).toLocaleString('zh-CN')}</span>
+                            {combinedItems.map((item) => {
+                                if (item.type === 'notification') {
+                                    const payload = item.payload;
+                                    const targetLabel = payload.targetType === 'reply' ? '回复' : '帖子';
+                                    const actionLabel = payload.action === 'like' ? '点赞' : '回复';
+                                    const preview = payload.preview ? `“${payload.preview}”` : '';
+                                    const message = `您发布的${targetLabel}${preview}收到了新${actionLabel}，点击查看`;
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            className={styles.threadItem}
+                                            onClick={() => {
+                                                markNotificationRead(payload.id);
+                                                if (payload.postId) {
+                                                    const hash = payload.replyId ? `#reply-${payload.replyId}` : '';
+                                                    navigate(`/post/${payload.postId}${hash}`);
+                                                    return;
+                                                }
+                                                navigate('/');
+                                            }}
+                                        >
+                                            <div className={`${styles.threadAvatar} ${styles.noticeAvatar}`}>🔔</div>
+                                            <div className={styles.threadMeta}>
+                                                <div className={styles.threadTop}>
+                                                    <span className={styles.threadName}>通知</span>
+                                                    <div className={styles.threadMetaRight}>
+                                                        {!payload.read && (
+                                                            <span className={styles.unreadBadge} aria-label="未读通知">1</span>
+                                                        )}
+                                                        <span className={styles.threadTime}>{new Date(payload.createdAt).toLocaleString('zh-CN')}</span>
+                                                    </div>
+                                                </div>
+                                                <div className={styles.threadPreview}>{message}</div>
                                             </div>
+                                        </button>
+                                    );
+                                }
+                                const payload = item.payload;
+                                return (
+                                    <button
+                                        key={payload.key}
+                                        className={styles.threadItem}
+                                        onClick={() => navigate(`/messages/${payload.otherId}`, {
+                                            state: { author: { id: payload.otherId, name: payload.otherName, avatar: payload.otherAvatar } }
+                                        })}
+                                    >
+                                        <div
+                                            className={styles.threadAvatar}
+                                            style={payload.otherAvatar ? { backgroundImage: `url(${payload.otherAvatar})` } : undefined}
+                                        />
+                                        <div className={styles.threadMeta}>
+                                            <div className={styles.threadTop}>
+                                                <span className={styles.threadName}>{payload.otherName}</span>
+                                                <div className={styles.threadMetaRight}>
+                                                    {payload.unreadCount > 0 && (
+                                                        <span className={styles.unreadBadge} aria-label={`未读 ${payload.unreadCount} 条`}>
+                                                            {payload.unreadCount > 99 ? '99+' : payload.unreadCount}
+                                                        </span>
+                                                    )}
+                                                    <span className={styles.threadTime}>{new Date(payload.lastAt).toLocaleString('zh-CN')}</span>
+                                                </div>
+                                            </div>
+                                            <div className={styles.threadPreview}>{payload.lastContent}</div>
                                         </div>
-                                        <div className={styles.threadPreview}>{item.lastContent}</div>
-                                    </div>
-                                </button>
-                            ))}
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                 </div>

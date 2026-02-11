@@ -22,6 +22,7 @@ import {
 import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../../utils/adminMeta';
 import { buildUserId, getMappedUserId } from '../../utils/userId';
 import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../../utils/followStore';
+import { pushNotification } from '../../utils/notifications';
 
 const isSameUser = (left, right) => {
   if (!left || !right) return false;
@@ -48,9 +49,12 @@ const PostDetail = () => {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [followVersion, setFollowVersion] = useState(0);
+  const [replySort, setReplySort] = useState('time');
+  const [replyLikesVersion, setReplyLikesVersion] = useState(0);
   const adminMenuRef = useRef(null);
   const viewTrackedRef = useRef(null);
   const LOCAL_REPLIES_KEY = 'aw_local_replies';
+  const LOCAL_REPLY_LIKES_KEY = 'aw_reply_likes';
 
   const readLocalReplies = () => {
     try {
@@ -83,6 +87,56 @@ const PostDetail = () => {
     data[postId] = nextReplies;
     writeLocalReplies(data);
   };
+  const readReplyLikes = () => {
+    try {
+      const raw = localStorage.getItem(LOCAL_REPLY_LIKES_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      console.error('Error reading reply likes:', error);
+      return {};
+    }
+  };
+
+  const writeReplyLikes = (data) => {
+    try {
+      localStorage.setItem(LOCAL_REPLY_LIKES_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('Error writing reply likes:', error);
+    }
+  };
+
+  const getReplyLikeInfo = (postId, replyId) => {
+    if (!postId || !replyId) return { count: 0, likedBy: [] };
+    const data = readReplyLikes();
+    const postLikes = data[postId] || {};
+    const info = postLikes[replyId] || { likedBy: [] };
+    const likedBy = Array.isArray(info.likedBy) ? info.likedBy : [];
+    return { count: likedBy.length, likedBy };
+  };
+
+  const isReplyLikedByUser = (postId, replyId, userId) => {
+    if (!userId) return false;
+    const info = getReplyLikeInfo(postId, replyId);
+    return info.likedBy.includes(userId);
+  };
+
+  const toggleReplyLike = (postId, replyId, userId) => {
+    if (!postId || !replyId || !userId) return { liked: false, count: 0 };
+    const data = readReplyLikes();
+    const postLikes = data[postId] || {};
+    const info = postLikes[replyId] || { likedBy: [] };
+    const likedBy = Array.isArray(info.likedBy) ? info.likedBy : [];
+    const alreadyLiked = likedBy.includes(userId);
+    const nextLikedBy = alreadyLiked
+      ? likedBy.filter((id) => id !== userId)
+      : [...likedBy, userId];
+    postLikes[replyId] = { likedBy: nextLikedBy };
+    data[postId] = postLikes;
+    writeReplyLikes(data);
+    return { liked: !alreadyLiked, count: nextLikedBy.length };
+  };
   const [activeReplyId, setActiveReplyId] = useState(null);
   const [nestedDraft, setNestedDraft] = useState('');
 
@@ -106,6 +160,13 @@ const PostDetail = () => {
   const authorMeta = useMemo(() => readAdminMeta(authorMetaId), [authorMetaId]);
 
   const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  const buildPreview = (text, limit = 18) => {
+    if (!text) return '';
+    const plain = text.toString().replace(/\s+/g, ' ').trim();
+    if (plain.length <= limit) return plain;
+    return `${plain.slice(0, limit)}...`;
+  };
 
   const handleBack = () => {
     if (location.state?.from) {
@@ -162,6 +223,19 @@ const PostDetail = () => {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (!location.hash) return;
+    const hashId = location.hash.replace('#', '').trim();
+    if (!hashId) return;
+    const timer = setTimeout(() => {
+      const target = document.getElementById(hashId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [location.hash, replies]);
+
   const handleSubmitReply = () => {
     if (!isViewerLoggedIn) {
       window.alert('请先登录后再发帖！');
@@ -186,6 +260,19 @@ const PostDetail = () => {
       parentId: null,
       replyToName: null,
     };
+    const authorId = getMappedUserId(post?.author?.id || '');
+    if (authorId && authorId !== currentUser.id) {
+      pushNotification({
+        userId: authorId,
+        targetType: 'post',
+        action: 'reply',
+        postId: id,
+        replyId: newReply.id,
+        preview: buildPreview(post?.summary || post?.title || post?.content || ''),
+        fromUserId: currentUser.id,
+        fromUserName: currentUser.name,
+      });
+    }
     setReplies((prev) => {
       const next = [...prev, newReply];
       persistReplies(id, next);
@@ -239,6 +326,19 @@ const PostDetail = () => {
       parentId: replyId,
       replyToName: target?.author?.name || '用户',
     };
+    const targetAuthorId = getMappedUserId(target?.author?.id || '');
+    if (targetAuthorId && targetAuthorId !== currentUser.id) {
+      pushNotification({
+        userId: targetAuthorId,
+        targetType: 'reply',
+        action: 'reply',
+        postId: id,
+        replyId: newReply.id,
+        preview: buildPreview(target?.content || ''),
+        fromUserId: currentUser.id,
+        fromUserName: currentUser.name,
+      });
+    }
     setReplies((prev) => {
       const next = [...prev, newReply];
       persistReplies(id, next);
@@ -359,6 +459,18 @@ const PostDetail = () => {
     const wasLiked = isLiked(id);
     toggleLike(id);
     updatePostLikes(id, wasLiked ? -1 : 1);
+    const authorId = getMappedUserId(post?.author?.id || '');
+    if (!wasLiked && authorId && authorId !== currentUser.id) {
+      pushNotification({
+        userId: authorId,
+        targetType: 'post',
+        action: 'like',
+        postId: id,
+        preview: buildPreview(post?.summary || post?.title || post?.content || ''),
+        fromUserId: currentUser.id,
+        fromUserName: currentUser.name,
+      });
+    }
   };
 
   const handleToggleFavorite = () => {
@@ -434,6 +546,19 @@ const PostDetail = () => {
     return map;
   }, [replies, isViewerLoggedIn]);
   const canDeletePost = currentUser.isAdmin || (authorId && currentUser.id === authorId);
+  const sortedReplies = useMemo(() => {
+    const list = [...replies];
+    if (replySort === 'likes') {
+      list.sort((a, b) => {
+        const likeDiff = getReplyLikeInfo(id, b.id).count - getReplyLikeInfo(id, a.id).count;
+        if (likeDiff !== 0) return likeDiff;
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      });
+      return list;
+    }
+    list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    return list;
+  }, [replies, replySort, id, replyLikesVersion]);
 
   if (loading) {
     return (
@@ -647,15 +772,32 @@ const PostDetail = () => {
           </div>
 
           <div className={styles.replySection}>
-            <h3 className={styles.replyTitle}>回复</h3>
+            <div className={styles.replyHeaderRow}>
+              <h3 className={styles.replyTitle}>回复</h3>
+              <div className={styles.replySort}>
+                <button
+                  type="button"
+                  className={`${styles.replySortButton} ${replySort === 'time' ? styles.replySortActive : ''}`}
+                  onClick={() => setReplySort('time')}
+                >
+                  时间
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.replySortButton} ${replySort === 'likes' ? styles.replySortActive : ''}`}
+                  onClick={() => setReplySort('likes')}
+                >
+                  点赞
+                </button>
+              </div>
+            </div>
             {replies.length === 0 ? (
               <div className={styles.emptyReply}>还没有人回复，来抢沙发吧～</div>
             ) : (
               <div className={styles.replyList}>
-                {[...replies]
-                  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+                {sortedReplies
                   .map((reply) => (
-                    <div key={reply.id} className={styles.replyItem}>
+                    <div key={reply.id} id={`reply-${reply.id}`} className={styles.replyItem}>
                       <div className={styles.replyBody}>
                         <div className={styles.replyHeader}>
                           <div className={styles.replyAuthor}>
@@ -710,6 +852,41 @@ const PostDetail = () => {
                         </div>
 
                         <div className={styles.replyFooter}>
+                          <button
+                            className={`${styles.replyButton} ${isReplyLikedByUser(id, reply.id, currentUser.id) ? styles.replyLiked : ''}`}
+                            onClick={() => {
+                              if (!isViewerLoggedIn) {
+                                window.alert('请先登录后再点赞！');
+                                navigate('/login');
+                                return;
+                              }
+                              if (userRestrictions.isBanned) {
+                                window.alert('您的账号已被封禁，无法进行点赞操作。');
+                                return;
+                              }
+                              if (userRestrictions.isMuted) {
+                                window.alert('您已被禁言，暂时无法进行点赞操作。');
+                                return;
+                              }
+                              const { liked } = toggleReplyLike(id, reply.id, currentUser.id);
+                              setReplyLikesVersion((prev) => prev + 1);
+                              const replyAuthorId = getMappedUserId(reply?.author?.id || '');
+                              if (liked && replyAuthorId && replyAuthorId !== currentUser.id) {
+                                pushNotification({
+                                  userId: replyAuthorId,
+                                  targetType: 'reply',
+                                  action: 'like',
+                                  postId: id,
+                                  replyId: reply.id,
+                                  preview: buildPreview(reply?.content || ''),
+                                  fromUserId: currentUser.id,
+                                  fromUserName: currentUser.name,
+                                });
+                              }
+                            }}
+                          >
+                            {isReplyLikedByUser(id, reply.id, currentUser.id) ? '❤️' : '🤍'} {getReplyLikeInfo(id, reply.id).count}
+                          </button>
                           <button
                             className={styles.replyButton}
                             onClick={() => handleOpenNestedReply(reply.id)}
