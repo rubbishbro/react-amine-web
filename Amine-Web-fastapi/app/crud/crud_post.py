@@ -5,14 +5,29 @@ from app.schemas.post import PostCreate, PostUpdate
 
 # 按照id获取帖子
 def get(db: Session, id: int) -> Optional[Post]:
-    return db.get(Post, id)
+    from app.models.user import User
+    
+    post = db.get(Post, id)
+    if post and post.author_id:
+        post.author = db.get(User, post.author_id)
+    return post
 
 # 分页列出帖子
 
 # 前端此处使用了假分页，实际上是一次性获取大量数据，故limit设置较大，后续需要更改前端
 def get_multi(db: Session, *, skip: int = 0, limit: int = 1000) -> List[Post]:
-    statement = select(Post).offset(skip).limit(limit)
-    return db.exec(statement).all()
+    from sqlmodel import select
+    from app.models.user import User
+    
+    # 使用 joinedload 或手动加载 author
+    posts = db.exec(select(Post).offset(skip).limit(limit)).all()
+    
+    # 手动加载每个帖子的作者信息
+    for post in posts:
+        if post.author_id:
+            post.author = db.get(User, post.author_id)
+    
+    return posts
 
 # 创建帖子
 def create(db: Session, *, obj_in: PostCreate, author_id: int) -> Post:
