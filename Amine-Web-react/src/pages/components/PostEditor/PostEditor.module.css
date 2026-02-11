@@ -337,10 +337,15 @@
   box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.2);
 }
 
+.markdownContainer :global(.markdown-editor textarea::placeholder) {
+  color: #c7c7c7;
+  font-weight: 600;
+}
+
 .editorStatsBadge {
   position: absolute;
-  top: -10px;
-  left: 12px;
+  bottom: 12px;
+  right: 12px;
   z-index: 2;
   padding: 4px 10px;
   border-radius: 12px;

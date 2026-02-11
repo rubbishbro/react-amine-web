@@ -22,9 +22,47 @@ const writeThread = (key, messages) => {
     if (!key) return;
     try {
         localStorage.setItem(key, JSON.stringify(messages));
+        window.dispatchEvent(new Event('aw-messages-updated'));
     } catch (error) {
         console.error('Failed to save DM messages:', error);
     }
+};
+
+const buildReadKey = (viewerId, otherId) => {
+    if (!viewerId || !otherId) return '';
+    return `aw_dm_read_${viewerId}_${otherId}`;
+};
+
+const readThreadReadAt = (viewerId, otherId) => {
+    const key = buildReadKey(viewerId, otherId);
+    if (!key) return '';
+    try {
+        return localStorage.getItem(key) || '';
+    } catch {
+        return '';
+    }
+};
+
+const writeThreadReadAt = (viewerId, otherId, value) => {
+    const key = buildReadKey(viewerId, otherId);
+    if (!key) return;
+    try {
+        localStorage.setItem(key, value);
+        window.dispatchEvent(new Event('aw-messages-updated'));
+    } catch {
+        // ignore
+    }
+};
+
+const getUnreadCount = (messages, viewerId, otherId) => {
+    if (!messages.length || !viewerId || !otherId) return 0;
+    const readAt = readThreadReadAt(viewerId, otherId);
+    const readTime = readAt ? new Date(readAt).getTime() : 0;
+    return messages.reduce((count, msg) => {
+        if (msg.from !== otherId) return count;
+        const msgTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
+        return msgTime > readTime ? count + 1 : count;
+    }, 0);
 };
 
 export default function Messages() {
@@ -72,6 +110,7 @@ export default function Messages() {
             if (blockedList.includes(otherId)) continue;
             const otherName = last.from === viewerId ? (last.toName || otherId) : (last.fromName || otherId);
             const otherAvatar = last.from === viewerId ? (last.toAvatar || '') : (last.fromAvatar || '');
+            const unreadCount = getUnreadCount(list, viewerId, otherId);
             all.push({
                 key,
                 otherId,
@@ -79,6 +118,7 @@ export default function Messages() {
                 otherAvatar,
                 lastContent: last.content,
                 lastAt: last.createdAt,
+                unreadCount,
             });
         }
         all.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
@@ -90,6 +130,15 @@ export default function Messages() {
         setBlocked(isBlocked(viewerId, targetId));
         setBlockedByTarget(isBlocked(targetId, viewerId));
     }, [viewerId, targetId]);
+
+    useEffect(() => {
+        if (!viewerId || !targetId || !messages.length) return;
+        const latestIncoming = [...messages].reverse().find((msg) => msg.from === targetId);
+        const latestAt = latestIncoming?.createdAt || messages[messages.length - 1]?.createdAt;
+        if (latestAt) {
+            writeThreadReadAt(viewerId, targetId, latestAt);
+        }
+    }, [viewerId, targetId, messages]);
 
     const restrictions = useMemo(() => getUserRestrictions(viewerId), [viewerId]);
     const dmDisabled = !viewerId || restrictions.isBanned || restrictions.isMuted || blocked || blockedByTarget;
@@ -205,7 +254,14 @@ export default function Messages() {
                                     <div className={styles.threadMeta}>
                                         <div className={styles.threadTop}>
                                             <span className={styles.threadName}>{item.otherName}</span>
-                                            <span className={styles.threadTime}>{new Date(item.lastAt).toLocaleString('zh-CN')}</span>
+                                            <div className={styles.threadMetaRight}>
+                                                {item.unreadCount > 0 && (
+                                                    <span className={styles.unreadBadge} aria-label={`未读 ${item.unreadCount} 条`}>
+                                                        {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                                                    </span>
+                                                )}
+                                                <span className={styles.threadTime}>{new Date(item.lastAt).toLocaleString('zh-CN')}</span>
+                                            </div>
                                         </div>
                                         <div className={styles.threadPreview}>{item.lastContent}</div>
                                     </div>
