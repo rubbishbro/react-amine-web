@@ -5,7 +5,6 @@ from typing import Optional
 from datetime import datetime
 from sqlmodel import Session
 from app.models.user import User
-from app.crud.crud_user import user as crud_user
 
 
 class CRUDAdmin:
