@@ -123,23 +123,30 @@ def create_test_data():
         created_users = []
         print("\n👤 创建测试用户...")
         for user_data in test_users:
-            user = User(
-                email=user_data["email"],
-                username=user_data["username"],
-                hashed_password=get_password_hash(user_data["password"]),
-                is_active=True,
-                is_superuser=user_data.get("is_superuser", False),
-            )
-            session.add(user)
-            created_users.append(user)
-            role = "管理员" if user.is_superuser else "用户"
-            print(f"  ✓ {user.username} ({user.email}) - {role}")
+            try:
+                user = User(
+                    email=user_data["email"],
+                    username=user_data["username"],
+                    hashed_password=get_password_hash(user_data["password"]),
+                    is_active=True,
+                    is_superuser=user_data.get("is_superuser", False),
+                )
+                session.add(user)
+                created_users.append(user)
+                role = "管理员" if user.is_superuser else "用户"
+                print(f"  ✓ {user.username} ({user.email}) - {role}")
+            except Exception as e:
+                print(f"  ❌ 创建用户 {user_data['username']} 失败: {e}")
+                raise
         
+        print("\n💾 提交用户数据...")
         session.commit()
+        print(f"  ✓ 已提交 {len(created_users)} 个用户")
         
         # 刷新用户以获取ID
         for user in created_users:
             session.refresh(user)
+            print(f"  ✓ 用户 {user.username} ID: {user.id}")
         
         # 创建测试帖子
         print("\n📄 创建测试帖子...")
@@ -147,32 +154,38 @@ def create_test_data():
         base_time = datetime.utcnow() - timedelta(days=10)
         
         for i, post_data in enumerate(test_posts):
-            # 随机分配作者，但第一篇由管理员发布
-            if i == 0:
-                author = created_users[-1]  # 管理员
-            else:
-                author = random.choice(created_users[:-1])  # 普通用户
-            
-            # 设置不同的发布时间
-            post_time = base_time + timedelta(days=i, hours=random.randint(0, 23))
-            
-            post = Post(
-                title=post_data["title"],
-                content=post_data["content"],
-                summary=post_data["summary"],
-                category=post_data["category"],
-                tags=post_data["tags"],
-                is_published=post_data["is_published"],
-                author_id=author.id,
-                created_at=post_time,
-                updated_at=post_time,
-            )
-            session.add(post)
-            created_posts.append(post)
-            status = "✓ 已发布" if post.is_published else "📝 草稿"
-            print(f"  {status} 《{post.title}》 - 作者: {author.username}")
+            try:
+                # 随机分配作者，但第一篇由管理员发布
+                if i == 0:
+                    author = created_users[-1]  # 管理员
+                else:
+                    author = random.choice(created_users[:-1])  # 普通用户
+                
+                # 设置不同的发布时间
+                post_time = base_time + timedelta(days=i, hours=random.randint(0, 23))
+                
+                post = Post(
+                    title=post_data["title"],
+                    content=post_data["content"],
+                    summary=post_data["summary"],
+                    category=post_data["category"],
+                    tags=post_data["tags"],
+                    is_published=post_data["is_published"],
+                    author_id=author.id,
+                    created_at=post_time,
+                    updated_at=post_time,
+                )
+                session.add(post)
+                created_posts.append(post)
+                status = "✓ 已发布" if post.is_published else "📝 草稿"
+                print(f"  {status} 《{post.title}》 - 作者: {author.username}")
+            except Exception as e:
+                print(f"  ❌ 创建帖子 《{post_data['title']}》 失败: {e}")
+                raise
         
+        print("\n💾 提交帖子数据...")
         session.commit()
+        print(f"  ✓ 已提交 {len(created_posts)} 个帖子")
         
         print("\n✅ 测试数据生成完成！")
         print(f"\n📊 统计:")
