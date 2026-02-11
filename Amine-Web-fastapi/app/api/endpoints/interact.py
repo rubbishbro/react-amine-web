@@ -18,7 +18,7 @@ def create_interaction(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Create an interaction (like/comment) on a post.
+    对帖子进行交互（如点赞、评论等）
     """
     interaction = crud_interact.create(db, obj_in=interaction_in, user_id=current_user.id)
     return interaction
@@ -31,7 +31,7 @@ def read_my_interactions(
     limit: int = 100,
 ) -> Any:
     """
-    Get current user's interactions.
+    获取当前用户的交互记录
     """
     interactions = crud_interact.get_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
     return interactions
@@ -44,7 +44,7 @@ def read_post_interactions(
     limit: int = 100,
 ) -> Any:
     """
-    Get interactions for a post.
+    获取指定帖子的交互记录
     """
     interactions = crud_interact.get_by_post(db, post_id=post_id, skip=skip, limit=limit)
     return interactions

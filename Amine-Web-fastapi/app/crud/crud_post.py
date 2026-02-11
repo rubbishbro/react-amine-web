@@ -11,7 +11,7 @@ def get(db: Session, id: int) -> Optional[Post]:
 
 # 前端此处使用了假分页，实际上是一次性获取大量数据，故limit设置较大，后续需要更改前端
 def get_multi(db: Session, *, skip: int = 0, limit: int = 1000) -> List[Post]:
-    statement = select(Post).offset(skip).limit(limit)
+    statement = select(Post).offset(skip).limit(limit).where(Post.is_published == True)
     return db.exec(statement).all()
 
 # 创建帖子
