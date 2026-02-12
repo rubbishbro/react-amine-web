@@ -3,6 +3,7 @@ import { isUserBanned } from './adminMeta.js';
 import { isBlocked } from './blockStore.js';
 import { ensurePostReadTime } from './postReadTime.js';
 import { buildUserId, getCurrentViewerId } from './userId.js';
+import { API_BASE_URL } from '../config/api.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
 const REMOTE_POSTS_CACHE_KEY = 'aw_posts_cache';
@@ -47,8 +48,30 @@ const normalizeAuthor = (author) => {
     school: author.school || author.college || '',
     className: author.className || author.class || author.grade || '',
     email: author.email || '',
-    isAdmin: author.isAdmin === true,
+    isAdmin: author.isAdmin === true || author.is_superuser === true,
     tagInfo,
+  };
+};
+
+/**
+ * 将后端帖子格式转换为前端期望的格式
+ */
+const transformBackendPost = (backendPost) => {
+  if (!backendPost) return null;
+  
+  return {
+    id: String(backendPost.id), // 后端是数字，前端期望字符串
+    title: backendPost.title || '',
+    content: backendPost.content || '',
+    summary: backendPost.summary || '',
+    category: backendPost.category || '',
+    tags: Array.isArray(backendPost.tags) ? backendPost.tags : [],
+    date: backendPost.created_at || backendPost.updated_at || new Date().toISOString(),
+    author: normalizeAuthor(backendPost.author),
+    status: backendPost.is_published ? 'published' : 'draft',
+    isPinnedGlobally: false, // 后端暂无此字段
+    pinnedInCategories: [],
+    order: 999,
   };
 };
 
@@ -72,20 +95,29 @@ const writeRemotePostsCache = (posts) => {
   }
 };
 
-// 保留后端接口，当前不主动调用
+// 从后端 API 获取帖子列表
 export const fetchPostsFromBackend = async () => {
   try {
-    const response = await fetch('/api/posts');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // 使用 PostAPI 服务
+    const PostAPI = (await import('../../services/getpostfromback.js')).default;
+    const api = new PostAPI();
+    const rawPosts = await api.getPostsLists();
+    
+    // 转换后端数据格式为前端格式
+    const transformedPosts = Array.isArray(rawPosts) 
+      ? rawPosts.map(post => transformBackendPost(post)).filter(p => p !== null)
+      : [];
+    
+    // 缓存到本地存储
+    if (transformedPosts.length > 0) {
+      writeRemotePostsCache(transformedPosts);
     }
-    const data = await response.json();
-    const posts = Array.isArray(data?.posts) ? data.posts : [];
-    writeRemotePostsCache(posts);
-    return posts;
+    
+    return transformedPosts;
   } catch (error) {
     console.error('Error fetching posts from backend:', error);
-    return [];
+    // 如果请求失败，尝试从缓存读取
+    return readRemotePostsCache();
   }
 };
 
@@ -188,6 +220,20 @@ export const upsertLocalPost = (postData) => {
     ...postData,
     author: normalizeAuthor(postData.author),
   };
+  
+  // 如果帖子是已发布状态，不保存到本地（应该在后端）
+  const isPublished = normalized.status === 'published' || normalized.is_published === true;
+  if (isPublished) {
+    console.warn('尝试保存已发布帖子到本地存储，已忽略。已发布帖子应存储在后端。');
+    // 如果本地有这个 ID 的帖子，删除它
+    const posts = readLocalPosts();
+    const filtered = posts.filter((item) => item.id !== normalized.id);
+    if (filtered.length !== posts.length) {
+      writeLocalPosts(filtered);
+    }
+    return normalized;
+  }
+  
   const posts = readLocalPosts();
   const index = posts.findIndex((item) => item.id === normalized.id);
   if (index >= 0) {
@@ -209,9 +255,42 @@ const getCachedPostById = (postId) => {
   return posts.find((item) => item.id === postId) || null;
 };
 
-const getLocalPublishedPosts = () => {
+/**
+ * 获取本地草稿帖子（未发布的）
+ * 已发布的帖子应该在后端，不应出现在本地存储中
+ */
+const getLocalDraftPosts = () => {
   const posts = readLocalPosts();
-  return posts.filter((item) => item.status === 'published');
+  return posts.filter((item) => {
+    // 只返回草稿状态的帖子
+    const isPublished = item.status === 'published' || item.is_published === true;
+    return !isPublished;
+  });
+};
+
+/**
+ * 清理本地存储中已发布的帖子
+ * 已发布的帖子应该从后端获取，不应保留在本地
+ */
+export const cleanPublishedLocalPosts = () => {
+  try {
+    const posts = readLocalPosts();
+    const draftPosts = posts.filter((item) => {
+      const isPublished = item.status === 'published' || item.is_published === true;
+      return !isPublished; // 只保留未发布的
+    });
+    
+    const removedCount = posts.length - draftPosts.length;
+    if (removedCount > 0) {
+      writeLocalPosts(draftPosts);
+      console.log(`已清理 ${removedCount} 个已发布的本地帖子`);
+    }
+    
+    return removedCount;
+  } catch (error) {
+    console.error('清理本地已发布帖子失败:', error);
+    return 0;
+  }
 };
 
 const applyPinned = (post, pinnedIds) => ensurePostReadTime({
@@ -225,16 +304,20 @@ const applyPinned = (post, pinnedIds) => ensurePostReadTime({
 const buildMergedPosts = () => {
   const pinnedIds = readPinnedPosts();
   const merged = new Map();
-  const localPosts = getLocalPublishedPosts();
+  
+  // 1. 添加后端帖子（已发布的）
   const cachedPosts = readRemotePostsCache();
-
-  localPosts.forEach((post) => {
+  cachedPosts.forEach((post) => {
+    if (!post) return;
     merged.set(post.id, applyPinned(post, pinnedIds));
   });
 
-  cachedPosts.forEach((post) => {
-    if (!post || merged.has(post.id)) return;
-    merged.set(post.id, applyPinned(post, pinnedIds));
+  // 2. 添加本地草稿帖子（仅未发布的）
+  const localDrafts = getLocalDraftPosts();
+  localDrafts.forEach((post) => {
+    // 为草稿添加标识
+    const draftPost = { ...post, isDraft: true };
+    merged.set(post.id, applyPinned(draftPost, pinnedIds));
   });
 
   return Array.from(merged.values());
@@ -262,10 +345,40 @@ export const loadPostContent = async (postId) => {
     if (isPostDeleted(postId)) {
       return null;
     }
+    
+    // 1. 优先查找本地帖子（草稿等）
     const localPost = getLocalPostById(postId);
     if (localPost) {
       return applyPinned(localPost, readPinnedPosts());
     }
+    
+    // 2. 从后端 API 获取
+    try {
+      const PostAPI = (await import('../../services/getpostfromback.js')).default;
+      const api = new PostAPI();
+      const rawPost = await api.getPostById(postId);
+      
+      if (rawPost) {
+        const transformedPost = transformBackendPost(rawPost);
+        if (transformedPost) {
+          // 更新缓存
+          const cached = readRemotePostsCache();
+          const index = cached.findIndex(p => p.id === transformedPost.id);
+          if (index >= 0) {
+            cached[index] = transformedPost;
+          } else {
+            cached.push(transformedPost);
+          }
+          writeRemotePostsCache(cached);
+          
+          return applyPinned(transformedPost, readPinnedPosts());
+        }
+      }
+    } catch (apiError) {
+      console.warn(`Failed to fetch post ${postId} from backend, trying cache:`, apiError.message);
+    }
+    
+    // 3. 最后尝试从缓存获取
     const cachedPost = getCachedPostById(postId);
     if (!cachedPost) return null;
     return applyPinned({ ...cachedPost, id: postId }, readPinnedPosts());
@@ -280,6 +393,12 @@ export const loadPostContent = async (postId) => {
  */
 export const loadAllPosts = async () => {
   try {
+    // 首先清理本地已发布的帖子
+    cleanPublishedLocalPosts();
+    
+    // 然后从后端获取最新数据
+    await fetchPostsFromBackend();
+    
     const viewerId = getCurrentViewerId();
     const deletedIds = readDeletedPosts();
     const validPosts = buildMergedPosts()

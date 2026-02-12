@@ -47,13 +47,20 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
+> **💡 提示**: CORS 配置在 `app/main.py` 中直接设置，如需修改域名请编辑该文件。
+
 ### 4. 启动数据库
 
 确保 PostgreSQL 服务运行中，并创建数据库：
 ```bash
 psql -U postgres
-CREATE DATABASE AMINE_WEB;
+CREATE DATABASE amine_web;
 \q
+```
+第二次启动：
+```bash
+psql -U postgres
+\c amine_web
 ```
 
 ### 5. 运行服务
@@ -185,6 +192,28 @@ Amine-Web-fastapi/
 
 ## 🔧 开发工具
 
+### API 测试
+
+**方法 1: Python 自动化测试**
+```bash
+python -m actions.test_api
+```
+
+**方法 2: 浏览器 CORS 测试（推荐）**
+```bash
+# 启动测试服务器
+python actions/start_cors_test.py
+
+# 然后在浏览器访问
+# http://localhost:5173/cors-test.html
+```
+
+> **⚠️ 重要**: 
+> - 不要直接双击 `cors-test.html`（file:// 协议无法测试 CORS）
+> - 必须通过 HTTP 服务器访问（上面的命令会自动启动）
+> - Python 测试脚本可能显示 CORS 警告（requests 库的行为），这是正常的
+> - **浏览器测试**可以真实验证 CORS 配置是否正常工作
+
 ### 代码规范
 - 遵循 PEP 8 风格
 - 使用类型注解
@@ -286,7 +315,137 @@ psql -U postgres
 
 然后按 **F5** 启动调试，可以在代码中设置断点。
 
-## 📝 TODO
+## � 生产环境部署配置
+
+### ⚠️ 部署前必须修改的配置项
+
+#### 1. CORS 配置 ([main.py](app/main.py))
+
+**当前配置（开发环境）**：
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    ...
+)
+```
+
+**生产环境修改为**：
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://yourdomain.com",           # 你的生产域名
+        "https://www.yourdomain.com",       # www 子域名
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # 只允许必要的方法
+    allow_headers=["Content-Type", "Authorization"],  # 只允许必要的头部
+)
+```
+
+#### 2. 数据库配置 ([main.py](app/main.py))
+
+**性能优化建议**：
+- 修改 [crud_post.py](app/crud/crud_post.py) 中的 `get_multi` 函数
+- 当前使用 `limit=1000` 是为了兼容前端假分页
+- 生产环境应改为真实分页（如 `limit=20`）
+- 前端需要相应修改为滚动加载或页码分页
+
+#### 3. 静态资源存储 ([upload.py](app/api/endpoints/upload.py))
+
+**当前配置**：本地文件存储（`static/uploads/`）
+
+**生产环境建议**：
+- 接入对象存储服务（阿里云 OSS / 腾讯云 COS / AWS S3）
+- 优点：CDN 加速、海量存储、高可用性
+- 修改 `upload.py` 中的文件保存逻辑
+
+#### 4. JWT 密钥配置 (`.env`)
+
+**必须修改**：
+```env
+SECRET_KEY=your-super-secret-key-change-this  # ❌ 请更换为强密码
+ACCESS_TOKEN_EXPIRE_MINUTES=30                # 可根据需求调整
+```
+
+生成强密钥：
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+#### 5. 数据库连接池配置
+
+在高并发场景下，修改 [database.py](app/db/database.py) 添加连接池配置：
+```python
+engine = create_engine(
+    settings.SQLALCHEMY_DATABASE_URI,
+    pool_size=20,           # 连接池大小
+    max_overflow=40,        # 最大溢出连接
+    pool_pre_ping=True,     # 连接检查
+)
+```
+
+#### 6. HTTPS 部署
+
+**必须使用 HTTPS**：
+- JWT Token 在 Authorization 头中传输
+- 使用 Nginx 反向代理 + Let's Encrypt 证书
+- 配置示例：
+
+```nginx
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.yourdomain.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+#### 7. 安全加固
+
+- 关闭 Swagger 文档访问（生产环境）
+- 添加 API 限流（防止 DDoS）
+- 配置日志记录系统
+- 定期备份数据库
+
+### 📋 生产部署检查清单
+
+- [ ] 修改 CORS 白名单为生产域名
+- [ ] 更换 JWT SECRET_KEY 为强密钥
+- [ ] 配置对象存储服务（替代本地上传）
+- [ ] 调整数据库分页参数（前后端同步）
+- [ ] 配置数据库连接池
+- [ ] 设置 HTTPS 证书
+- [ ] 关闭或限制 Swagger 文档访问
+- [ ] 添加 API 限流中间件
+- [ ] 配置日志和监控
+- [ ] 设置数据库自动备份
+- [ ] 环境变量使用系统级配置（不提交 .env 到 Git）
+
+---
+
+## �📝 TODO
 
 ### 核心功能
 - [x] 用户关系系统

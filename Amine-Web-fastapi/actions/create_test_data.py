@@ -1,9 +1,6 @@
 """
 生成测试用户和帖子的脚本
 """
-import sys
-import os
-
 from sqlmodel import Session, select
 from app.db.database import engine
 from app.models.user import User
@@ -14,12 +11,12 @@ import random
 
 # 测试用户数据
 test_users = [
-    {"email": "zhangsan@example.com", "username": "张三", "password": "password123"},
-    {"email": "lisi@example.com", "username": "李四", "password": "password123"},
-    {"email": "wangwu@example.com", "username": "王五", "password": "password123"},
-    {"email": "zhaoliu@example.com", "username": "赵六", "password": "password123"},
-    {"email": "sunqi@example.com", "username": "孙七", "password": "password123"},
-    {"email": "admin@example.com", "username": "管理员", "password": "admin123", "is_superuser": True},
+    {"email": "zhangsan@example.com", "username": "张三", "password": "password123", "userSchool": "北京大学", "userClass": "计算机科学1班"},
+    {"email": "lisi@example.com", "username": "李四", "password": "password123", "userSchool": "清华大学", "userClass": "软件工程2班"},
+    {"email": "wangwu@example.com", "username": "王五", "password": "password123", "userSchool": "浙江大学", "userClass": "人工智能3班"},
+    {"email": "zhaoliu@example.com", "username": "赵六", "password": "password123", "userSchool": "上海交通大学", "userClass": "数据科学1班"},
+    {"email": "sunqi@example.com", "username": "孙七", "password": "password123", "userSchool": "复旦大学", "userClass": "网络工程2班"},
+    {"email": "admin@example.com", "username": "管理员", "password": "admin123", "is_superuser": True, "userSchool": "系统管理员", "userClass": "管理员组"},
 ]
 
 # 测试帖子数据
@@ -124,6 +121,8 @@ def create_test_data():
                 email=user_data["email"],
                 username=user_data["username"],
                 hashed_password=get_password_hash(user_data["password"]),
+                userSchool=user_data.get("userSchool"),
+                userClass=user_data.get("userClass"),
                 is_active=True,
                 is_superuser=user_data.get("is_superuser", False),
             )

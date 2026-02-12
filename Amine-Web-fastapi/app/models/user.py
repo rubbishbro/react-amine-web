@@ -5,6 +5,8 @@ from datetime import datetime # 处理日期时间
 class UserBase(SQLModel): 
     email: str = Field(unique=True, index=True) # 用户邮箱，唯一且索引
     username: str = Field(unique=True, index=True) # 用户昵称，唯一且索引
+    userSchool: Optional[str] = None # 用户学校（可选）
+    userClass: Optional[str] = None # 用户班级（可选）
     is_active: bool = True # 用户是否激活
     is_superuser: bool = False # 是否管理员
 

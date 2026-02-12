@@ -8,9 +8,13 @@ class UserBase(BaseModel):
     username: Optional[str] = None
     is_active: Optional[bool] = True
     is_superuser: bool = False
+    userSchool: Optional[str] = None
+    userClass: Optional[str] = None
 
 # 注册输入
 class UserCreate(UserBase):
+    userClass: Optional[str] = None
+    userSchool: Optional[str] = None
     email: EmailStr
     username: str
     password: str
@@ -32,7 +36,7 @@ class User(UserInDBBase):
 class UserInDB(UserInDBBase):
     hashed_password: str
 
-# Admin operations schemas
+# 管理员操作请求模型
 class SetTitleRequest(BaseModel):
     title: str
 
