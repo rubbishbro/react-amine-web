@@ -19,7 +19,7 @@ import {
   updatePostFavorites,
   updatePostLikes,
 } from '../../utils/postStats';
-import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../../utils/adminMeta';
+import { buildTagInfo, getUserRestrictions } from '../../utils/adminMeta';
 import { buildUserId, getMappedUserId } from '../../utils/userId';
 import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../../utils/followStore';
 import { pushNotification } from '../../utils/notifications';
@@ -155,9 +155,6 @@ const PostDetail = () => {
 
   // 获取当前用户的禁言/封禁状态
   const userRestrictions = useMemo(() => getUserRestrictions(currentUserId), [currentUserId]);
-
-  const authorMetaId = getMappedUserId(post?.author?.id || '');
-  const authorMeta = useMemo(() => readAdminMeta(authorMetaId), [authorMetaId]);
 
   const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -519,7 +516,7 @@ const PostDetail = () => {
     : { name: author || '匿名' };
   const mappedAuthorId = getMappedUserId(authorInfo.id || '');
   const hasAuthorLink = !!mappedAuthorId;
-  const authorTagInfo = useMemo(() => buildTagInfo(authorInfo, authorMeta), [authorInfo, authorMeta]);
+  const authorTagInfo = useMemo(() => buildTagInfo(authorInfo), [authorInfo]);
   const authorId = mappedAuthorId || '';
   const viewerId = user?.id || '';
   const isSelfAuthor = useMemo(() => isSameUser(authorInfo, currentUser), [authorInfo, currentUser]);
@@ -537,8 +534,7 @@ const PostDetail = () => {
     const map = new Map();
     replies.forEach((reply) => {
       if (!reply?.author?.id) return;
-      const meta = readAdminMeta(getMappedUserId(reply.author.id));
-      const info = buildTagInfo(reply.author, meta);
+      const info = buildTagInfo(reply.author);
       if (info) {
         map.set(reply.id, info);
       }

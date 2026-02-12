@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS 配置测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 CORS 配置测试</h1>
+        <p>此页面用于测试后端 API 的 CORS 配置是否正常工作</p>
+        
+        <div>
+            <button onclick="testGetPosts()">📋 测试 GET /posts</button>
+            <button onclick="testLogin()">🔐 测试 POST /login</button>
+            <button onclick="testWithAuth()">🔑 测试认证请求</button>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api/v1';
+        let authToken = null;
+
+        function showResult(message, type = 'info') {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = type;
+        }
+
+        async function testGetPosts() {
+            showResult('🔄 正在请求 GET /posts...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/posts`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(
+                        `✅ CORS 配置正常！\n\n` +
+                        `状态码: ${response.status}\n` +
+                        `获取到 ${data.length} 个帖子\n\n` +
+                        `响应头:\n` +
+                        `- Access-Control-Allow-Origin: ${response.headers.get('Access-Control-Allow-Origin') || '未设置'}\n` +
+                        `- Access-Control-Allow-Credentials: ${response.headers.get('Access-Control-Allow-Credentials') || '未设置'}\n\n` +
+                        `第一个帖子: ${JSON.stringify(data[0], null, 2)}`,
+                        'success'
+                    );
+                } else {
+                    showResult(`⚠️ 请求失败\n状态码: ${response.status}\n响应: ${await response.text()}`, 'warning');
+                }
+            } catch (error) {
+                showResult(
+                    `❌ CORS 配置错误或服务器未启动！\n\n` +
+                    `错误信息: ${error.message}\n\n` +
+                    `可能的原因:\n` +
+                    `1. 后端服务未启动 (运行: uvicorn app.main:app --reload)\n` +
+                    `2. CORS 配置有误\n` +
+                    `3. 端口不匹配`,
+                    'error'
+                );
+            }
+        }
+
+        async function testLogin() {
+            showResult('🔄 正在测试 POST /login...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/login/access-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        username: 'admin@example.com',  // 使用测试数据中的管理员账号
+                        password: 'admin123'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    showResult(
+                        `✅ POST 请求成功！CORS 配置正常\n\n` +
+                        `已获取 Token (前20字符): ${authToken.slice(0, 20)}...\n\n` +
+                        `现在可以点击"测试认证请求"按钮`,
+                        'success'
+                    );
+                } else {
+                    showResult(`⚠️ 登录失败 (状态码: ${response.status})\n可能是用户名或密码错误`, 'warning');
+                }
+            } catch (error) {
+                showResult(`❌ CORS 错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWithAuth() {
+            if (!authToken) {
+                showResult('⚠️ 请先点击"测试 POST /login"获取 Token', 'warning');
+                return;
+            }
+
+            showResult('🔄 正在测试带 Authorization 头部的请求...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/me`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(
+                        `✅ 认证请求成功！CORS 和 Authorization 配置正常\n\n` +
+                        `用户信息:\n${JSON.stringify(data, null, 2)}`,
+                        'success'
+                    );
+                } else {
+                    showResult(`⚠️ 认证失败 (状态码: ${response.status})`, 'warning');
+                }
+            } catch (error) {
+                showResult(`❌ 请求失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 页面加载时显示提示
+        window.onload = () => {
+            const protocol = window.location.protocol;
+            if (protocol === 'file:') {
+                showResult(
+                    '❌ 错误: 请不要直接双击打开 HTML 文件\n\n' +
+                    '正确使用方法:\n' +
+                    '1. 在后端目录运行: python actions/start_cors_test.py\n' +
+                    '2. 浏览器访问: http://localhost:5173/cors-test.html\n\n' +
+                    '原因: file:// 协议无法正确测试 CORS 配置',
+                    'error'
+                );
+                return;
+            }
+            
+            showResult(
+                '👋 欢迎使用 CORS 测试工具\n\n' +
+                '请确保：\n' +
+                '1. 后端服务已启动: uvicorn app.main:app --reload\n' +
+                '2. 服务运行在 http://127.0.0.1:8000\n' +
+                '3. 数据库已初始化\n\n' +
+                '点击上方按钮开始测试 →',
+                'info'
+            );
+        };
+    </script>
+</body>
+</html>

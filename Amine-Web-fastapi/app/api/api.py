@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.endpoints import auth, users, posts, upload, interact, relations, comments, search
+from app.api.endpoints import auth, users, posts, upload, interact, relations, comments, search, admin
 
 # api接口汇总
 api_router = APIRouter()
@@ -11,3 +11,4 @@ api_router.include_router(upload.router, prefix="/upload", tags=["upload"])
 api_router.include_router(relations.router, prefix="/users", tags=["relations"])
 api_router.include_router(comments.router, prefix="/comments", tags=["comments"])
 api_router.include_router(search.router, prefix="/search", tags=["search"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])

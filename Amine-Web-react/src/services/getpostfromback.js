@@ -8,10 +8,13 @@ class PostAPI{
     async getPostsLists(){
         try{
             const response = await fetch(`${this.baseUrl}/posts`);
-            if(!response.ok)throw new Error('获取失败');
-            return await response.json();
+            if(!response.ok) {
+                throw new Error(`HTTP ${response.status}: 获取失败`);
+            }
+            const data = await response.json();
+            return Array.isArray(data) ? data : [];
         }catch(error){
-            console.error('获取列表失败',error);
+            console.error('获取帖子列表失败:', error);
             return [];
         }
     }
@@ -27,3 +30,5 @@ class PostAPI{
         }
     }
 }
+
+export default PostAPI;
