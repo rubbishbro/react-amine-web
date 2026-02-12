@@ -1,12 +1,6 @@
 """
 查看数据库表和数据的脚本
 """
-import sys
-from pathlib import Path
-
-# 添加项目根目录到路径
-sys.path.append(str(Path(__file__).parent.parent))
-
 from sqlalchemy import inspect, text
 from app.db.database import engine, Session
 
