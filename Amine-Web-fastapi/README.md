@@ -45,6 +45,19 @@ POSTGRES_DB=AMINE_WEB
 SECRET_KEY=your-super-secret-key-change-this
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# 邮箱验证码（开发环境可先不配 SMTP，使用调试模式）
+EMAIL_CODE_DEBUG=true
+EMAIL_CODE_EXPIRE_MINUTES=10
+EMAIL_CODE_SEND_COOLDOWN_SECONDS=60
+
+# 生产环境建议配置 SMTP（用于真实发送邮箱验证码）
+# SMTP_HOST=smtp.qq.com
+# SMTP_PORT=587
+# SMTP_USERNAME=your_email@example.com
+# SMTP_PASSWORD=your_email_auth_code
+# SMTP_FROM_EMAIL=your_email@example.com
+# SMTP_USE_TLS=true
 ```
 
 > **💡 提示**: CORS 配置在 `app/main.py` 中直接设置，如需修改域名请编辑该文件。
@@ -76,12 +89,15 @@ uvicorn app.main:app --reload
 ## 📚 API 功能(在api文档中测试)
 
 ### 用户模块 (`/api/v1/users`)
-- `POST /` - 用户注册（邮箱和用户名唯一）
+- `POST /` - 用户注册（邮箱和用户名唯一，兼容旧接口）
 - `GET /me` - 获取当前用户信息
 - `GET /username/{username}` - 根据用户名查询用户
 
 ### 认证模块 (`/api/v1/login`)
-- `POST /access-token` - 登录（支持邮箱或用户名）
+- `POST /access-token` - 登录（支持邮箱或用户名，前端当前使用邮箱登录）
+- `POST /auth/email-code/send` - 发送邮箱验证码（`purpose=register` 或 `reset_password`）
+- `POST /auth/register-email` - 邮箱 + 验证码注册
+- `POST /auth/password-reset` - 邮箱 + 验证码重置密码
 
 ### 帖子模块 (`/api/v1/posts`)
 - `GET /` - 获取帖子列表（支持分页）
@@ -126,12 +142,18 @@ uvicorn app.main:app --reload
 
 ## 🔐 认证流程
 
-1. **注册/登录** → 获取 JWT Token
+1. **注册/登录** → 获取 JWT Token（推荐邮箱主流程）
+    - 发送验证码：`POST /api/v1/auth/email-code/send`
+    - 邮箱注册：`POST /api/v1/auth/register-email`
+    - 邮箱登录：`POST /api/v1/login/access-token`
+    - 忘记密码：`POST /api/v1/auth/password-reset`
 2. **后续请求** → 在 Header 中携带：
    ```
    Authorization: Bearer <your_token>
    ```
 3. **Swagger 测试** → 点击右上角 🔓 Authorize 按钮输入 Token
+
+> **💡 开发提示**：当 `EMAIL_CODE_DEBUG=true` 且未配置 SMTP 时，发送验证码接口会在响应中返回 `debug_code`，便于本地联调。
 
 ## 🗄️ 数据库管理
 

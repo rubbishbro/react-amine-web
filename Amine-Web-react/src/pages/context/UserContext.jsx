@@ -26,7 +26,7 @@ const defaultProfile = {
 const USER_STORAGE_KEY = 'aw_user';
 const EXTRA_PROFILE_PREFIX = 'aw_profile_';
 
-const normalizeLoginId = (value) => (value ?? '').toString().trim();
+const normalizeEmail = (value) => (value ?? '').toString().trim();
 const normalizePassword = (value) => (value ?? '').toString();
 
 const normalizeExtraProfile = (profile = {}, fallbackEmail = '') => {
@@ -228,24 +228,24 @@ export function UserProvider({ children }) {
   ]);
 
   const login = async (payload) => {
-    const loginId = normalizeLoginId(payload?.loginId || payload?.username);
+    const loginEmail = normalizeEmail(payload?.email || payload?.loginId || payload?.username);
     const password = normalizePassword(payload?.password);
     const extraProfile = normalizeExtraProfile({
       school: payload?.school || '',
       className: payload?.className || '',
-      email: payload?.email || '',
+      email: loginEmail,
       bio: payload?.bio || '',
     });
 
-    if (!loginId) {
-      return { ok: false, message: '请输入用户名或学号' };
+    if (!loginEmail) {
+      return { ok: false, message: '请输入邮箱' };
     }
     if (!password) {
       return { ok: false, message: '请输入密码' };
     }
 
     try {
-      const token = await requestToken({ username: loginId, password });
+      const token = await requestToken({ username: loginEmail, password });
       saveToken(token);
       setAuthToken(token);
 
