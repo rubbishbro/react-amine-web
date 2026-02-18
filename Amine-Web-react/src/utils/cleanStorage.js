@@ -106,12 +106,53 @@ export function clearAllLocalPosts() {
 export function clearRemoteCache() {
   try {
     localStorage.removeItem('aw_posts_cache');
+    localStorage.removeItem('aw_posts_cache_timestamp');
     console.log('✅ 已清空远程帖子缓存');
     console.log('💡 刷新页面将从后端重新获取数据');
     return true;
   } catch (error) {
     console.error('❌ 清空失败:', error);
     return false;
+  }
+}
+
+// 获取缓存信息
+export function getCacheInfo() {
+  try {
+    const cacheData = localStorage.getItem('aw_posts_cache');
+    const timestamp = localStorage.getItem('aw_posts_cache_timestamp');
+    
+    if (!cacheData) {
+      console.log('💭 当前没有缓存数据');
+      return { exists: false };
+    }
+    
+    const posts = JSON.parse(cacheData);
+    const cacheTime = timestamp ? new Date(parseInt(timestamp)) : null;
+    const age = timestamp ? Date.now() - parseInt(timestamp) : 0;
+    const expiryMs = 5 * 60 * 1000; // 5分钟
+    const remainingMs = Math.max(0, expiryMs - age);
+    
+    console.log('\n📋 缓存信息');
+    console.log('─'.repeat(40));
+    console.log(`💾 帖子数量: ${posts.length}`);
+    console.log(`🕒 缓存时间: ${cacheTime ? cacheTime.toLocaleString('zh-CN') : '未知'}`);
+    console.log(`⏳ 已经过: ${Math.floor(age / 1000)} 秒`);
+    console.log(`⏰ 还剩: ${Math.floor(remainingMs / 1000)} 秒`);
+    console.log(`🚦 状态: ${remainingMs > 0 ? '✅ 有效' : '❌ 已过期'}`);
+    console.log('─'.repeat(40) + '\n');
+    
+    return {
+      exists: true,
+      count: posts.length,
+      timestamp: cacheTime,
+      ageSeconds: Math.floor(age / 1000),
+      remainingSeconds: Math.floor(remainingMs / 1000),
+      isValid: remainingMs > 0
+    };
+  } catch (error) {
+    console.error('❌ 获取缓存信息失败:', error);
+    return { exists: false, error: error.message };
   }
 }
 
@@ -126,16 +167,19 @@ export function help() {
 1️⃣  查看本地帖子状态
    inspectLocalPosts()
 
-2️⃣  清理已发布的本地帖子（推荐）
+2️⃣  查看缓存信息（新！）
+   getCacheInfo()
+
+3️⃣  清理已发布的本地帖子（推荐）
    cleanPublishedLocalPosts()
 
-3️⃣  清空所有本地帖子（包括草稿）
+4️⃣  清空所有本地帖子（包括草稿）
    clearAllLocalPosts()
 
-4️⃣  清空远程帖子缓存
+5️⃣  清空远程帖子缓存
    clearRemoteCache()
 
-5️⃣  重新显示帮助
+6️⃣  重新显示帮助
    help()
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -149,6 +193,7 @@ if (typeof window !== 'undefined') {
   window.cleanPublishedLocalPosts = cleanPublishedLocalPosts;
   window.clearAllLocalPosts = clearAllLocalPosts;
   window.clearRemoteCache = clearRemoteCache;
+  window.getCacheInfo = getCacheInfo;
   window.storageHelp = help;
 }
 

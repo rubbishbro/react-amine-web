@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     EMAIL_CODE_EXPIRE_MINUTES: int = 10
     EMAIL_CODE_SEND_COOLDOWN_SECONDS: int = 60
-    EMAIL_CODE_DEBUG: bool = True
+    EMAIL_CODE_DEBUG: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
