@@ -140,6 +140,62 @@
   opacity: 0.75;
 }
 
+/* 刷新按钮样式 */
+.refreshButton {
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #bfdbfe, #ddd6fe);
+  color: #1e3a8a;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.refreshButton:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(30, 58, 138, 0.2);
+  background: linear-gradient(120deg, #93c5fd, #c4b5fd);
+}
+
+.refreshButton:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 4px 10px rgba(30, 58, 138, 0.15);
+}
+
+.refreshButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.refreshing .refreshIcon {
+  animation: spin 1s linear infinite;
+}
+
+.refreshIcon {
+  font-size: 1rem;
+  display: inline-block;
+}
+
+.refreshText {
+  font-size: 0.9rem;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes bounce {
   0% {
     transform: translateY(0);

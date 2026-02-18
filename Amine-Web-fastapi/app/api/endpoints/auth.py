@@ -79,19 +79,28 @@ def _send_email_code(email: str, code: str, purpose: str) -> None:
         message["To"] = email
         message.set_content(body)
 
-        if settings.SMTP_USE_TLS:
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
-                smtp.starttls()
-                smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-                smtp.send_message(message)
-        else:
-            with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
-                smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-                smtp.send_message(message)
-        return
+        try:
+            if settings.SMTP_USE_TLS:
+                with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
+                    smtp.starttls()
+                    smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+                    smtp.send_message(message)
+            else:
+                with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
+                    smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+                    smtp.send_message(message)
+            return
+        except Exception as e:
+            # 邮件发送失败，记录错误但不抛出异常
+            # 在生产环境中，可以考虑记录到日志系统
+            print(f"邮件发送失败: {e}")
+            # 如果是调试模式，继续；否则抛出异常
+            if not settings.EMAIL_CODE_DEBUG:
+                raise HTTPException(status_code=500, detail=f"邮件发送失败: {str(e)}")
 
+    # SMTP 未配置
     if not settings.EMAIL_CODE_DEBUG:
-        raise HTTPException(status_code=500, detail="邮件服务未配置，请联系管理员")
+        raise HTTPException(status_code=500, detail="邮件服务未配置，无法发送验证码")
 
 
 def _verify_email_code_or_raise(email: str, purpose: str, code: str) -> None:

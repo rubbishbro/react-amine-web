@@ -7,8 +7,10 @@ import { API_BASE_URL } from '../config/api.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
 const REMOTE_POSTS_CACHE_KEY = 'aw_posts_cache';
+const REMOTE_POSTS_CACHE_TIMESTAMP_KEY = 'aw_posts_cache_timestamp';
 const LOCAL_DELETED_POSTS_KEY = 'aw_deleted_posts';
 const LOCAL_PINNED_POSTS_KEY = 'aw_pinned_posts';
+const CACHE_EXPIRY_MS = 5 * 60 * 1000; // 缓存过期时间：5分钟
 
 const defaultAuthor = {
   id: 'anonymous',
@@ -78,7 +80,23 @@ const transformBackendPost = (backendPost) => {
 const readRemotePostsCache = () => {
   try {
     const raw = localStorage.getItem(REMOTE_POSTS_CACHE_KEY);
+    const timestamp = localStorage.getItem(REMOTE_POSTS_CACHE_TIMESTAMP_KEY);
+    
     if (!raw) return [];
+    
+    // 检查缓存是否过期
+    if (timestamp) {
+      const age = Date.now() - parseInt(timestamp);
+      if (age > CACHE_EXPIRY_MS) {
+        console.log('🔄 缓存已过期，将从服务器重新获取数据');
+        // 清除过期缓存
+        localStorage.removeItem(REMOTE_POSTS_CACHE_KEY);
+        localStorage.removeItem(REMOTE_POSTS_CACHE_TIMESTAMP_KEY);
+        return [];
+      }
+      console.log(`✅ 使用缓存数据（还剩 ${Math.floor((CACHE_EXPIRY_MS - age) / 1000)} 秒过期）`);
+    }
+    
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -90,6 +108,8 @@ const readRemotePostsCache = () => {
 const writeRemotePostsCache = (posts) => {
   try {
     localStorage.setItem(REMOTE_POSTS_CACHE_KEY, JSON.stringify(posts));
+    localStorage.setItem(REMOTE_POSTS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+    console.log(`💾 缓存已更新，共 ${posts.length} 条帖子`);
   } catch (error) {
     console.error('Error writing remote posts cache:', error);
   }
@@ -389,10 +409,32 @@ export const loadPostContent = async (postId) => {
 };
 
 /**
- * 加载所有帖子的完整数据
+ * 清除帖子缓存（手动刷新时使用）
  */
-export const loadAllPosts = async () => {
+export const clearPostsCache = () => {
   try {
+    localStorage.removeItem(REMOTE_POSTS_CACHE_KEY);
+    localStorage.removeItem(REMOTE_POSTS_CACHE_TIMESTAMP_KEY);
+    console.log('🗑️ 帖子缓存已清除');
+    return true;
+  } catch (error) {
+    console.error('清除缓存失败:', error);
+    return false;
+  }
+};
+
+/**
+ * 加载所有帖子的完整数据
+ * @param {boolean} forceRefresh - 强制刷新，忽略缓存
+ */
+export const loadAllPosts = async (forceRefresh = false) => {
+  try {
+    // 如果是强制刷新，清除缓存
+    if (forceRefresh) {
+      clearPostsCache();
+      console.log('🔄 强制刷新：从服务器获取最新数据');
+    }
+    
     // 首先清理本地已发布的帖子
     cleanPublishedLocalPosts();
     

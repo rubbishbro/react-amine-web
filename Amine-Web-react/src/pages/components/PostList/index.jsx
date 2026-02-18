@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Post from '../Post';
 import styles from './PostList.module.css';
-import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName } from '../../utils/postLoader';
+import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName, clearPostsCache } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config/colors';
 import { getContrastTextColor, generateGradient } from '../../utils/colorUtils';
 import { getPostStats } from '../../utils/postStats';
@@ -14,6 +14,7 @@ const PostList = ({ onReadMore, category = null }) => {
   const [page, setPage] = useState(1);
   const [error, setError] = useState(null);
   const [sortMode, setSortMode] = useState('time');
+  const [refreshing, setRefreshing] = useState(false);
   const loaderRef = useRef(null);
   const observerRef = useRef(null);
   const allPostsRef = useRef([]);
@@ -48,7 +49,7 @@ const PostList = ({ onReadMore, category = null }) => {
   }, []);
 
   // 根据分类加载帖子
-  const loadPosts = useCallback(async (pageNum = 1, categoryParam = null, sortModeParam = 'time') => {
+  const loadPosts = useCallback(async (pageNum = 1, categoryParam = null, sortModeParam = 'time', forceRefresh = false) => {
     try {
       setLoading(true);
 
@@ -56,7 +57,7 @@ const PostList = ({ onReadMore, category = null }) => {
       if (categoryParam && categoryParam !== 'all') {
         allPosts = await loadPostsByCategory(categoryParam);
       } else {
-        allPosts = await loadAllPosts();
+        allPosts = await loadAllPosts(forceRefresh);
       }
       const sortedPosts = applySort(allPosts, sortModeParam, categoryParam);
       // 存储总帖子数 & 缓存所有帖子
@@ -99,6 +100,18 @@ const PostList = ({ onReadMore, category = null }) => {
     setHasMore(endIndex < sortedPosts.length);
     setAllPostsCount(sortedPosts.length);
   }, [sortMode, category, page, postsPerPage, applySort]);
+
+  // 手动刷新功能
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadPosts(1, category, sortMode, true);
+    } catch (err) {
+      console.error('刷新失败:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [category, sortMode, loadPosts]);
 
   // 加载更多帖子
   const loadMorePosts = useCallback(async () => {
@@ -235,6 +248,18 @@ const PostList = ({ onReadMore, category = null }) => {
           <div className={styles.categoryBadge} style={getBadgeStyles()}>
             {getCategoryBadgeText()}
           </div>
+          <button
+            type="button"
+            className={`${styles.refreshButton} ${refreshing ? styles.refreshing : ''}`}
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="刷新帖子列表"
+          >
+            <span className={styles.refreshIcon}>{refreshing ? '🔄' : '🔃'}</span>
+            <span className={styles.refreshText}>
+              {refreshing ? '刷新中...' : '刷新'}
+            </span>
+          </button>
           <button
             type="button"
             className={`${styles.sortToggle} ${sortMode === 'likes' ? styles.sortToggleActive : ''}`}
