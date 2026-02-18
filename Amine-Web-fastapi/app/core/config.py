@@ -1,5 +1,5 @@
 # 核心配置文件
-from typing import List, Union  # typing导入List和Union
+from typing import List, Optional, Union  # typing导入List和Union
 from pydantic import AnyHttpUrl, EmailStr, field_validator # 导入Pydantic的AnyHttpUrl和field_validator 
 from pydantic_settings import BaseSettings, SettingsConfigDict # 导入BaseSettings和SettingsConfigDict
 
@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256" # 采用HS256算法
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # 邮件验证码（注册/重置密码）
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: Optional[EmailStr] = None
+    SMTP_USE_TLS: bool = True
+
+    EMAIL_CODE_EXPIRE_MINUTES: int = 10
+    EMAIL_CODE_SEND_COOLDOWN_SECONDS: int = 60
+    EMAIL_CODE_DEBUG: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

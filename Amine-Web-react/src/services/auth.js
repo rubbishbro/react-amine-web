@@ -54,7 +54,7 @@ export async function requestToken({ username, password }) {
 
   if (!response.ok) {
     const detail = await parseErrorMessage(response);
-    throw new Error(detail || `登录失败（HTTP ${response.status}）`);
+    throw new Error(detail || `邮箱或密码错误（HTTP ${response.status}）`);
   }
 
   const data = await response.json();
@@ -62,6 +62,61 @@ export async function requestToken({ username, password }) {
     throw new Error('后端未返回访问令牌 access_token');
   }
   return data.access_token;
+}
+
+export async function sendEmailCode({ email, purpose }) {
+  const response = await fetch(buildApiUrl('/auth/email-code/send'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, purpose }),
+  });
+
+  if (!response.ok) {
+    const detail = await parseErrorMessage(response);
+    throw new Error(detail || `发送验证码失败（HTTP ${response.status}）`);
+  }
+
+  return response.json();
+}
+
+export async function registerByEmail({ email, password, confirmPassword, code }) {
+  const response = await fetch(buildApiUrl('/auth/register-email'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password,
+      confirm_password: confirmPassword,
+      code,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await parseErrorMessage(response);
+    throw new Error(detail || `注册失败（HTTP ${response.status}）`);
+  }
+
+  return response.json();
+}
+
+export async function resetPasswordByEmailCode({ email, password, confirmPassword, code }) {
+  const response = await fetch(buildApiUrl('/auth/password-reset'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password,
+      confirm_password: confirmPassword,
+      code,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await parseErrorMessage(response);
+    throw new Error(detail || `重置密码失败（HTTP ${response.status}）`);
+  }
+
+  return response.json();
 }
 
 export async function fetchCurrentUser(token) {
