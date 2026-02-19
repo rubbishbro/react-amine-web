@@ -8,8 +8,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Amine Web API"
     
-    # CORS 测试环境
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
+    # CORS 白名单
+    BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # 组装数据库连接字符串
     @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
-    def assemble_db_connection(cls, v: Union[str, None], info) -> AnyHttpUrl:
+    def assemble_db_connection(cls, v: Union[str, None], info) -> str:
         # 拼接/读取
         if isinstance(v, str):
             return v

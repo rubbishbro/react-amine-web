@@ -66,7 +66,7 @@ export default function ProfileView() {
         favorites: 0,
         replies: 0,
     });
-    const [setFollowVersion] = useState(0); // deprecated: kept for compatibility
+    const [followVersion, setFollowVersion] = useState(0);
     const [isFollowing, setIsFollowing] = useState(false);
     const [followerCount, setFollowerCount] = useState(0);
     const [followLoading, setFollowLoading] = useState(false);
@@ -236,11 +236,15 @@ export default function ProfileView() {
         return () => { cancelled = true; };
     }, [displayAuthor?.name, isSelf]);
 
-    // freshTargetUser 含后端 title/is_superuser，直接构建 tagInfo 不经过旧快照
+    // freshTargetUser 含后端 title/is_superuser/avatar_url，直接构建 tagInfo 不经过旧快照
     const tagInfo = useMemo(() => {
         if (freshTargetUser) return buildTagInfo(freshTargetUser);
         return buildTagInfo(displayAuthor, adminMeta);
     }, [displayAuthor, adminMeta, freshTargetUser]);
+
+    // 用后端最新头像/头图覆盖导航快照里的旧数据（仅他人主页）
+    const freshAvatar = freshTargetUser?.avatar_url || null;
+    const freshCover = freshTargetUser?.cover_url || null;
 
     const [targetBackendUser, setTargetBackendUser] = useState(null);
     const isViewerAdmin = user?.isAdmin === true;
@@ -359,7 +363,7 @@ export default function ProfileView() {
 
     const canUseAdminTools = user?.isAdmin === true;
 
-    const coverImage = isViewerLoggedIn ? (displayAuthor?.cover || displayAuthor?.avatar) : '';
+    const coverImage = isViewerLoggedIn ? (freshCover || displayAuthor?.cover || freshAvatar || displayAuthor?.avatar) : '';
     const coverStyle = coverImage
         ? { backgroundImage: `linear-gradient(120deg, rgba(20, 20, 40, 0.4), rgba(30, 30, 60, 0.7)), url(${coverImage})` }
         : undefined;
@@ -383,7 +387,7 @@ export default function ProfileView() {
                     <div className={styles.avatarWrap}>
                         <div
                             className={styles.avatar}
-                            style={isViewerLoggedIn && displayAuthor?.avatar ? { backgroundImage: `url(${displayAuthor.avatar})` } : undefined}
+                            style={isViewerLoggedIn && (freshAvatar || displayAuthor?.avatar) ? { backgroundImage: `url(${freshAvatar || displayAuthor.avatar})` } : undefined}
                         />
                     </div>
                     <div className={styles.identity}>

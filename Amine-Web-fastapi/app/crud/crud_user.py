@@ -21,6 +21,8 @@ def create(db: Session, *, obj_in: UserCreate) -> User:
         hashed_password=get_password_hash(obj_in.password),
         username=obj_in.username,
         is_superuser=False, # 防止恶意请求
+        userSchool=obj_in.userSchool or None,
+        userClass=obj_in.userClass or None,
     )
     db.add(db_obj)
     db.commit()
