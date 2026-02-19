@@ -6,6 +6,7 @@ import { buildTagInfo } from '../utils/adminMeta';
 import { updateAuthorInCaches } from '../utils/postLoader';
 import {
     adminGetUser,
+    adminSearchUsers,
     adminSetTitle,
     adminSetRole,
     adminMuteUser,
@@ -97,6 +98,10 @@ function AdminPanelContent({ target, user, targetId, onBack, onLogout }) {
 
     const [title, setTitle] = useState('');
     const [role, setRole] = useState('user');
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [searchError, setSearchError] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
 
     useEffect(() => {
         let cancelled = false;
@@ -153,6 +158,45 @@ function AdminPanelContent({ target, user, targetId, onBack, onLogout }) {
             email: updatedUser.email || target?.email || '',
             isAdmin: updatedUser.is_superuser === true,
             tagInfo: nextTagInfo,
+        });
+    };
+
+    const handleSearch = async (event) => {
+        event.preventDefault();
+        const keyword = searchKeyword.trim();
+        if (!keyword) {
+            setSearchResults([]);
+            setSearchError('请输入昵称或邮箱');
+            return;
+        }
+        setSearchLoading(true);
+        setSearchError('');
+        try {
+            const users = await adminSearchUsers(authToken, keyword, { limit: 20 });
+            const nextResults = Array.isArray(users) ? users : [];
+            setSearchResults(nextResults);
+            if (nextResults.length === 0) {
+                setSearchError('未找到匹配用户');
+            }
+        } catch (err) {
+            setSearchResults([]);
+            setSearchError(err.message || '搜索失败');
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const handleSelectSearchUser = (selectedUser) => {
+        navigate('/admin', {
+            state: {
+                target: {
+                    id: selectedUser.id,
+                    name: selectedUser.username || '匿名',
+                    avatar: selectedUser.avatar_url || '',
+                    isAdmin: selectedUser.is_superuser === true,
+                    email: selectedUser.email || '',
+                },
+            },
         });
     };
 
@@ -244,9 +288,42 @@ function AdminPanelContent({ target, user, targetId, onBack, onLogout }) {
         <div className={styles.page}>
             <div className={styles.panel}>
                 <div className={styles.header}>
-                    <div>
+                    <div className={styles.headerMain}>
                         <h2 className={styles.title}>管理员面板</h2>
                         <p className={styles.subtitle}>管理用户信息与权限</p>
+
+                        <form className={styles.searchForm} onSubmit={handleSearch}>
+                            <div className={styles.searchInputWrap}>
+                                <span className={styles.searchIcon} aria-hidden="true">🔍</span>
+                                <input
+                                    className={styles.searchInput}
+                                    value={searchKeyword}
+                                    onChange={(e) => setSearchKeyword(e.target.value)}
+                                    placeholder="搜索用户昵称/邮箱"
+                                />
+                            </div>
+                            <button className={styles.primaryButton} type="submit" disabled={searchLoading}>
+                                {searchLoading ? '搜索中…' : '搜索'}
+                            </button>
+                        </form>
+
+                        {searchError && <div className={styles.searchError}>{searchError}</div>}
+
+                        {searchResults.length > 0 && (
+                            <div className={styles.searchResults}>
+                                {searchResults.map((item) => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        className={styles.searchResultItem}
+                                        onClick={() => handleSelectSearchUser(item)}
+                                    >
+                                        <div className={styles.searchResultName}>{item.username || '匿名'}</div>
+                                        <div className={styles.searchResultEmail}>{item.email || '-'}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                     <button className={styles.secondaryButton} onClick={onBack}>
                         返回
