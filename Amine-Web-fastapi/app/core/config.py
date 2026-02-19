@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     EMAIL_CODE_SEND_COOLDOWN_SECONDS: int = 60
     EMAIL_CODE_DEBUG: bool = False
 
+    # 七牛云对象存储（可选，未配置时回退到本地存储）
+    QINIU_ACCESS_KEY: str = ""
+    QINIU_SECRET_KEY: str = ""
+    QINIU_BUCKET_NAME: str = ""
+    QINIU_DOMAIN: str = ""   # 例: https://xxx.bkt.clouddn.com
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 # 读取.env配置文件，生成

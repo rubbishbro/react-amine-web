@@ -76,6 +76,9 @@ const normalizeBackendUser = (backendUser, extraProfile = defaultProfile) => {
       ...extraProfile,
       name: backendUser.username || backendUser.email || extraProfile.name || '',
       email: backendUser.email || extraProfile.email || '',
+      // 头像和头图：后端 URL 优先，如无则用本地缓存（未迁移时的降级）
+      avatar: backendUser.avatar_url || extraProfile.avatar || '',
+      cover: backendUser.cover_url || extraProfile.cover || '',
     },
     backendUser.email,
   );

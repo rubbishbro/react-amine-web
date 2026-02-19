@@ -4,6 +4,7 @@ import { useUser } from '../context/UserContext';
 import { buildUserId, getMappedUserId } from '../utils/userId';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { adminActivate } from '../../services/adminApi';
+import { uploadFile, updateUserAvatar } from '../../services/auth';
 
 const emptyProfile = {
     name: '',
@@ -79,54 +80,48 @@ export default function Profile() {
     const [avatarError, setAvatarError] = useState('');
     const [coverError, setCoverError] = useState('');
 
-    const handleAvatar = (e) => {
+    const handleAvatar = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // 限制原始文件大小（2MB）
         const maxFileSize = 2 * 1024 * 1024;
         if (file.size > maxFileSize) {
             setAvatarError('图片大小不能超过 2MB');
             e.target.value = '';
             return;
         }
-
         setAvatarError('');
-        const img = new Image();
-        const reader = new FileReader();
-        reader.onload = () => {
-            img.onload = () => {
-                const maxSize = 128;
-                const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
-                const w = Math.round(img.width * scale);
-                const h = Math.round(img.height * scale);
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
-                // 限制压缩后大小（50KB），避免 localStorage 配额超限
-                if (dataUrl.length > 50 * 1024) {
-                    setAvatarError('图片压缩后仍过大，请选择更小的图片');
-                    return;
-                }
-
-                formDirtyRef.current = true;
-                setForm((s) => ({ ...s, avatar: dataUrl }));
-            };
-            img.onerror = () => {
-                setAvatarError('图片加载失败，请选择有效的图片文件');
-            };
-            img.src = reader.result;
-        };
-        reader.onerror = () => {
-            setAvatarError('读取文件失败');
-        };
-        reader.readAsDataURL(file);
+        try {
+            // 先在本地压缩，再上传到后端
+            const blob = await new Promise((resolve, reject) => {
+                const img = new Image();
+                const reader = new FileReader();
+                reader.onload = () => {
+                    img.onload = () => {
+                        const maxSize = 256;
+                        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('压缩失败'))), 'image/jpeg', 0.85);
+                    };
+                    img.onerror = () => reject(new Error('图片加载失败，请选择有效的图片文件'));
+                    img.src = reader.result;
+                };
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsDataURL(file);
+            });
+            const { url } = await uploadFile(authToken, new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+            formDirtyRef.current = true;
+            setForm((s) => ({ ...s, avatar: url }));
+        } catch (err) {
+            setAvatarError(err.message || '上传失败，请重试');
+        }
     };
 
-    const handleCover = (e) => {
+    const handleCover = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -136,39 +131,34 @@ export default function Profile() {
             e.target.value = '';
             return;
         }
-
         setCoverError('');
-        const img = new Image();
-        const reader = new FileReader();
-        reader.onload = () => {
-            img.onload = () => {
-                const maxWidth = 1200;
-                const scale = Math.min(maxWidth / img.width, 1);
-                const w = Math.round(img.width * scale);
-                const h = Math.round(img.height * scale);
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
 
-                if (dataUrl.length > 200 * 1024) {
-                    setCoverError('图片压缩后仍过大，请选择更小的图片');
-                    return;
-                }
-
-                formDirtyRef.current = true;
-                setForm((s) => ({ ...s, cover: dataUrl }));
-            };
-            img.onerror = () => {
-                setCoverError('图片加载失败，请选择有效的图片文件');
-            };
-            img.src = reader.result;
-        };
-        reader.onerror = () => {
-            setCoverError('读取文件失败');
-        };
-        reader.readAsDataURL(file);
+        try {
+            const blob = await new Promise((resolve, reject) => {
+                const img = new Image();
+                const reader = new FileReader();
+                reader.onload = () => {
+                    img.onload = () => {
+                        const maxWidth = 1200;
+                        const scale = Math.min(maxWidth / img.width, 1);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('压缩失败'))), 'image/jpeg', 0.85);
+                    };
+                    img.onerror = () => reject(new Error('图片加载失败，请选择有效的图片文件'));
+                    img.src = reader.result;
+                };
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsDataURL(file);
+            });
+            const { url } = await uploadFile(authToken, new File([blob], 'cover.jpg', { type: 'image/jpeg' }));
+            formDirtyRef.current = true;
+            setForm((s) => ({ ...s, cover: url }));
+        } catch (err) {
+            setCoverError(err.message || '上传失败，请重试');
+        }
     };
 
     const handleSave = async (e) => {
@@ -179,6 +169,10 @@ export default function Profile() {
         }
         setPasswordError('');
         await updateProfile({ ...form, password: password || '' });
+        // 头像和头图 URL 同步到后端数据库，其他设备登录后可自动读取
+        if (authToken) {
+            updateUserAvatar(authToken, { avatarUrl: form.avatar, coverUrl: form.cover }).catch(() => {});
+        }
         const derivedId = getMappedUserId(user?.id || buildUserId(form.name, user?.id || 'local'));
         const nextUser = {
             id: user?.id || 'local',

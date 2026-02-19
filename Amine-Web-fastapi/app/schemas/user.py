@@ -37,6 +37,8 @@ class User(UserInDBBase):
     is_banned: bool = False
     mute_count: int = 0
     ban_count: int = 0
+    avatar_url: Optional[str] = None
+    cover_url: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

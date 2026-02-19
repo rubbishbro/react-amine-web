@@ -149,3 +149,41 @@ export async function fetchUserByUsername(username) {
     return null;
   }
 }
+
+/**
+ * 上传图片或音频文件，返回后端 URL
+ * 配置了七牛云时返回 CDN 地址，否则返回本地 /static/uploads/... 路径
+ */
+export async function uploadFile(token, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch(buildApiUrl('/upload/'), {
+    method: 'POST',
+    headers: authHeaders(token),  // 不要手动设置 Content-Type，浏览器自动带 boundary
+    body: formData,
+  });
+  if (!response.ok) {
+    const detail = await parseErrorMessage(response);
+    throw new Error(detail || `上传失败（HTTP ${response.status}）`);
+  }
+  return response.json(); // { url: '...' }
+}
+
+/**
+ * 更新当前用户的头像 / 头图 URL（写入数据库）
+ */
+export async function updateUserAvatar(token, { avatarUrl, coverUrl } = {}) {
+  const body = {};
+  if (avatarUrl !== undefined) body.avatar_url = avatarUrl;
+  if (coverUrl !== undefined) body.cover_url = coverUrl;
+  const response = await fetch(buildApiUrl('/users/me/avatar'), {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const detail = await parseErrorMessage(response);
+    throw new Error(detail || '头像更新失败');
+  }
+  return response.json();
+}
