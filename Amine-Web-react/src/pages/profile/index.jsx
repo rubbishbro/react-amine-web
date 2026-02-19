@@ -174,33 +174,16 @@ export default function Profile() {
             updateUserAvatar(authToken, { avatarUrl: form.avatar, coverUrl: form.cover }).catch(() => {});
         }
         const derivedId = getMappedUserId(user?.id || buildUserId(form.name, user?.id || 'local'));
-        const nextUser = {
-            id: user?.id || 'local',
-            profile: { ...form },
-            isAdmin: user?.isAdmin === true,
-        };
         setPassword('');
         formDirtyRef.current = false;
-        navigate(`/user/${derivedId}`, {
-            state: {
-                author: {
-                    id: derivedId,
-                    name: nextUser.profile?.name || '匿名',
-                    avatar: nextUser.profile?.avatar || '',
-                    cover: nextUser.profile?.cover || '',
-                    school: nextUser.profile?.school || '',
-                    className: nextUser.profile?.className || '',
-                    email: nextUser.profile?.email || '',
-                    bio: nextUser.profile?.bio || '',
-                    isAdmin: nextUser.isAdmin === true,
-                },
-            },
-        });
+        navigate(`/user/${derivedId}`);
     };
 
     const handleAdminKey = async () => {
         const key = adminKey.trim();
         if (!key) return;
+        // 先标记 dirty，防止 refreshUser 后 useEffect 用后端数据覆盖用户正在编辑的表单
+        formDirtyRef.current = true;
         try {
             await adminActivate(authToken, key);
             await refreshUser();

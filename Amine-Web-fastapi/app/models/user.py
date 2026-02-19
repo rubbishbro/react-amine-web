@@ -25,6 +25,7 @@ class User(UserBase, table=True): # 继承UserBase，并指定表名
     ban_count: int = 0  # 被封禁次数
     avatar_url: Optional[str] = None  # 头像 URL（七牛 CDN 或本地路径）
     cover_url: Optional[str] = None   # 头图 URL
+    bio: Optional[str] = None  # 个人简介
     created_at: datetime = Field(default_factory=datetime.utcnow)  # 创建时间
     updated_at: datetime = Field(default_factory=datetime.utcnow)  # 更新时间
     

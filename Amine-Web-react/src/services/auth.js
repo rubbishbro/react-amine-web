@@ -172,6 +172,19 @@ export async function uploadFile(token, file) {
 /**
  * 更新当前用户的头像 / 头图 URL（写入数据库）
  */
+export async function updateUserProfile(token, { username, userSchool, userClass, bio } = {}) {
+    const res = await fetch(buildApiUrl('/users/me'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, userSchool, userClass, bio }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || '更新个人资料失败');
+    }
+    return res.json();
+}
+
 export async function updateUserAvatar(token, { avatarUrl, coverUrl } = {}) {
   const body = {};
   if (avatarUrl !== undefined) body.avatar_url = avatarUrl;

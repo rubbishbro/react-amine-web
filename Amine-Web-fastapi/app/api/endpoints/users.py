@@ -63,6 +63,32 @@ def read_user_by_username(
     return user
 
 
+class ProfileUpdate(BaseModel):
+    username: Optional[str] = None
+    userSchool: Optional[str] = None
+    userClass: Optional[str] = None
+    bio: Optional[str] = None
+
+
+@router.patch("/me", response_model=UserSchema)
+def update_my_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    更新当前用户的昵称、学校、班级、个人简介。
+    """
+    return crud_user.update_profile(
+        db,
+        user=current_user,
+        username=payload.username,
+        user_school=payload.userSchool,
+        user_class=payload.userClass,
+        bio=payload.bio,
+    )
+
+
 class AvatarUpdate(BaseModel):
     avatar_url: Optional[str] = None
     cover_url: Optional[str] = None
