@@ -18,15 +18,9 @@ app = FastAPI(
 )
 
 # 设置所有 CORS 允许的源，告诉浏览器哪些前端合法
-# 开发环境使用宽松的 CORS 配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
     allow_credentials=True, # 允许携带cookie和authorization头
     allow_methods=["*"], # 允许所有方法（GET, POST, PUT, DELETE, OPTIONS 等）
     allow_headers=["*"], # 允许所有请求头

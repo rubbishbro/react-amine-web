@@ -1,6 +1,6 @@
 /**
  * 用户关系 API 服务（关注 / 拉黑）
- * 所有操作均经由后端 /relations 端点持久化，不再依赖 localStorage
+ * 所有操作均经由后端 /users 端点持久化，不再依赖 localStorage
  */
 import { buildApiUrl } from '../pages/config/api.js';
 import { authHeaders } from './auth.js';
@@ -22,10 +22,10 @@ const extractError = async (response) => {
 
 /**
  * 关注用户
- * POST /relations/{user_id}/follow
+ * POST /users/{user_id}/follow
  */
 export const followUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/follow`), {
+    const res = await fetch(buildApiUrl(`/users/${userId}/follow`), {
         method: 'POST',
         headers: { ...authHeaders(token) },
     });
@@ -35,10 +35,10 @@ export const followUser = async (token, userId) => {
 
 /**
  * 取消关注
- * DELETE /relations/{user_id}/follow
+ * DELETE /users/{user_id}/follow
  */
 export const unfollowUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/follow`), {
+    const res = await fetch(buildApiUrl(`/users/${userId}/follow`), {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -62,10 +62,10 @@ export const toggleFollowApi = async (token, userId, currentlyFollowing) => {
 
 /**
  * 获取当前用户与目标用户的关系状态
- * GET /relations/{user_id}/relation
+ * GET /users/{user_id}/relation
  */
 export const getRelationStatus = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/relation`), {
+    const res = await fetch(buildApiUrl(`/users/${userId}/relation`), {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));
@@ -74,30 +74,30 @@ export const getRelationStatus = async (token, userId) => {
 
 /**
  * 获取用户的粉丝数和关注数
- * GET /relations/{user_id}/stats
+ * GET /users/{user_id}/stats
  */
 export const getUserRelationStats = async (userId) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/stats`));
+    const res = await fetch(buildApiUrl(`/users/${userId}/stats`));
     if (!res.ok) throw new Error(await extractError(res));
     return res.json(); // { follower_count, following_count }
 };
 
 /**
  * 获取用户的粉丝列表
- * GET /relations/{user_id}/followers
+ * GET /users/{user_id}/followers
  */
 export const getFollowers = async (userId, { skip = 0, limit = 100 } = {}) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/followers?skip=${skip}&limit=${limit}`));
+    const res = await fetch(buildApiUrl(`/users/${userId}/followers?skip=${skip}&limit=${limit}`));
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
 
 /**
  * 获取用户关注的人列表
- * GET /relations/{user_id}/following
+ * GET /users/{user_id}/following
  */
 export const getFollowing = async (userId, { skip = 0, limit = 100 } = {}) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/following?skip=${skip}&limit=${limit}`));
+    const res = await fetch(buildApiUrl(`/users/${userId}/following?skip=${skip}&limit=${limit}`));
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -108,10 +108,10 @@ export const getFollowing = async (userId, { skip = 0, limit = 100 } = {}) => {
 
 /**
  * 拉黑用户
- * POST /relations/{user_id}/block
+ * POST /users/{user_id}/block
  */
 export const blockUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/block`), {
+    const res = await fetch(buildApiUrl(`/users/${userId}/block`), {
         method: 'POST',
         headers: { ...authHeaders(token) },
     });
@@ -121,10 +121,10 @@ export const blockUser = async (token, userId) => {
 
 /**
  * 取消拉黑
- * DELETE /relations/{user_id}/block
+ * DELETE /users/{user_id}/block
  */
 export const unblockUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/relations/${userId}/block`), {
+    const res = await fetch(buildApiUrl(`/users/${userId}/block`), {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -148,10 +148,10 @@ export const toggleBlockApi = async (token, userId, currentlyBlocked) => {
 
 /**
  * 获取我拉黑的用户列表
- * GET /relations/me/blocked
+ * GET /users/me/blocked
  */
 export const getMyBlockedUsers = async (token) => {
-    const res = await fetch(buildApiUrl('/relations/me/blocked'), {
+    const res = await fetch(buildApiUrl('/users/me/blocked'), {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));

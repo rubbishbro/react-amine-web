@@ -70,8 +70,7 @@ def get_post_comments(
         result.append({
             **comment.dict(),
             "author_name": author.username if author else "匿名",
-            # 如果 author 不存在，使用默认头像或 None
-            "author_avatar": None, 
+            "author_avatar": author.avatar_url if author else None, 
         })
     
     return result
@@ -95,7 +94,7 @@ def get_comment_replies(
         result.append({
             **comment.dict(),
             "author_name": author.username if author else "匿名",
-            "author_avatar": None,
+            "author_avatar": author.avatar_url if author else None,
         })
     
     return result

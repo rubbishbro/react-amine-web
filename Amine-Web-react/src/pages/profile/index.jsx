@@ -45,8 +45,6 @@ export default function Profile() {
     }));
     const formDirtyRef = useRef(false);
     const lastUserIdRef = useRef(user?.id || '');
-    const [password, setPassword] = useState('');
-    const [passwordError, setPasswordError] = useState('');
     const [adminOpen, setAdminOpen] = useState(location.state?.openAdmin === true);
     const [adminKey, setAdminKey] = useState('');
     const [adminError, setAdminError] = useState('');
@@ -163,18 +161,12 @@ export default function Profile() {
 
     const handleSave = async (e) => {
         e.preventDefault();
-        if (password && password.length < 8) {
-            setPasswordError('密码至少8位');
-            return;
-        }
-        setPasswordError('');
-        await updateProfile({ ...form, password: password || '' });
-        // 头像和头图 URL 同步到后端数据库，其他设备登录后可自动读取
+        await updateProfile({ ...form });
+        // 头像和头图 URL 同步到后端数据库，等待写入完成再跳转，防止刷新后丢失
         if (authToken) {
-            updateUserAvatar(authToken, { avatarUrl: form.avatar, coverUrl: form.cover }).catch(() => {});
+            await updateUserAvatar(authToken, { avatarUrl: form.avatar, coverUrl: form.cover }).catch(() => {});
         }
         const derivedId = getMappedUserId(user?.id || buildUserId(form.name, user?.id || 'local'));
-        setPassword('');
         formDirtyRef.current = false;
         navigate(`/user/${derivedId}`);
     };
@@ -242,8 +234,8 @@ export default function Profile() {
                     <input name="className" value={form.className} onChange={handleChange} />
                 </label>
                 <label className={styles.label}>
-                    邮箱
-                    <input name="email" value={form.email} onChange={handleChange} />
+                    邮箱（不可修改）
+                    <input name="email" value={form.email} readOnly disabled className={styles.readOnly} />
                 </label>
                 <label className={styles.label}>
                     个人简介（支持 Markdown）
@@ -256,16 +248,17 @@ export default function Profile() {
                     />
                 </label>
                 <label className={styles.label}>
-                    密码（留空则不修改）
+                    密码（如需修改，请前往登录页「忘记密码」）
                     <input
                         name="password"
                         type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="至少8位"
+                        value=""
+                        readOnly
+                        disabled
+                        className={styles.readOnly}
+                        placeholder="通过邮箱验证码重置"
                     />
                 </label>
-                {passwordError && <span className={styles.loginError}>{passwordError}</span>}
 
                 <div className={styles.adminSection}>
                     <button
