@@ -1,7 +1,8 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session
+from pydantic import BaseModel
 
 from app.crud import crud_user
 from app.api import deps
@@ -60,3 +61,27 @@ def read_user_by_username(
             detail="该用户名不存在",
         )
     return user
+
+
+class AvatarUpdate(BaseModel):
+    avatar_url: Optional[str] = None
+    cover_url: Optional[str] = None
+
+
+@router.patch("/me/avatar", response_model=UserSchema)
+def update_my_avatar(
+    payload: AvatarUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    更新当前用户的头像和头图 URL（七牛 CDN 或本地路径）。
+    """
+    if payload.avatar_url is not None:
+        current_user.avatar_url = payload.avatar_url
+    if payload.cover_url is not None:
+        current_user.cover_url = payload.cover_url
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user

@@ -23,6 +23,8 @@ class User(UserBase, table=True): # 继承UserBase，并指定表名
     is_banned: bool = False  # 是否被封禁
     mute_count: int = 0  # 被禁言次数
     ban_count: int = 0  # 被封禁次数
+    avatar_url: Optional[str] = None  # 头像 URL（七牛 CDN 或本地路径）
+    cover_url: Optional[str] = None   # 头图 URL
     created_at: datetime = Field(default_factory=datetime.utcnow)  # 创建时间
     updated_at: datetime = Field(default_factory=datetime.utcnow)  # 更新时间
     
