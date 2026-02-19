@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256" # 采用HS256算法
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # 管理员密钥
+    ADMIN_SECRET_KEY: str
+
     # 邮件验证码（注册/重置密码）
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587

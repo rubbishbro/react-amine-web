@@ -31,7 +31,14 @@ class UserInDBBase(UserBase):
         from_attributes = True
 
 class User(UserInDBBase):
-    pass
+    # 管理字段（前端展示和管理面板需要）
+    title: Optional[str] = None
+    is_muted: bool = False
+    is_banned: bool = False
+    mute_count: int = 0
+    ban_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class UserInDB(UserInDBBase):
     hashed_password: str

@@ -2,15 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import styles from './PublicProfile.module.css';
 import { useUser } from '../context/UserContext';
+import { adminGetUser } from '../../services/adminApi';
+import { fetchUserByUsername } from '../../services/auth';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Post from '../components/Post';
 import { loadAllPosts } from '../utils/postLoader';
 import { getPostStats } from '../utils/postStats';
-import { buildTagInfo, readAdminMeta, getUserRestrictions } from '../utils/adminMeta';
+import { buildTagInfo, readAdminMeta } from '../utils/adminMeta';
 import { buildUserId, getMappedUserId, isSupportedUserId } from '../utils/userId';
-import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../utils/followStore';
-import { isBlocked } from '../utils/blockStore';
+import { getFollowerCount, isFollowingUser, toggleFollowUser, syncFollowFromBackend } from '../utils/followStore';
+import { isBlocked, toggleBlock, syncBlockedFromBackend } from '../utils/blockStore';
 
 const normalizeText = (value) => (value ?? '').toString().trim();
 const decodeSafe = (value) => {
@@ -51,7 +53,7 @@ export default function ProfileView() {
     const { state } = useLocation();
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user } = useUser();
+    const { user, authToken } = useUser();
     const mappedRouteId = id ? getMappedUserId(id) : '';
     const routeId = mappedRouteId || id || '';
 
@@ -64,7 +66,12 @@ export default function ProfileView() {
         favorites: 0,
         replies: 0,
     });
-    const [setFollowVersion] = useState(0);
+    const [setFollowVersion] = useState(0); // deprecated: kept for compatibility
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [followerCount, setFollowerCount] = useState(0);
+    const [followLoading, setFollowLoading] = useState(false);
+    const [blockedByViewer, setBlockedByViewer] = useState(false);
+    const [blockedByAuthor, setBlockedByAuthor] = useState(false);
 
     const authorFromState = state?.author
         ? { ...state.author, id: getMappedUserId(state.author.id || '') }
@@ -150,7 +157,6 @@ export default function ProfileView() {
                 resolved = { id: buildUserId(first.trim(), 'local'), name: first.trim() };
             }
         }
-
         if (resolved && user && isSamePerson(resolved, {
             id: buildUserId(user?.profile?.name, user?.id || 'local'),
             name: user.profile?.name || '匿名'
@@ -214,8 +220,52 @@ export default function ProfileView() {
 
     const profileId = getMappedUserId(displayAuthor?.id || routeId || '');
     const adminMeta = useMemo(() => readAdminMeta(profileId), [profileId]);
-    const tagInfo = useMemo(() => buildTagInfo(displayAuthor, adminMeta), [displayAuthor, adminMeta]);
-    const userRestrictions = useMemo(() => getUserRestrictions(profileId), [profileId]);
+
+    // 直接从后端拉取目标用户最新数据，确保 title（头衔）与后端同步
+    // 不依赖导航 state 快照（可能含旧 tagInfo），也不依赖 posts（帖子可能为空）
+    const [freshTargetUser, setFreshTargetUser] = useState(null);
+    useEffect(() => {
+        if (!displayAuthor?.name || isSelf) {
+            setFreshTargetUser(null);
+            return;
+        }
+        let cancelled = false;
+        fetchUserByUsername(displayAuthor.name)
+            .then((data) => { if (!cancelled && data) setFreshTargetUser(data); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [displayAuthor?.name, isSelf]);
+
+    // freshTargetUser 含后端 title/is_superuser，直接构建 tagInfo 不经过旧快照
+    const tagInfo = useMemo(() => {
+        if (freshTargetUser) return buildTagInfo(freshTargetUser);
+        return buildTagInfo(displayAuthor, adminMeta);
+    }, [displayAuthor, adminMeta, freshTargetUser]);
+
+    const [targetBackendUser, setTargetBackendUser] = useState(null);
+    const isViewerAdmin = user?.isAdmin === true;
+    useEffect(() => {
+        if (!isViewerAdmin || !profileId || isSelf || !authToken) {
+            setTargetBackendUser(null);
+            return;
+        }
+        let cancelled = false;
+        adminGetUser(authToken, profileId)
+            .then((data) => { if (!cancelled) setTargetBackendUser(data); })
+            .catch(() => { if (!cancelled) setTargetBackendUser(null); });
+        return () => { cancelled = true; };
+    }, [isViewerAdmin, profileId, isSelf, authToken]);
+
+    const userRestrictions = useMemo(() => {
+        if (isSelf) {
+            // 查看自己：直接读登录用户对象
+            return { isMuted: user?.isMuted === true, isBanned: user?.isBanned === true };
+        }
+        if (targetBackendUser) {
+            return { isMuted: targetBackendUser.is_muted === true, isBanned: targetBackendUser.is_banned === true };
+        }
+        return { isMuted: false, isBanned: false };
+    }, [isSelf, user, targetBackendUser]);
     const adminTarget = useMemo(() => (
         displayAuthor || {
             id: profileId || 'local',
@@ -223,20 +273,39 @@ export default function ProfileView() {
         }
     ), [displayAuthor, profileId, authorName]);
     const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
-    const blockedByAuthor = useMemo(() => isBlocked(profileId, viewerId), [profileId, viewerId]);
-    const blockedByViewer = useMemo(() => isBlocked(viewerId, profileId), [profileId, viewerId]);
-    const isFollowing = useMemo(
-        () => isFollowingUser(viewerId, profileId),
-        [viewerId, profileId]
-    );
-    const followerCount = useMemo(
-        () => getFollowerCount(profileId),
-        [profileId]
-    );
     const displayFollowerCount = isViewerLoggedIn ? followerCount : '-';
 
+    // 从后端初始化关注状态与拉黑状态
+    useEffect(() => {
+        if (!profileId || !isViewerLoggedIn) {
+            setIsFollowing(false);
+            setFollowerCount(0);
+            setBlockedByViewer(false);
+            setBlockedByAuthor(false);
+            return;
+        }
+        let cancelled = false;
+        // 快速读缓存
+        setIsFollowing(isFollowingUser(viewerId, profileId));
+        setFollowerCount(getFollowerCount(profileId));
+        setBlockedByViewer(isBlocked(viewerId, profileId));
+        // 从后端同步关注
+        syncFollowFromBackend(profileId, authToken, viewerId).then(({ followerCount: fc, isFollowing: isF }) => {
+            if (cancelled) return;
+            setIsFollowing(isF);
+            setFollowerCount(fc);
+        });
+        // 从后端同步拉黑列表
+        if (authToken) {
+            syncBlockedFromBackend(authToken, viewerId).then((ids) => {
+                if (cancelled) return;
+                setBlockedByViewer(ids.includes(String(profileId)));
+            });
+        }
+        return () => { cancelled = true; };
+    }, [profileId, viewerId, isViewerLoggedIn, authToken]);
 
-    const handleToggleFollow = () => {
+    const handleToggleFollow = async () => {
         if (!viewerId) {
             window.alert('请先登录');
             return;
@@ -246,8 +315,17 @@ export default function ProfileView() {
             window.alert('不能对自己执行操作');
             return;
         }
-        toggleFollowUser(viewerId, profileId);
-        setFollowVersion((prev) => prev + 1);
+        if (followLoading) return;
+        setFollowLoading(true);
+        try {
+            const result = await toggleFollowUser(authToken, viewerId, profileId);
+            setIsFollowing(result.isFollowing);
+            setFollowerCount(result.followerCount);
+        } catch (err) {
+            window.alert(err.message || '操作失败，请重试');
+        } finally {
+            setFollowLoading(false);
+        }
     };
 
     const handleOpenDm = () => {
@@ -266,11 +344,11 @@ export default function ProfileView() {
             window.alert('你已被禁言，暂时无法发送私信。');
             return;
         }
-        if (isBlocked(viewerId, profileId)) {
+        if (isBlocked(viewerId, profileId) || blockedByViewer) {
             window.alert('你已拉黑对方，无法发送私信。');
             return;
         }
-        if (isBlocked(profileId, viewerId)) {
+        if (isBlocked(profileId, viewerId) || blockedByAuthor) {
             window.alert('对方已拉黑你，无法发送私信。');
             return;
         }
@@ -368,9 +446,9 @@ export default function ProfileView() {
                                     type="button"
                                     className={`${styles.actionButton} ${styles.actionButtonFollow}`}
                                     onClick={handleToggleFollow}
-                                    disabled={isSelf}
+                                    disabled={isSelf || followLoading}
                                 >
-                                    {isFollowing ? '已关注' : '关注'}
+                                    {followLoading ? '...' : isFollowing ? '已关注' : '关注'}
                                 </button>
                             )}
                             <button

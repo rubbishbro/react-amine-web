@@ -1,15 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styles from './AdminPanel.module.css';
 import { useUser } from '../context/UserContext';
-import {
-    buildTagInfo,
-    deleteAdminMeta,
-    readAdminMeta,
-    writeAdminMeta,
-    verifyAdminKey,
-} from '../utils/adminMeta';
+import { buildTagInfo } from '../utils/adminMeta';
 import { updateAuthorInCaches } from '../utils/postLoader';
+import {
+    adminGetUser,
+    adminSetTitle,
+    adminSetRole,
+    adminMuteUser,
+    adminUnmuteUser,
+    adminBanUser,
+    adminUnbanUser,
+    adminDeleteUser,
+} from '../../services/adminApi';
 
 const formatDateTime = (value) => {
     if (!value) return '-';
@@ -76,122 +80,165 @@ export default function AdminPanel() {
             user={user}
             targetId={targetId}
             onBack={() => navigate(-1)}
-            onSetAdmin={setAdmin}
             onLogout={logout}
         />
     );
 }
 
-function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogout }) {
+function AdminPanelContent({ target, user, targetId, onBack, onLogout }) {
     const navigate = useNavigate();
-    const [meta, setMeta] = useState(() => readAdminMeta(targetId));
-    const [title, setTitle] = useState(meta.title || '');
-    const [role, setRole] = useState(meta.role || (target?.isAdmin ? 'admin' : 'user'));
+    const { authToken, refreshUser } = useUser();
+
+    // 从后端加载目标用户的真实状态
+    const [backendUser, setBackendUser] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
+    const [messageType, setMessageType] = useState('');
+
+    const [title, setTitle] = useState('');
+    const [role, setRole] = useState('user');
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        adminGetUser(authToken, targetId)
+            .then((data) => {
+                if (cancelled) return;
+                setBackendUser(data);
+                setTitle(data.title || '');
+                setRole(data.is_superuser ? 'admin' : 'user');
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setTitle('');
+                setRole(target?.isAdmin ? 'admin' : 'user');
+                console.warn('无法获取后端用户信息，使用本地数据:', err.message);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [targetId, authToken, target]);
+
+    const showMsg = (text, type = 'success') => {
+        setMessage(text);
+        setMessageType(type);
+    };
+
+    const isMuted = backendUser?.is_muted === true;
+    const isBanned = backendUser?.is_banned === true;
+    const isTargetAdmin = role === 'admin';
+    const isSelf = String(targetId) === String(user?.id);
 
     const tagInfo = useMemo(() => {
         if (!target) return null;
-        return buildTagInfo({ ...target, isAdmin: role === 'admin' }, { title, role });
+        return buildTagInfo(
+            { ...target, is_superuser: role === 'admin' },
+            { title, role }
+        );
     }, [target, title, role]);
 
-    const isTargetAdmin = role === 'admin';
-    const isSelf = targetId === user?.id;
-    const originalRole = meta.role || (target?.isAdmin ? 'admin' : 'user');
-    const originalTitle = meta.title || '';
-    const isRoleChanged = role !== originalRole;
-    const isTitleChanged = title.trim() !== originalTitle;
-
-    const handleSave = () => {
-        if (!targetId) return;
-
-        // 如果修改了他人的权限或头衔，需要验证管理员密钥
-        if (!isSelf && (isRoleChanged || isTitleChanged)) {
-            const inputKey = window.prompt('修改他人信息需要验证管理员密钥，请输入：');
-            if (!inputKey) {
-                setMessage('操作已取消');
-                return;
-            }
-            if (!verifyAdminKey(inputKey)) {
-                window.alert('管理员密钥错误，操作被拒绝。');
-                setMessage('密钥验证失败');
-                return;
-            }
-        }
-
-        const nextMeta = {
-            ...meta,
-            title: title.trim(),
-            role,
-            lastActiveAt: new Date().toISOString(),
-        };
-        writeAdminMeta(targetId, nextMeta);
-        setMeta(nextMeta);
-        if (targetId === user?.id) {
-            onSetAdmin(role === 'admin');
-        }
-        const nextTagInfo = buildTagInfo({ ...target, isAdmin: role === 'admin' }, nextMeta);
+    const syncCaches = (updatedUser) => {
+        const nextTagInfo = buildTagInfo(
+            { ...target, is_superuser: updatedUser.is_superuser },
+            { title: updatedUser.title || '', role: updatedUser.is_superuser ? 'admin' : 'user' }
+        );
         updateAuthorInCaches({
-            id: targetId,
-            name: target?.name || '匿名',
+            id: String(updatedUser.id),
+            name: updatedUser.username || target?.name || '匿名',
             avatar: target?.avatar || '',
             cover: target?.cover || '',
-            school: target?.school || '',
-            className: target?.className || '',
-            email: target?.email || '',
-            isAdmin: role === 'admin',
+            school: updatedUser.userSchool || target?.school || '',
+            className: updatedUser.userClass || target?.className || '',
+            email: updatedUser.email || target?.email || '',
+            isAdmin: updatedUser.is_superuser === true,
             tagInfo: nextTagInfo,
         });
-        setMessage('已保存');
     };
 
-    const isMuted = meta.isMuted === true;
-    const isBanned = meta.isBanned === true;
-
-    const handleMute = () => {
+    const handleSave = async () => {
         if (!targetId) return;
-        if (isTargetAdmin) return;
-        const nextMuted = !isMuted;
-        const confirmMsg = nextMuted ? '确定要禁言该用户吗？' : '确定要取消禁言吗？';
-        if (!window.confirm(confirmMsg)) return;
-        const nextMeta = {
-            ...meta,
-            isMuted: nextMuted,
-            muteCount: nextMuted ? (meta.muteCount || 0) + 1 : meta.muteCount,
-            lastActiveAt: new Date().toISOString(),
-        };
-        writeAdminMeta(targetId, nextMeta);
-        setMeta(nextMeta);
-        setMessage(nextMuted ? '已禁言' : '已取消禁言');
-    };
+        try {
+            let updated = backendUser;
+            const titleChanged = title.trim() !== (backendUser?.title || '');
+            const roleChanged = (role === 'admin') !== (backendUser?.is_superuser === true);
 
-    const handleBan = () => {
-        if (!targetId) return;
-        if (isTargetAdmin) return;
-        const nextBanned = !isBanned;
-        const confirmMsg = nextBanned ? '确定要封禁该用户吗？' : '确定要取消封禁吗？';
-        if (!window.confirm(confirmMsg)) return;
-        const nextMeta = {
-            ...meta,
-            isBanned: nextBanned,
-            banCount: nextBanned ? (meta.banCount || 0) + 1 : meta.banCount,
-            lastActiveAt: new Date().toISOString(),
-        };
-        writeAdminMeta(targetId, nextMeta);
-        setMeta(nextMeta);
-        setMessage(nextBanned ? '已封禁' : '已取消封禁');
-    };
+            // 只有自己或操作普通用户时才能改头衔；不能修改其他管理员的头衔
+            const canChangeTitle = isSelf || !isTargetAdmin;
+            if (titleChanged && !canChangeTitle) {
+                showMsg('不能修改其他管理员的头衔，只能修改自己的头衔', 'error');
+                return;
+            }
 
-    const handleDelete = () => {
-        if (!targetId) return;
-        if (isTargetAdmin) return;
-        if (!window.confirm('确定要删除该用户吗？该操作不可撤销。')) return;
-        deleteAdminMeta(targetId);
-        if (targetId === user?.id) {
-            onLogout();
+            if (titleChanged && canChangeTitle) {
+                updated = await adminSetTitle(authToken, targetId, title.trim());
+                setBackendUser(updated);
+            }
+            if (roleChanged && !isSelf) {
+                updated = await adminSetRole(authToken, targetId, role === 'admin');
+                setBackendUser(updated);
+                setRole(updated.is_superuser ? 'admin' : 'user');
+            }
+            syncCaches(updated);
+            if (isSelf) await refreshUser();
+            showMsg('已保存', 'success');
+        } catch (err) {
+            showMsg(err.message || '保存失败', 'error');
         }
-        setMessage('用户已删除');
-        navigate('/');
     };
+
+    const handleMute = async () => {
+        if (!targetId || isTargetAdmin) return;
+        const nextMuted = !isMuted;
+        if (!window.confirm(nextMuted ? '确定要禁言该用户吗？' : '确定要取消禁言吗？')) return;
+        try {
+            const updated = nextMuted
+                ? await adminMuteUser(authToken, targetId)
+                : await adminUnmuteUser(authToken, targetId);
+            setBackendUser(updated);
+            showMsg(nextMuted ? '已禁言' : '已取消禁言', 'success');
+        } catch (err) {
+            showMsg(err.message || '操作失败', 'error');
+        }
+    };
+
+    const handleBan = async () => {
+        if (!targetId || isTargetAdmin) return;
+        const nextBanned = !isBanned;
+        if (!window.confirm(nextBanned ? '确定要封禁该用户吗？' : '确定要取消封禁吗？')) return;
+        try {
+            const updated = nextBanned
+                ? await adminBanUser(authToken, targetId, '管理员操作')
+                : await adminUnbanUser(authToken, targetId);
+            setBackendUser(updated);
+            showMsg(nextBanned ? '已封禁' : '已取消封禁', 'success');
+        } catch (err) {
+            showMsg(err.message || '操作失败', 'error');
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!targetId || isTargetAdmin) return;
+        if (!window.confirm('确定要删除该用户吗？该操作不可撤销。')) return;
+        try {
+            await adminDeleteUser(authToken, targetId);
+            if (isSelf) onLogout();
+            showMsg('用户已删除', 'success');
+            navigate('/');
+        } catch (err) {
+            showMsg(err.message || '删除失败', 'error');
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className={styles.page}>
+                <div className={styles.panel}>
+                    <p className={styles.notice}>正在加载用户信息…</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.page}>
@@ -236,6 +283,7 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 placeholder="留空则管理员显示默认标签，普通用户隐藏"
+                                disabled={isTargetAdmin && !isSelf}
                             />
                         </label>
                         <label className={styles.field}>
@@ -244,15 +292,26 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
                                 className={styles.input}
                                 value={role}
                                 onChange={(e) => setRole(e.target.value)}
+                                disabled={isSelf}
                             >
                                 <option value="admin">管理员</option>
                                 <option value="user">用户</option>
                             </select>
                         </label>
                     </div>
+                    {isSelf && (
+                        <p className={styles.restrictNote}>无法修改自己的管理员等级，但可以修改自己的头衔</p>
+                    )}
+                    {isTargetAdmin && !isSelf && (
+                        <p className={styles.restrictNote}>不能修改其他管理员的头衔或权限</p>
+                    )}
                     <div className={styles.actions}>
                         <button className={styles.primaryButton} onClick={handleSave}>保存</button>
-                        {message && <span className={styles.message}>{message}</span>}
+                        {message && (
+                            <span className={messageType === 'error' ? styles.errorMessage : styles.message}>
+                                {message}
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -261,27 +320,25 @@ function AdminPanelContent({ target, user, targetId, onBack, onSetAdmin, onLogou
                     <div className={styles.infoGrid}>
                         <div className={styles.infoCard}>
                             <div className={styles.infoLabel}>账户创建时间</div>
-                            <div className={styles.infoValue}>{formatDateTime(meta.createdAt)}</div>
+                            <div className={styles.infoValue}>{formatDateTime(backendUser?.created_at)}</div>
                         </div>
                         <div className={styles.infoCard}>
-                            <div className={styles.infoLabel}>最后活动时间</div>
-                            <div className={styles.infoValue}>{formatDateTime(meta.lastActiveAt)}</div>
-                        </div>
-                        <div className={styles.infoCard}>
-                            <div className={styles.infoLabel}>收到的举报</div>
-                            <div className={styles.infoValue}>{meta.reportsReceived}</div>
-                        </div>
-                        <div className={styles.infoCard}>
-                            <div className={styles.infoLabel}>提交的举报</div>
-                            <div className={styles.infoValue}>{meta.reportsSubmitted}</div>
+                            <div className={styles.infoLabel}>最后更新时间</div>
+                            <div className={styles.infoValue}>{formatDateTime(backendUser?.updated_at)}</div>
                         </div>
                         <div className={styles.infoCard}>
                             <div className={styles.infoLabel}>被禁言次数</div>
-                            <div className={styles.infoValue}>{meta.muteCount}</div>
+                            <div className={styles.infoValue}>{backendUser?.mute_count ?? 0}</div>
                         </div>
                         <div className={styles.infoCard}>
                             <div className={styles.infoLabel}>被封禁次数</div>
-                            <div className={styles.infoValue}>{meta.banCount}</div>
+                            <div className={styles.infoValue}>{backendUser?.ban_count ?? 0}</div>
+                        </div>
+                        <div className={styles.infoCard}>
+                            <div className={styles.infoLabel}>当前状态</div>
+                            <div className={styles.infoValue}>
+                                {isBanned ? '🚫 已封禁' : isMuted ? '🔇 已禁言' : '✅ 正常'}
+                            </div>
                         </div>
                     </div>
                 </div>

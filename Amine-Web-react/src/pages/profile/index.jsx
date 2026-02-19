@@ -3,6 +3,7 @@ import styles from './Profile.module.css';
 import { useUser } from '../context/UserContext';
 import { buildUserId, getMappedUserId } from '../utils/userId';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { adminActivate } from '../../services/adminApi';
 
 const emptyProfile = {
     name: '',
@@ -15,7 +16,7 @@ const emptyProfile = {
 };
 
 export default function Profile() {
-    const { user, updateProfile, logout, setAdmin } = useUser();
+    const { user, updateProfile, logout, setAdmin, authToken, refreshUser } = useUser();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -203,13 +204,16 @@ export default function Profile() {
         });
     };
 
-    const handleAdminKey = () => {
-        if (adminKey.trim() === 'E动漫社forever') {
-            setAdmin(true);
+    const handleAdminKey = async () => {
+        const key = adminKey.trim();
+        if (!key) return;
+        try {
+            await adminActivate(authToken, key);
+            await refreshUser();
             setAdminError('');
             setAdminKey('');
-        } else {
-            setAdminError('无效的密钥');
+        } catch (err) {
+            setAdminError(err.message || '无效的密钥');
         }
     };
 
