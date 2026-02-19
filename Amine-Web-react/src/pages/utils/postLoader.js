@@ -45,10 +45,10 @@ const normalizeAuthor = (author) => {
     ...author,
     id,
     name,
-    avatar: author.avatar || author.avatarUrl || author.avatarURL || '',
-    cover: author.cover || author.coverUrl || author.coverURL || '',
-    school: author.school || author.college || '',
-    className: author.className || author.class || author.grade || '',
+    avatar: author.avatar || author.avatarUrl || author.avatarURL || author.avatar_url || '',
+    cover: author.cover || author.coverUrl || author.coverURL || author.cover_url || '',
+    school: author.school || author.college || author.userSchool || '',
+    className: author.className || author.class || author.grade || author.userClass || '',
     email: author.email || '',
     isAdmin: author.isAdmin === true || author.is_superuser === true,
     tagInfo,
@@ -115,29 +115,83 @@ const writeRemotePostsCache = (posts) => {
   }
 };
 
-// 从后端 API 获取帖子列表
+const filterVisiblePosts = (posts) => {
+  const viewerId = getCurrentViewerId();
+  const deletedIds = readDeletedPosts();
+
+  return posts.filter((post) => {
+    if (!post) return false;
+    if (deletedIds.includes(post.id)) return false;
+    const normalizedAuthor = normalizeAuthor(post.author);
+    const authorId = normalizedAuthor?.id || buildUserId(normalizedAuthor?.name || '', '');
+    if (viewerId && authorId) {
+      if (isBlocked(authorId, viewerId)) return false;
+      if (isBlocked(viewerId, authorId)) return false;
+    }
+    if (authorId && isUserBanned(authorId)) return false;
+    return true;
+  });
+};
+
+// 从后端 API 获取帖子列表（批量拉取全部，用于个人主页/搜索等）
 export const fetchPostsFromBackend = async () => {
   try {
-    // 使用 PostAPI 服务
     const PostAPI = (await import('../../services/getpostfromback.js')).default;
     const api = new PostAPI();
-    const rawPosts = await api.getPostsLists();
-    
-    // 转换后端数据格式为前端格式
-    const transformedPosts = Array.isArray(rawPosts) 
-      ? rawPosts.map(post => transformBackendPost(post)).filter(p => p !== null)
-      : [];
-    
-    // 缓存到本地存储
+    const pageSize = 100;
+    let skip = 0;
+    let total = 0;
+    const rawPosts = [];
+
+    while (true) {
+      const result = await api.getPostsLists({ skip, limit: pageSize });
+      const items = Array.isArray(result?.items) ? result.items : [];
+      total = Number.isFinite(result?.total) ? result.total : total;
+      rawPosts.push(...items);
+
+      if (items.length < pageSize) break;
+      if (total > 0 && skip + pageSize >= total) break;
+      skip += pageSize;
+    }
+
+    const transformedPosts = rawPosts
+      .map((post) => transformBackendPost(post))
+      .filter((post) => post !== null);
+
     if (transformedPosts.length > 0) {
       writeRemotePostsCache(transformedPosts);
     }
-    
+
     return transformedPosts;
   } catch (error) {
     console.error('Error fetching posts from backend:', error);
-    // 如果请求失败，尝试从缓存读取
     return readRemotePostsCache();
+  }
+};
+
+export const fetchPostsPageFromBackend = async ({ skip = 0, limit = 20, category = null } = {}) => {
+  try {
+    const PostAPI = (await import('../../services/getpostfromback.js')).default;
+    const api = new PostAPI();
+    const result = await api.getPostsLists({ skip, limit, category });
+    const items = Array.isArray(result?.items) ? result.items : [];
+    const total = Number.isFinite(result?.total) ? result.total : items.length;
+    const transformedPosts = items
+      .map((post) => transformBackendPost(post))
+      .filter((post) => post !== null);
+
+    if (transformedPosts.length > 0) {
+      const cached = readRemotePostsCache();
+      const merged = new Map();
+      cached.forEach((post) => merged.set(post.id, post));
+      transformedPosts.forEach((post) => merged.set(post.id, post));
+      writeRemotePostsCache(Array.from(merged.values()));
+    }
+
+    return { posts: transformedPosts, total, skip, limit };
+  } catch (error) {
+    console.error('Error fetching paged posts from backend:', error);
+    return { posts: [], total: 0, skip, limit };
   }
 };
 
@@ -441,22 +495,7 @@ export const loadAllPosts = async (forceRefresh = false) => {
     // 然后从后端获取最新数据
     await fetchPostsFromBackend();
     
-    const viewerId = getCurrentViewerId();
-    const deletedIds = readDeletedPosts();
-    const validPosts = buildMergedPosts()
-      .filter((post) => {
-        if (post === null) return false;
-        if (deletedIds.includes(post.id)) return false;
-        // 过滤被封禁/拉黑用户的帖子
-        const normalizedAuthor = normalizeAuthor(post.author);
-        const authorId = normalizedAuthor?.id || buildUserId(normalizedAuthor?.name || '', '');
-        if (viewerId && authorId) {
-          if (isBlocked(authorId, viewerId)) return false;
-          if (isBlocked(viewerId, authorId)) return false;
-        }
-        if (authorId && isUserBanned(authorId)) return false;
-        return true;
-      });
+    const validPosts = filterVisiblePosts(buildMergedPosts());
 
     const sortedPosts = validPosts.sort((a, b) => {
       if (a.isPinnedGlobally && !b.isPinnedGlobally) return -1;
@@ -474,6 +513,55 @@ export const loadAllPosts = async (forceRefresh = false) => {
   } catch (error) {
     console.error('Error loading all posts:', error);
     return [];
+  }
+};
+
+export const loadPostsPage = async ({ page = 1, pageSize = 5, category = null, forceRefresh = false } = {}) => {
+  try {
+    if (forceRefresh) {
+      clearPostsCache();
+    }
+
+    cleanPublishedLocalPosts();
+
+    const skip = Math.max(page - 1, 0) * pageSize;
+    const { posts: remotePosts, total: remoteTotal } = await fetchPostsPageFromBackend({
+      skip,
+      limit: pageSize,
+      category,
+    });
+
+    const pinnedIds = readPinnedPosts();
+    const normalizedRemote = remotePosts.map((post) => applyPinned(post, pinnedIds));
+
+    let localDrafts = [];
+    if (page === 1) {
+      localDrafts = getLocalDraftPosts()
+        .filter((post) => {
+          if (!category || category === 'all' || category === '全部') return true;
+          return post.category === category;
+        })
+        .map((post) => applyPinned({ ...post, isDraft: true }, pinnedIds));
+    }
+
+    const combined = [...localDrafts, ...normalizedRemote].map((post) => ({
+      ...post,
+      isPinnedInCurrentCategory: category && category !== 'all'
+        ? post.isPinnedGlobally || (post.pinnedInCategories || []).includes(category)
+        : post.isPinnedGlobally,
+    }));
+
+    const visiblePosts = filterVisiblePosts(combined);
+
+    return {
+      posts: visiblePosts,
+      remoteTotal,
+      localDraftCount: localDrafts.length,
+      remoteCount: normalizedRemote.length,
+    };
+  } catch (error) {
+    console.error('Error loading paged posts:', error);
+    return { posts: [], remoteTotal: 0, localDraftCount: 0, remoteCount: 0 };
   }
 };
 

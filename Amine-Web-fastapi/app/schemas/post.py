@@ -14,11 +14,11 @@ class PostBase(BaseModel):
 
 # 帖子创建输入
 class PostCreate(PostBase):
-    pass
+    is_published: bool = True
 
 # 帖子更新输入
 class PostUpdate(PostBase):
-    pass
+    is_published: Optional[bool] = None
 
 # 数据库中存储的模型共享属性
 class PostInDBBase(PostBase):
@@ -34,3 +34,10 @@ class PostInDBBase(PostBase):
 # 返回给客户端的属性
 class Post(PostInDBBase):
     author: Optional[User] = None  # 包含完整作者信息
+
+
+class PostPage(BaseModel):
+    items: List[Post]
+    total: int
+    skip: int
+    limit: int

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Post from '../Post';
 import styles from './PostList.module.css';
-import { loadAllPosts, loadPostsByCategory, getCategoryDisplayName, clearPostsCache } from '../../utils/postLoader';
+import { loadPostsPage, getCategoryDisplayName, clearPostsCache } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config/colors';
 import { getContrastTextColor, generateGradient } from '../../utils/colorUtils';
 import { getPostStats } from '../../utils/postStats';
@@ -9,6 +9,7 @@ import { getPostStats } from '../../utils/postStats';
 const PostList = ({ onReadMore, category = null }) => {
   const [posts, setPosts] = useState([]);
   const [allPostsCount, setAllPostsCount] = useState(0);
+  const [remoteTotal, setRemoteTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -17,8 +18,6 @@ const PostList = ({ onReadMore, category = null }) => {
   const [refreshing, setRefreshing] = useState(false);
   const loaderRef = useRef(null);
   const observerRef = useRef(null);
-  const allPostsRef = useRef([]);
-  const allPostsRawRef = useRef([]);
   const postsPerPage = 5;
 
   const applySort = useCallback((inputPosts, mode, categoryParam) => {
@@ -53,29 +52,22 @@ const PostList = ({ onReadMore, category = null }) => {
     try {
       setLoading(true);
 
-      let allPosts;
-      if (categoryParam && categoryParam !== 'all') {
-        allPosts = await loadPostsByCategory(categoryParam);
-      } else {
-        allPosts = await loadAllPosts(forceRefresh);
-      }
-      const sortedPosts = applySort(allPosts, sortModeParam, categoryParam);
-      // 存储总帖子数 & 缓存所有帖子
-      allPostsRawRef.current = allPosts;
-      allPostsRef.current = sortedPosts;
-      setAllPostsCount(sortedPosts.length);
+      const { posts: fetchedPosts, remoteTotal: nextRemoteTotal, localDraftCount, remoteCount } = await loadPostsPage({
+        page: pageNum,
+        pageSize: postsPerPage,
+        category: categoryParam,
+        forceRefresh,
+      });
 
-      // 计算当前页的帖子
-      const startIndex = 0;
-      const endIndex = pageNum * postsPerPage;
-      const currentPosts = sortedPosts.slice(startIndex, endIndex);
+      const sortedPosts = applySort(fetchedPosts, sortModeParam, categoryParam);
 
-      setPosts(currentPosts);
+      setPosts((prev) => (pageNum === 1 ? sortedPosts : [...prev, ...sortedPosts]));
       setPage(pageNum);
-      setHasMore(currentPosts.length < allPosts.length);
+      setRemoteTotal(nextRemoteTotal);
+      setAllPostsCount(nextRemoteTotal + localDraftCount);
+      setHasMore(pageNum * postsPerPage < nextRemoteTotal && remoteCount > 0);
       setError(null);
-
-      return allPosts;
+      return sortedPosts;
     } catch (err) {
       setError('加载帖子失败，请刷新重试');
       console.error('Error loading posts:', err);
@@ -89,17 +81,6 @@ const PostList = ({ onReadMore, category = null }) => {
   useEffect(() => {
     loadPosts(1, category, sortMode);
   }, [category, sortMode, loadPosts]);
-
-  useEffect(() => {
-    const rawPosts = allPostsRawRef.current || [];
-    if (!rawPosts.length) return;
-    const sortedPosts = applySort(rawPosts, sortMode, category);
-    allPostsRef.current = sortedPosts;
-    const endIndex = page * postsPerPage;
-    setPosts(sortedPosts.slice(0, endIndex));
-    setHasMore(endIndex < sortedPosts.length);
-    setAllPostsCount(sortedPosts.length);
-  }, [sortMode, category, page, postsPerPage, applySort]);
 
   // 手动刷新功能
   const handleRefresh = useCallback(async () => {
@@ -116,24 +97,9 @@ const PostList = ({ onReadMore, category = null }) => {
   // 加载更多帖子
   const loadMorePosts = useCallback(async () => {
     if (loading || !hasMore) return;
-
-    try {
-      setLoading(true);
-      const nextPage = page + 1;
-      const endIndex = nextPage * postsPerPage;
-      const cachedPosts = allPostsRef.current || [];
-      const nextPosts = cachedPosts.slice(0, endIndex);
-      setPosts(nextPosts);
-      setPage(nextPage);
-      setHasMore(nextPosts.length < cachedPosts.length);
-      setError(null);
-    } catch (err) {
-      setError('加载更多帖子失败');
-      console.error('Error loading more posts:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, loading, hasMore, postsPerPage]);
+    const nextPage = page + 1;
+    await loadPosts(nextPage, category, sortMode, false);
+  }, [page, loading, hasMore, loadPosts, category, sortMode]);
 
   // 观察器回调
   const handleObserver = useCallback((entries) => {
@@ -181,9 +147,6 @@ const PostList = ({ onReadMore, category = null }) => {
 
   // 获取分类徽章的文本
   const getCategoryBadgeText = useCallback(() => {
-    if (category && category !== 'all') {
-      return `共 ${posts.length} 篇帖子`;
-    }
     return `共 ${allPostsCount} 篇帖子`;
   }, [category, posts.length, allPostsCount]);
 

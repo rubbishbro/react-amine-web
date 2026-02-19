@@ -17,7 +17,7 @@ import { calculatePostReadTime, getPostWordCount } from '../../utils/postReadTim
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
   const { id: postId } = useParams();
-  const { user } = useUser();
+  const { user, authToken } = useUser();
   const [loading, setLoading] = useState(false); // 保持用于编辑模式加载
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
@@ -195,26 +195,37 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
   // 保存函数（不包含状态管理）
   const savePostData = useCallback(async (postData, status) => {
     try {
-      // 本地缓存保存
-      upsertLocalPost({ ...postData, status });
-
-      // 根据状态显示不同的通知
-      console.log('保存完成，显示通知，状态:', status);
       if (status === 'draft') {
+        // 本地缓存保存
+        upsertLocalPost({ ...postData, status });
+        console.log('保存完成，显示通知，状态:', status);
         logMessage('草稿已保存到本地缓存', 'info');
-      } else {
-        logMessage('帖子已成功发布（本地缓存）', 'info');
+        setHasUnsavedChanges(false);
+        return true;
       }
 
+      if (!authToken) {
+        throw new Error('缺少登录令牌，无法发布');
+      }
+
+      // 发布到后端
+      const PostAPI = (await import('../../../services/getpostfromback.js')).default;
+      const api = new PostAPI();
+      const created = await api.createPost(postData, authToken);
+      if (!created?.id) {
+        throw new Error('后端未返回帖子ID');
+      }
+
+      // 清理本地草稿（如果存在）
+      upsertLocalPost({ ...postData, status: 'published' });
+
+      console.log('发布成功，准备跳转');
+      logMessage('帖子已成功发布', 'info');
       setHasUnsavedChanges(false);
 
-      // 只有发布状态才跳转
-      if (status === 'published') {
-        console.log('发布成功，准备跳转');
-        setTimeout(() => {
-          navigate(`/post/${postData.id}`);
-        }, 1500);
-      }
+      setTimeout(() => {
+        navigate(`/post/${created.id}`);
+      }, 300);
 
       return true;
     } catch (error) {
@@ -222,7 +233,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       logMessage('保存失败，请检查网络连接', 'error');
       throw error;
     }
-  }, [logMessage, navigate]);
+  }, [authToken, logMessage, navigate]);
 
   // 保存草稿
   const handleSaveDraft = useCallback(async () => {

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -6,22 +6,23 @@ from app import crud
 from app.crud import crud_post
 from app.api import deps
 from app.models.user import User
-from app.schemas.post import Post, PostCreate, PostUpdate
+from app.schemas.post import Post, PostCreate, PostUpdate, PostPage
 
 router = APIRouter()
 
-@router.get("/", response_model=List[Post])
+@router.get("/", response_model=PostPage)
 def read_posts(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
-    limit: int = 1000,
+    limit: int = 20,
+    category: Optional[str] = None,
 ) -> Any:
     """
     读取已发布的帖子列表
-    目前前端使用假分页，实际上是一次性获取大量数据，故limit设置较大，后续需要更改前端
     """
-    posts = crud_post.get_multi(db, skip=skip, limit=limit)
-    return posts
+    posts = crud_post.get_multi(db, skip=skip, limit=limit, category=category)
+    total = crud_post.count(db, category=category)
+    return {"items": posts, "total": total, "skip": skip, "limit": limit}
 
 @router.post("/", response_model=Post)
 def create_post(
