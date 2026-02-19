@@ -9,6 +9,7 @@ class InteractionType(str, Enum):
     '''
     LIKE = "like"
     COMMENT = "comment"
+    FAVORITE = "favorite"
 
 class Interaction(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

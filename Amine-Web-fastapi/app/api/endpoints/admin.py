@@ -1,11 +1,12 @@
 """
 管理员 API 端点
 """
-from typing import Any
-from fastapi import APIRouter, Body, Depends, HTTPException
-from sqlmodel import Session
+from typing import Any, List
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlmodel import Session, select
 
 from app.api import deps
+from app.api.deps import get_current_active_user
 from app.crud import crud_admin
 from app.models.user import User
 from app.schemas.user import (
@@ -19,6 +20,44 @@ from app.schemas.user import (
 router = APIRouter()
 
 
+@router.post("/activate", response_model=UserSchema)
+def activate_admin(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+    secret_key: str = Body(..., embed=True, alias="secret_key"),
+) -> Any:
+    """
+    用管理员密钥激活当前用户的管理员权限。
+    正确密钥 → 将 is_superuser 设为 True 并返回更新后的用户。
+    错误密钥 → 422 错误。
+    """
+    from app.core.config import settings
+    if secret_key != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=422, detail="无效的密钥")
+    current_user.is_superuser = True
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+
+@router.get("/users", response_model=List[UserSchema])
+def list_users(
+    *,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_superuser),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> Any:
+    """
+    获取用户列表（仅管理员）
+    """
+    users = db.exec(select(User).offset(skip).limit(limit)).all()
+    return users
+
+
 @router.put("/users/{user_id}/title", response_model=UserSchema)
 def set_user_title(
     *,
@@ -28,8 +67,15 @@ def set_user_title(
     current_user: User = Depends(deps.get_current_superuser),
 ) -> Any:
     """
-    设置用户头衔（仅管理员）
+    设置用户头衔（仅管理员）。
+    管理员可修改自己或普通用户的头衔，不能修改其他管理员的头衔。
     """
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    # 不能修改其他管理员的头衔（可以修改自己的）
+    if target.is_superuser and target.id != current_user.id:
+        raise HTTPException(status_code=403, detail="不能修改其他管理员的头衔")
     user = crud_admin.admin.set_title(db, user_id=user_id, title=request.title)
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")

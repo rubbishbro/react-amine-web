@@ -1,82 +1,25 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import styles from './Messages.module.css';
 import { useUser } from '../context/UserContext';
 import { buildUserId, getMappedUserId } from '../utils/userId';
-import { getUserRestrictions } from '../utils/adminMeta';
-import { isBlocked, toggleBlock, readBlockedList } from '../utils/blockStore';
+import { isBlocked, toggleBlock, readBlockedList, syncBlockedFromBackend } from '../utils/blockStore';
 import {
     getUserNotifications,
     markNotificationRead,
     onNotificationsUpdated,
     clearReadNotifications,
     markAllNotificationsRead,
+    syncNotificationsFromBackend,
 } from '../utils/notifications';
-
-const readThread = (key) => {
-    if (!key) return [];
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
-};
-
-const writeThread = (key, messages) => {
-    if (!key) return;
-    try {
-        localStorage.setItem(key, JSON.stringify(messages));
-        window.dispatchEvent(new Event('aw-messages-updated'));
-    } catch (error) {
-        console.error('Failed to save DM messages:', error);
-    }
-};
-
-const buildReadKey = (viewerId, otherId) => {
-    if (!viewerId || !otherId) return '';
-    return `aw_dm_read_${viewerId}_${otherId}`;
-};
-
-const readThreadReadAt = (viewerId, otherId) => {
-    const key = buildReadKey(viewerId, otherId);
-    if (!key) return '';
-    try {
-        return localStorage.getItem(key) || '';
-    } catch {
-        return '';
-    }
-};
-
-const writeThreadReadAt = (viewerId, otherId, value) => {
-    const key = buildReadKey(viewerId, otherId);
-    if (!key) return;
-    try {
-        localStorage.setItem(key, value);
-        window.dispatchEvent(new Event('aw-messages-updated'));
-    } catch {
-        // ignore
-    }
-};
-
-const getUnreadCount = (messages, viewerId, otherId) => {
-    if (!messages.length || !viewerId || !otherId) return 0;
-    const readAt = readThreadReadAt(viewerId, otherId);
-    const readTime = readAt ? new Date(readAt).getTime() : 0;
-    return messages.reduce((count, msg) => {
-        if (msg.from !== otherId) return count;
-        const msgTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
-        return msgTime > readTime ? count + 1 : count;
-    }, 0);
-};
+import { getDmThreads, getDmThread, sendDm, recallDm, deleteDm } from '../../services/dmApi';
+import { DmWsClient } from '../../services/dmWsClient';
 
 export default function Messages() {
     const { id } = useParams();
     const { state } = useLocation();
     const navigate = useNavigate();
-    const { user } = useUser();
+    const { user, authToken } = useUser();
 
     const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
     const targetId = id || '';
@@ -86,11 +29,6 @@ export default function Messages() {
     const viewerName = user?.profile?.name || '我';
     const viewerAvatar = user?.profile?.avatar || '';
 
-    const threadKey = useMemo(() => {
-        if (!viewerId || !targetId) return '';
-        return `aw_dm_${[viewerId, targetId].sort().join('_')}`;
-    }, [viewerId, targetId]);
-
     const [draft, setDraft] = useState('');
     const [messages, setMessages] = useState([]);
     const [threads, setThreads] = useState([]);
@@ -98,70 +36,155 @@ export default function Messages() {
     const [blocked, setBlocked] = useState(false);
     const [blockedByTarget, setBlockedByTarget] = useState(false);
     const [notifications, setNotifications] = useState([]);
+    const [threadsLoading, setThreadsLoading] = useState(false);
+    const [messagesLoading, setMessagesLoading] = useState(false);
+    const wsClientRef = useRef(null);
 
-    useEffect(() => {
-        setMessages(readThread(threadKey));
-    }, [threadKey]);
+    // 从 user 对象读取封禁/禁言状态（修复旧代码中 restrictions 未定义的 bug）
+    const restrictions = {
+        isBanned: user?.isBanned === true,
+        isMuted: user?.isMuted === true,
+    };
 
+    // 加载当前会话的私信（后端优先）
     useEffect(() => {
-        if (!isListView || !viewerId) return;
-        const blockedList = readBlockedList(viewerId);
-        const all = [];
-        for (let i = 0; i < localStorage.length; i += 1) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith('aw_dm_')) continue;
-            if (!key.includes(viewerId)) continue;
-            const list = readThread(key);
-            if (!list.length) continue;
-            const last = list[list.length - 1];
-            const otherId = last.from === viewerId ? last.to : last.from;
-            if (blockedList.includes(otherId)) continue;
-            const otherName = last.from === viewerId ? (last.toName || otherId) : (last.fromName || otherId);
-            const otherAvatar = last.from === viewerId ? (last.toAvatar || '') : (last.fromAvatar || '');
-            const unreadCount = getUnreadCount(list, viewerId, otherId);
-            all.push({
-                key,
-                otherId,
-                otherName,
-                otherAvatar,
-                lastContent: last.content,
-                lastAt: last.createdAt,
-                unreadCount,
-            });
+        if (!targetId || !authToken) return;
+        setMessagesLoading(true);
+        const numericOtherId = Number(getMappedUserId(targetId) || targetId);
+        if (!numericOtherId || Number.isNaN(numericOtherId)) {
+            setMessagesLoading(false);
+            return;
         }
-        all.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
-        setThreads(all);
-    }, [isListView, viewerId]);
+        getDmThread(authToken, numericOtherId)
+            .then((msgs) => {
+                // 将后端格式映射为前端内部格式
+                setMessages(msgs.map((m) => ({
+                    id: String(m.id),
+                    backendId: m.id,
+                    from: String(m.sender_id),
+                    to: String(m.receiver_id),
+                    fromName: m.sender_id === Number(user?.id) ? viewerName : (target?.name || '对方'),
+                    fromAvatar: m.sender_id === Number(user?.id) ? viewerAvatar : (target?.avatar || ''),
+                    toName: m.receiver_id === Number(user?.id) ? viewerName : (target?.name || '对方'),
+                    toAvatar: m.receiver_id === Number(user?.id) ? viewerAvatar : (target?.avatar || ''),
+                    content: m.content,
+                    recalled: m.recalled,
+                    createdAt: m.created_at,
+                })));
+            })
+            .catch(() => { /* fallback to empty */ })
+            .finally(() => setMessagesLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [targetId, authToken]);
 
+    // 加载会话列表（后端优先）
+    useEffect(() => {
+        if (!isListView || !authToken) return;
+        setThreadsLoading(true);
+        getDmThreads(authToken)
+            .then((data) => {
+                setThreads(data.map((t) => ({
+                    key: `backend_${t.other_id}`,
+                    otherId: String(t.other_id),
+                    otherName: t.other_name || String(t.other_id),
+                    otherAvatar: t.other_avatar || '',
+                    lastContent: t.last_message?.content || '',
+                    lastAt: t.last_message?.created_at || '',
+                    unreadCount: t.unread_count,
+                })));
+            })
+            .catch(() => { /* fallback */ })
+            .finally(() => setThreadsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isListView, authToken]);
+
+    // 同步通知（登录后拉取后端，否则读本地缓存）
     useEffect(() => {
         if (!viewerId) return;
-        const updateNotifications = () => {
+        let cancelled = false;
+        const update = () => {
             const list = getUserNotifications(viewerId);
             list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            setNotifications(list);
+            if (!cancelled) setNotifications(list);
         };
-        updateNotifications();
-        const unsubscribe = onNotificationsUpdated(updateNotifications);
-        return unsubscribe;
-    }, [viewerId]);
+        update();
+        if (authToken) {
+            syncNotificationsFromBackend(authToken).then(() => { if (!cancelled) update(); });
+        }
+        const unsubscribe = onNotificationsUpdated(update);
+        return () => { cancelled = true; unsubscribe(); };
+    }, [viewerId, authToken]);
 
     useEffect(() => {
         if (!viewerId || !targetId) return;
+        // 先从缓存读
         setBlocked(isBlocked(viewerId, targetId));
         setBlockedByTarget(isBlocked(targetId, viewerId));
+        // 再从后端同步
+        if (!user?.authToken && !window.__aw_token) return;
+        const token = authToken || '';
+        if (token) {
+            syncBlockedFromBackend(token, viewerId).then((ids) => {
+                setBlocked(ids.includes(String(targetId)));
+            }).catch(() => {});
+        }
     }, [viewerId, targetId]);
 
+    // WebSocket 连接（登录且有 targetId 时建立连接）
     useEffect(() => {
-        if (!viewerId || !targetId || !messages.length) return;
-        const latestIncoming = [...messages].reverse().find((msg) => msg.from === targetId);
-        const latestAt = latestIncoming?.createdAt || messages[messages.length - 1]?.createdAt;
-        if (latestAt) {
-            writeThreadReadAt(viewerId, targetId, latestAt);
-        }
-    }, [viewerId, targetId, messages]);
+        if (!authToken || !user?.id || !targetId) return;
+        const numericUserId = Number(user.id);
+        if (!numericUserId || Number.isNaN(numericUserId)) return;
 
-    const restrictions = useMemo(() => getUserRestrictions(viewerId), [viewerId]);
-    const dmDisabled = !viewerId || restrictions.isBanned || restrictions.isMuted || blocked || blockedByTarget;
+        const client = new DmWsClient(numericUserId, authToken, {
+            onMessage: (msg) => {
+                // 对方发来的新消息
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: String(msg.id),
+                        backendId: msg.id,
+                        from: String(msg.sender_id),
+                        to: String(msg.receiver_id),
+                        fromName: target?.name || '对方',
+                        fromAvatar: target?.avatar || '',
+                        toName: viewerName,
+                        toAvatar: viewerAvatar,
+                        content: msg.content,
+                        recalled: false,
+                        createdAt: msg.created_at,
+                    },
+                ]);
+            },
+            onSent: (msg) => {
+                // 发送成功确认：将临时 ID 替换为后端返回的真实 ID
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m._pending && m.content === msg.content && m.from === String(numericUserId)
+                            ? { ...m, id: String(msg.id), backendId: msg.id, _pending: false }
+                            : m
+                    )
+                );
+            },
+            onRecalled: (msg) => {
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.backendId === msg.id ? { ...m, content: '该消息已撤回', recalled: true } : m
+                    )
+                );
+            },
+            onError: (detail) => {
+                console.warn('[DM WS Error]', detail);
+            },
+        });
+        client.connect();
+        wsClientRef.current = client;
+        return () => { client.disconnect(); wsClientRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authToken, user?.id, targetId]);
+
+    // 直接读后端同步的 user 对象，不查 localStorage
+    const dmDisabled = !viewerId || user?.isBanned === true || user?.isMuted === true || blocked || blockedByTarget;
 
     const combinedItems = useMemo(() => {
         if (!isListView) return [];
@@ -182,7 +205,7 @@ export default function Messages() {
         return [...noticeItems, ...threadItems].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }, [notifications, threads, isListView]);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!draft.trim()) return;
         if (!viewerId) {
             window.alert('请先登录');
@@ -205,70 +228,105 @@ export default function Messages() {
             window.alert('你已被禁言，暂时无法发送私信。');
             return;
         }
-        const next = [
-            ...messages,
-            {
-                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                from: viewerId,
-                to: targetId,
-                fromName: viewerName,
-                fromAvatar: viewerAvatar,
-                toName: target?.name || '对方',
-                toAvatar: target?.avatar || '',
-                content: draft.trim(),
-                createdAt: new Date().toISOString(),
-            },
-        ];
-        setMessages(next);
-        writeThread(threadKey, next);
+
+        const numericReceiverId = Number(getMappedUserId(targetId) || targetId);
+        const contentText = draft.trim();
         setDraft('');
+
+        // 乐观消息预先显示
+        const tempId = `pending-${Date.now()}`;
+        const optimistic = {
+            id: tempId,
+            backendId: null,
+            from: String(user?.id),
+            to: String(numericReceiverId),
+            fromName: viewerName,
+            fromAvatar: viewerAvatar,
+            toName: target?.name || '对方',
+            toAvatar: target?.avatar || '',
+            content: contentText,
+            recalled: false,
+            createdAt: new Date().toISOString(),
+            _pending: true,
+        };
+        setMessages((prev) => [...prev, optimistic]);
+
+        // 优先 WebSocket，fallback REST
+        if (wsClientRef.current?.isConnected) {
+            wsClientRef.current.send(numericReceiverId, contentText);
+        } else {
+            try {
+                const msg = await sendDm(authToken, { receiver_id: numericReceiverId, content: contentText });
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === tempId
+                            ? { ...m, id: String(msg.id), backendId: msg.id, _pending: false }
+                            : m
+                    )
+                );
+            } catch (err) {
+                window.alert(err.message || '发送失败，请重试');
+                setMessages((prev) => prev.filter((m) => m.id !== tempId));
+            }
+        }
     };
 
-    const handleToggleBlock = () => {
+    const handleToggleBlock = async () => {
         if (!viewerId) {
             window.alert('请先登录');
             navigate('/login');
             return;
         }
         if (!targetId) return;
-        const result = toggleBlock(viewerId, targetId);
-        setBlocked(result.blocked);
-    };
-
-    const handleRecall = (messageId) => {
-        const next = messages.map((msg) => {
-            if (msg.id !== messageId) return msg;
-            if (msg.from !== viewerId) return msg;
-            return {
-                ...msg,
-                content: '该消息已撤回',
-                recalled: true,
-            };
-        });
-        setMessages(next);
-        writeThread(threadKey, next);
-    };
-
-    const handleDelete = (messageId) => {
-        const next = messages.filter((msg) => msg.id !== messageId);
-        setMessages(next);
-        writeThread(threadKey, next);
-    };
-
-    const markAllThreadsRead = () => {
-        if (!viewerId) return;
-        for (let i = 0; i < localStorage.length; i += 1) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith('aw_dm_')) continue;
-            if (!key.includes(viewerId)) continue;
-            const list = readThread(key);
-            if (!list.length) continue;
-            const last = list[list.length - 1];
-            const otherId = last.from === viewerId ? last.to : last.from;
-            if (!otherId) continue;
-            writeThreadReadAt(viewerId, otherId, last.createdAt || new Date().toISOString());
+        const token = authToken || '';
+        try {
+            const result = await toggleBlock(token, viewerId, targetId);
+            setBlocked(result.blocked);
+        } catch (err) {
+            window.alert(err.message || '操作失败，请重试');
         }
-        window.dispatchEvent(new Event('aw-messages-updated'));
+    };;
+
+    const handleRecall = async (messageId) => {
+        const msg = messages.find((m) => m.id === messageId);
+        if (!msg) return;
+        // 乐观更新
+        setMessages((prev) =>
+            prev.map((m) => m.id === messageId ? { ...m, content: '该消息已撤回', recalled: true } : m)
+        );
+        // WebSocket 或 REST
+        if (msg.backendId) {
+            if (wsClientRef.current?.isConnected) {
+                wsClientRef.current.recall(msg.backendId);
+            } else {
+                try {
+                    await recallDm(authToken, msg.backendId);
+                } catch (err) {
+                    console.warn('撤回失败:', err);
+                    // 回滚
+                    setMessages((prev) =>
+                        prev.map((m) => m.id === messageId ? { ...m, content: msg.content, recalled: false } : m)
+                    );
+                }
+            }
+        }
+    };
+
+    const handleDelete = async (messageId) => {
+        const msg = messages.find((m) => m.id === messageId);
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        if (msg?.backendId && authToken) {
+            try {
+                await deleteDm(authToken, msg.backendId);
+            } catch { /* ignore */ }
+        }
+    };
+
+    const markAllThreadsRead = async () => {
+        if (!viewerId || !authToken) return;
+        // 后端全部已读（通过重新读取 threads 实现：只要把 unread_count 全郠置 0 即可）
+        setThreads((prev) => prev.map((t) => ({ ...t, unreadCount: 0 })));
+        // TODO: backend 提供 mark-all-read 接口时调用
     };
 
     if (!targetId) {
@@ -297,7 +355,7 @@ export default function Messages() {
                                 className={styles.clearButton}
                                 type="button"
                                 onClick={() => {
-                                    markAllNotificationsRead(viewerId);
+                                    markAllNotificationsRead(viewerId, authToken);
                                     markAllThreadsRead();
                                 }}
                             >
@@ -306,7 +364,7 @@ export default function Messages() {
                             <button
                                 className={styles.clearButton}
                                 type="button"
-                                onClick={() => clearReadNotifications(viewerId)}
+                                onClick={() => clearReadNotifications(viewerId, authToken)}
                             >
                                 清空已读通知
                             </button>
@@ -328,7 +386,7 @@ export default function Messages() {
                                             key={item.id}
                                             className={styles.threadItem}
                                             onClick={() => {
-                                                markNotificationRead(payload.id);
+                                                markNotificationRead(payload.id, authToken);
                                                 if (payload.postId) {
                                                     const hash = payload.replyId ? `#reply-${payload.replyId}` : '';
                                                     navigate(`/post/${payload.postId}${hash}`);
@@ -415,8 +473,8 @@ export default function Messages() {
                             </button>
                         </div>
                         <div className={styles.names}>
-                            <div className={styles.nameLine}>{user?.profile?.name || '我'} ⇄ {target?.name || '对方'}</div>
-                            <div className={styles.subLine}>双方私信记录</div>
+                            <div className={styles.nameLine}>{target?.name || '对方'}</div>
+                            <div className={styles.subLine}>私信对话</div>
                         </div>
                     </div>
                     <button
@@ -443,7 +501,6 @@ export default function Messages() {
                     )}
                     {messages.map((msg) => {
                         const isSelf = msg.from === viewerId;
-                        const name = isSelf ? (user?.profile?.name || '我') : (target?.name || '对方');
                         const avatar = isSelf ? user?.profile?.avatar : target?.avatar;
                         return (
                             <div key={msg.id} className={`${styles.messageItem} ${isSelf ? styles.self : styles.other}`}>
@@ -466,7 +523,9 @@ export default function Messages() {
                                 </button>
                                 <div className={styles.messageContent}>
                                     <div className={styles.messageHeader}>
-                                        <span className={styles.messageName}>{name}</span>
+                                        {!isSelf && (
+                                            <span className={styles.messageName}>{target?.name || '对方'}</span>
+                                        )}
                                         <span className={styles.messageTime}>{new Date(msg.createdAt).toLocaleString('zh-CN')}</span>
                                         <div className={styles.messageActions}>
                                             {isSelf && !msg.recalled && (

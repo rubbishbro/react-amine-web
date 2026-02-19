@@ -19,10 +19,11 @@ import {
   updatePostFavorites,
   updatePostLikes,
 } from '../../utils/postStats';
-import { buildTagInfo, getUserRestrictions } from '../../utils/adminMeta';
+import { buildTagInfo } from '../../utils/adminMeta';
 import { buildUserId, getMappedUserId } from '../../utils/userId';
-import { getFollowerCount, isFollowingUser, toggleFollowUser } from '../../utils/followStore';
+import { getFollowerCount, isFollowingUser, syncFollowFromBackend, toggleFollowUser } from '../../utils/followStore';
 import { pushNotification } from '../../utils/notifications';
+import { getPostComments, createComment, deleteComment, likeComment } from '../../../services/commentsApi';
 
 const isSameUser = (left, right) => {
   if (!left || !right) return false;
@@ -38,7 +39,7 @@ const PostDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, toggleLike, toggleFavorite, isLiked, isFavorited } = useUser();
+  const { user, authToken, toggleLike, toggleFavorite, isLiked, isFavorited } = useUser();
   const isViewerLoggedIn = user?.loggedIn === true;
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -46,97 +47,31 @@ const PostDetail = () => {
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [replyDraft, setReplyDraft] = useState('');
   const [replies, setReplies] = useState([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
-  const [followVersion, setFollowVersion] = useState(0);
+  // 关注状态（从后端初始化）
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followLoading, setFollowLoading] = useState(false);
   const [replySort, setReplySort] = useState('time');
-  const [replyLikesVersion, setReplyLikesVersion] = useState(0);
   const adminMenuRef = useRef(null);
   const viewTrackedRef = useRef(null);
-  const LOCAL_REPLIES_KEY = 'aw_local_replies';
-  const LOCAL_REPLY_LIKES_KEY = 'aw_reply_likes';
 
-  const readLocalReplies = () => {
-    try {
-      const raw = localStorage.getItem(LOCAL_REPLIES_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-      console.error('Error reading local replies:', error);
-      return {};
-    }
+  // 评论点赞本地状态（{ [commentId]: { liked: bool, count: number } }）
+  // 初始值来自后端返回的 likes 字段，点赞后乐观更新
+  const [replyLikeMap, setReplyLikeMap] = useState({});
+
+  const getReplyLikeInfo = (_, replyId) => {
+    if (!replyId) return { count: 0, liked: false };
+    const info = replyLikeMap[String(replyId)];
+    return info || { count: 0, liked: false };
   };
 
-  const writeLocalReplies = (data) => {
-    try {
-      localStorage.setItem(LOCAL_REPLIES_KEY, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error writing local replies:', error);
-    }
+  const isReplyLikedByUser = (_, replyId) => {
+    return getReplyLikeInfo(_, replyId).liked;
   };
 
-  const loadRepliesFromCache = (postId) => {
-    const data = readLocalReplies();
-    const list = Array.isArray(data[postId]) ? data[postId] : [];
-    setReplies(list);
-  };
-
-  const persistReplies = (postId, nextReplies) => {
-    const data = readLocalReplies();
-    data[postId] = nextReplies;
-    writeLocalReplies(data);
-  };
-  const readReplyLikes = () => {
-    try {
-      const raw = localStorage.getItem(LOCAL_REPLY_LIKES_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-      console.error('Error reading reply likes:', error);
-      return {};
-    }
-  };
-
-  const writeReplyLikes = (data) => {
-    try {
-      localStorage.setItem(LOCAL_REPLY_LIKES_KEY, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error writing reply likes:', error);
-    }
-  };
-
-  const getReplyLikeInfo = (postId, replyId) => {
-    if (!postId || !replyId) return { count: 0, likedBy: [] };
-    const data = readReplyLikes();
-    const postLikes = data[postId] || {};
-    const info = postLikes[replyId] || { likedBy: [] };
-    const likedBy = Array.isArray(info.likedBy) ? info.likedBy : [];
-    return { count: likedBy.length, likedBy };
-  };
-
-  const isReplyLikedByUser = (postId, replyId, userId) => {
-    if (!userId) return false;
-    const info = getReplyLikeInfo(postId, replyId);
-    return info.likedBy.includes(userId);
-  };
-
-  const toggleReplyLike = (postId, replyId, userId) => {
-    if (!postId || !replyId || !userId) return { liked: false, count: 0 };
-    const data = readReplyLikes();
-    const postLikes = data[postId] || {};
-    const info = postLikes[replyId] || { likedBy: [] };
-    const likedBy = Array.isArray(info.likedBy) ? info.likedBy : [];
-    const alreadyLiked = likedBy.includes(userId);
-    const nextLikedBy = alreadyLiked
-      ? likedBy.filter((id) => id !== userId)
-      : [...likedBy, userId];
-    postLikes[replyId] = { likedBy: nextLikedBy };
-    data[postId] = postLikes;
-    writeReplyLikes(data);
-    return { liked: !alreadyLiked, count: nextLikedBy.length };
-  };
   const [activeReplyId, setActiveReplyId] = useState(null);
   const [nestedDraft, setNestedDraft] = useState('');
 
@@ -145,6 +80,7 @@ const PostDetail = () => {
   const currentUserId = buildUserId(currentUserName, user?.id || 'guest');
   const currentUser = {
     id: currentUserId,
+    backendId: user?.id || null,
     name: currentUserName,
     avatar: user?.profile?.avatar || '',
     school: user?.profile?.school || '',
@@ -153,8 +89,11 @@ const PostDetail = () => {
     isAdmin: user?.isAdmin === true,
   };
 
-  // 获取当前用户的禁言/封禁状态
-  const userRestrictions = useMemo(() => getUserRestrictions(currentUserId), [currentUserId]);
+  // 获取当前用户的禁言/封禁状态（直接读后端同步的 user 对象）
+  const userRestrictions = useMemo(() => ({
+    isMuted: user?.isMuted === true,
+    isBanned: user?.isBanned === true,
+  }), [user?.isMuted, user?.isBanned]);
 
   const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -199,6 +138,63 @@ const PostDetail = () => {
     fetchPost();
   }, [id]);
 
+  // 从后端加载评论列表
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setRepliesLoading(true);
+    // 尝试将 id 转换为数字（后端帖子 ID 是整数）
+    const numericId = Number(id);
+    if (Number.isNaN(numericId)) {
+      setRepliesLoading(false);
+      return;
+    }
+    getPostComments(numericId)
+      .then((data) => {
+        if (cancelled) return;
+        // 将后端评论格式转换为前端格式
+        const mapped = (data || []).map((c) => ({
+          id: String(c.id),
+          backendId: c.id,
+          author: {
+            id: String(c.author_id),
+            name: c.author_name || '匿名',
+            avatar: c.author_avatar || '',
+          },
+          content: c.content,
+          createdAt: c.created_at,
+          parentId: c.parent_id ? String(c.parent_id) : null,
+          replyToName: null, // 后端未直接返回，可通过 parent 查找
+          likes: c.likes ?? 0,
+          is_deleted: c.is_deleted,
+        }));
+        // 填充 replyToName
+        const idMap = {};
+        mapped.forEach((c) => { idMap[c.id] = c; });
+        mapped.forEach((c) => {
+          if (c.parentId && idMap[c.parentId]) {
+            c.replyToName = idMap[c.parentId].author?.name || '用户';
+          }
+        });
+        setReplies(mapped.filter((c) => !c.is_deleted));
+        // 初始化点赞状态（liked = false，后端暂不返回"我是否点赞"，乐观更新）
+        const likeInit = {};
+        mapped.forEach((c) => {
+          likeInit[c.id] = { count: c.likes, liked: false };
+        });
+        setReplyLikeMap(likeInit);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[PostDetail] 加载评论失败，回退到空列表:', err.message);
+        setReplies([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRepliesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [id]);
+
   useEffect(() => {
     setIsPinned(post?.isPinnedGlobally === true);
   }, [post?.isPinnedGlobally]);
@@ -215,12 +211,6 @@ const PostDetail = () => {
   }, [adminMenuOpen]);
 
   useEffect(() => {
-    if (id) {
-      loadRepliesFromCache(id);
-    }
-  }, [id]);
-
-  useEffect(() => {
     if (!location.hash) return;
     const hashId = location.hash.replace('#', '').trim();
     if (!hashId) return;
@@ -233,7 +223,7 @@ const PostDetail = () => {
     return () => clearTimeout(timer);
   }, [location.hash, replies]);
 
-  const handleSubmitReply = () => {
+  const handleSubmitReply = async () => {
     if (!isViewerLoggedIn) {
       window.alert('请先登录后再发帖！');
       navigate('/login');
@@ -249,34 +239,40 @@ const PostDetail = () => {
       return;
     }
     if (!replyDraft.trim()) return;
-    const newReply = {
-      id: createId(),
-      author: currentUser,
-      content: replyDraft.trim(),
-      createdAt: new Date().toISOString(),
-      parentId: null,
-      replyToName: null,
-    };
-    const authorId = getMappedUserId(post?.author?.id || '');
-    if (authorId && authorId !== currentUser.id) {
-      pushNotification({
-        userId: authorId,
-        targetType: 'post',
-        action: 'reply',
-        postId: id,
-        replyId: newReply.id,
-        preview: buildPreview(post?.summary || post?.title || post?.content || ''),
-        fromUserId: currentUser.id,
-        fromUserName: currentUser.name,
-      });
+    const numericPostId = Number(id);
+    if (Number.isNaN(numericPostId)) return;
+    try {
+      const created = await createComment(authToken, { post_id: numericPostId, content: replyDraft.trim() });
+      const newReply = {
+        id: String(created.id),
+        backendId: created.id,
+        author: { id: String(currentUser.backendId || currentUser.id), name: currentUser.name, avatar: currentUser.avatar },
+        content: created.content,
+        createdAt: created.created_at,
+        parentId: null,
+        replyToName: null,
+        likes: 0,
+      };
+      const authorId = getMappedUserId(post?.author?.id || '');
+      if (authorId && authorId !== currentUser.id) {
+        pushNotification({
+          userId: authorId,
+          targetType: 'post',
+          action: 'reply',
+          postId: id,
+          replyId: newReply.id,
+          preview: buildPreview(post?.summary || post?.title || post?.content || ''),
+          fromUserId: currentUser.id,
+          fromUserName: currentUser.name,
+        }, authToken);
+      }
+      setReplies((prev) => [...prev, newReply]);
+      setReplyLikeMap((prev) => ({ ...prev, [newReply.id]: { count: 0, liked: false } }));
+      setReplyDraft('');
+      setIsReplyOpen(false);
+    } catch (err) {
+      window.alert(err.message || '发布失败，请重试');
     }
-    setReplies((prev) => {
-      const next = [...prev, newReply];
-      persistReplies(id, next);
-      return next;
-    });
-    setReplyDraft('');
-    setIsReplyOpen(false);
   };
 
   const handleOpenNestedReply = (replyId) => {
@@ -298,7 +294,7 @@ const PostDetail = () => {
     setNestedDraft('');
   };
 
-  const handleSubmitNestedReply = (replyId) => {
+  const handleSubmitNestedReply = async (replyId) => {
     if (!isViewerLoggedIn) {
       window.alert('请先登录后再发帖！');
       navigate('/login');
@@ -315,34 +311,46 @@ const PostDetail = () => {
     }
     if (!nestedDraft.trim()) return;
     const target = replies.find((item) => item.id === replyId);
-    const newReply = {
-      id: createId(),
-      author: currentUser,
-      content: nestedDraft.trim(),
-      createdAt: new Date().toISOString(),
-      parentId: replyId,
-      replyToName: target?.author?.name || '用户',
-    };
-    const targetAuthorId = getMappedUserId(target?.author?.id || '');
-    if (targetAuthorId && targetAuthorId !== currentUser.id) {
-      pushNotification({
-        userId: targetAuthorId,
-        targetType: 'reply',
-        action: 'reply',
-        postId: id,
-        replyId: newReply.id,
-        preview: buildPreview(target?.content || ''),
-        fromUserId: currentUser.id,
-        fromUserName: currentUser.name,
+    const numericPostId = Number(id);
+    if (Number.isNaN(numericPostId)) return;
+    // backendId 可能是 number，也可能已经是字符串形式的数字
+    const numericParentId = target?.backendId ?? Number(replyId);
+    try {
+      const created = await createComment(authToken, {
+        post_id: numericPostId,
+        content: nestedDraft.trim(),
+        parent_id: numericParentId,
       });
+      const newReply = {
+        id: String(created.id),
+        backendId: created.id,
+        author: { id: String(currentUser.backendId || currentUser.id), name: currentUser.name, avatar: currentUser.avatar },
+        content: created.content,
+        createdAt: created.created_at,
+        parentId: replyId,
+        replyToName: target?.author?.name || '用户',
+        likes: 0,
+      };
+      const targetAuthorId = getMappedUserId(target?.author?.id || '');
+      if (targetAuthorId && targetAuthorId !== currentUser.id) {
+        pushNotification({
+          userId: targetAuthorId,
+          targetType: 'reply',
+          action: 'reply',
+          postId: id,
+          replyId: newReply.id,
+          preview: buildPreview(target?.content || ''),
+          fromUserId: currentUser.id,
+          fromUserName: currentUser.name,
+        }, authToken);
+      }
+      setReplies((prev) => [...prev, newReply]);
+      setReplyLikeMap((prev) => ({ ...prev, [newReply.id]: { count: 0, liked: false } }));
+      setNestedDraft('');
+      setActiveReplyId(null);
+    } catch (err) {
+      window.alert(err.message || '发布失败，请重试');
     }
-    setReplies((prev) => {
-      const next = [...prev, newReply];
-      persistReplies(id, next);
-      return next;
-    });
-    setNestedDraft('');
-    setActiveReplyId(null);
   };
 
   const handleDeletePost = () => {
@@ -385,22 +393,24 @@ const PostDetail = () => {
     navigate(`/editor/${id}`);
   };
 
-  const handleDeleteReply = (replyId) => {
+  const handleDeleteReply = async (replyId) => {
     const target = replies.find((reply) => reply.id === replyId);
-    const replyAuthorId = getMappedUserId(target?.author?.id || '');
-    const canDeleteReply = currentUser.isAdmin || (replyAuthorId && currentUser.id === replyAuthorId);
+    const replyAuthorId = target?.author?.id || '';
+    const canDeleteReply = currentUser.isAdmin || (replyAuthorId && String(currentUser.backendId || currentUser.id) === String(replyAuthorId));
     if (!canDeleteReply) {
       window.alert('你没有权限删除该回复。');
       return;
     }
     if (!window.confirm('确定删除该回复吗？')) return;
-    setReplies((prev) => {
-      const next = prev.filter((reply) => reply.id !== replyId && reply.parentId !== replyId);
-      persistReplies(id, next);
-      return next;
-    });
-    if (activeReplyId === replyId) {
-      setActiveReplyId(null);
+    const backendId = target?.backendId ?? Number(replyId);
+    try {
+      await deleteComment(authToken, backendId);
+      setReplies((prev) => prev.filter((reply) => reply.id !== replyId && reply.parentId !== replyId));
+      if (activeReplyId === replyId) {
+        setActiveReplyId(null);
+      }
+    } catch (err) {
+      window.alert(err.message || '删除失败，请重试');
     }
   };
 
@@ -466,7 +476,7 @@ const PostDetail = () => {
         preview: buildPreview(post?.summary || post?.title || post?.content || ''),
         fromUserId: currentUser.id,
         fromUserName: currentUser.name,
-      });
+      }, authToken);
     }
   };
 
@@ -520,15 +530,24 @@ const PostDetail = () => {
   const authorId = mappedAuthorId || '';
   const viewerId = user?.id || '';
   const isSelfAuthor = useMemo(() => isSameUser(authorInfo, currentUser), [authorInfo, currentUser]);
-  const isFollowing = useMemo(
-    () => isFollowingUser(viewerId, authorId),
-    [viewerId, authorId, followVersion]
-  );
-  const followerCount = useMemo(
-    () => getFollowerCount(authorId),
-    [authorId, followVersion]
-  );
   const displayFollowerCount = isViewerLoggedIn ? followerCount : '-';
+
+  // 从后端初始化关注状态（作者 ID 已知后触发）
+  useEffect(() => {
+    if (!authorId || !isViewerLoggedIn) return;
+    let cancelled = false;
+    // 先用缓存快速渲染
+    setIsFollowing(isFollowingUser(viewerId, authorId));
+    setFollowerCount(getFollowerCount(authorId));
+    // 再从后端拉取真实值
+    syncFollowFromBackend(authorId, authToken, viewerId).then(({ followerCount: fc, isFollowing: isF }) => {
+      if (cancelled) return;
+      setIsFollowing(isF);
+      setFollowerCount(fc);
+    });
+    return () => { cancelled = true; };
+  }, [authorId, viewerId, isViewerLoggedIn, authToken]);
+
   const replyTagMap = useMemo(() => {
     if (!isViewerLoggedIn) return new Map();
     const map = new Map();
@@ -554,7 +573,7 @@ const PostDetail = () => {
     }
     list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     return list;
-  }, [replies, replySort, id, replyLikesVersion]);
+  }, [replies, replySort, id, replyLikeMap]);
 
   if (loading) {
     return (
@@ -667,16 +686,22 @@ const PostDetail = () => {
                 <button
                   type="button"
                   className={`${styles.followButton} ${isFollowing ? styles.followButtonActive : ''}`}
-                  onClick={() => {
-                    if (isSelfAuthor) {
-                      return;
+                  disabled={isSelfAuthor || followLoading}
+                  onClick={async () => {
+                    if (isSelfAuthor || followLoading) return;
+                    setFollowLoading(true);
+                    try {
+                      const result = await toggleFollowUser(authToken, viewerId, authorId);
+                      setIsFollowing(result.isFollowing);
+                      setFollowerCount(result.followerCount);
+                    } catch (err) {
+                      window.alert(err.message || '操作失败，请重试');
+                    } finally {
+                      setFollowLoading(false);
                     }
-                    toggleFollowUser(viewerId, authorId);
-                    setFollowVersion((prev) => prev + 1);
                   }}
-                  disabled={isSelfAuthor}
                 >
-                  {isFollowing ? '已关注' : '关注'}
+                  {followLoading ? '...' : isFollowing ? '已关注' : '关注'}
                 </button>
               )}
               {authorId && (
@@ -849,8 +874,8 @@ const PostDetail = () => {
 
                         <div className={styles.replyFooter}>
                           <button
-                            className={`${styles.replyButton} ${isReplyLikedByUser(id, reply.id, currentUser.id) ? styles.replyLiked : ''}`}
-                            onClick={() => {
+                            className={`${styles.replyButton} ${isReplyLikedByUser(id, reply.id) ? styles.replyLiked : ''}`}
+                            onClick={async () => {
                               if (!isViewerLoggedIn) {
                                 window.alert('请先登录后再点赞！');
                                 navigate('/login');
@@ -864,24 +889,46 @@ const PostDetail = () => {
                                 window.alert('您已被禁言，暂时无法进行点赞操作。');
                                 return;
                               }
-                              const { liked } = toggleReplyLike(id, reply.id, currentUser.id);
-                              setReplyLikesVersion((prev) => prev + 1);
-                              const replyAuthorId = getMappedUserId(reply?.author?.id || '');
-                              if (liked && replyAuthorId && replyAuthorId !== currentUser.id) {
-                                pushNotification({
-                                  userId: replyAuthorId,
-                                  targetType: 'reply',
-                                  action: 'like',
-                                  postId: id,
-                                  replyId: reply.id,
-                                  preview: buildPreview(reply?.content || ''),
-                                  fromUserId: currentUser.id,
-                                  fromUserName: currentUser.name,
-                                });
+                              const prevInfo = getReplyLikeInfo(id, reply.id);
+                              // 乐观更新
+                              const nextLiked = !prevInfo.liked;
+                              const nextCount = Math.max(0, prevInfo.count + (nextLiked ? 1 : -1));
+                              setReplyLikeMap((prev) => ({
+                                ...prev,
+                                [String(reply.id)]: { count: nextCount, liked: nextLiked },
+                              }));
+                              try {
+                                const backendId = reply.backendId ?? Number(reply.id);
+                                const result = await likeComment(authToken, backendId);
+                                // 以后端返回的 likes 和 liked 为准
+                                const trueLiked = result.liked ?? nextLiked;
+                                setReplyLikeMap((prev) => ({
+                                  ...prev,
+                                  [String(reply.id)]: { count: result.likes ?? nextCount, liked: trueLiked },
+                                }));
+                                const replyAuthorId = reply?.author?.id || '';
+                                if (trueLiked && replyAuthorId && String(replyAuthorId) !== String(currentUser.backendId || currentUser.id)) {
+                                  pushNotification({
+                                    userId: replyAuthorId,
+                                    targetType: 'reply',
+                                    action: 'like',
+                                    postId: id,
+                                    replyId: reply.id,
+                                    preview: buildPreview(reply?.content || ''),
+                                    fromUserId: currentUser.id,
+                                    fromUserName: currentUser.name,
+                                  }, authToken);
+                                }
+                              } catch {
+                                // 回滚乐观更新
+                                setReplyLikeMap((prev) => ({
+                                  ...prev,
+                                  [String(reply.id)]: prevInfo,
+                                }));
                               }
                             }}
                           >
-                            {isReplyLikedByUser(id, reply.id, currentUser.id) ? '❤️' : '🤍'} {getReplyLikeInfo(id, reply.id).count}
+                            {isReplyLikedByUser(id, reply.id) ? '❤️' : '🤍'} {getReplyLikeInfo(id, reply.id).count}
                           </button>
                           <button
                             className={styles.replyButton}
@@ -889,7 +936,7 @@ const PostDetail = () => {
                           >
                             回复
                           </button>
-                          {(currentUser.isAdmin || (reply.author?.id && currentUser.id === getMappedUserId(reply.author.id))) && (
+                          {(currentUser.isAdmin || (reply.author?.id && String(currentUser.backendId || currentUser.id) === String(reply.author.id))) && (
                             <button
                               className={styles.replyDeleteButton}
                               onClick={() => handleDeleteReply(reply.id)}

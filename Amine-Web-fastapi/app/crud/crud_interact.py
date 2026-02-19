@@ -1,29 +1,67 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlmodel import Session, select
 from app.models.interact import Interaction, InteractionType
 from app.schemas.interact import InteractionCreate
 
-# 创建互动
-def create(db: Session, *, obj_in: InteractionCreate, user_id: int) -> Optional[Interaction]:
-    # 如果是点赞，检查是否已存在相同的点赞，防止重复点赞
-    if obj_in.type == InteractionType.LIKE:
-        statement = select(Interaction).where(
-            Interaction.user_id == user_id,
-            Interaction.post_id == obj_in.post_id,
-            Interaction.type == InteractionType.LIKE
-        )
-        existing_like = db.exec(statement).first()
-        if existing_like:
-            # 如果已经点赞了，把它删掉
-            db.delete(existing_like)
-            db.commit()
-            return None # 或者返回一个特殊标记告诉前端已取消
+# 通用切换函数
+def _toggle(db: Session, *, post_id: int, user_id: int, itype: InteractionType) -> Tuple[bool, Optional[Interaction]]:
+    """
+    切换某种交互类型（已存在则删除，不存在则创建）
+    返回 (activated: bool, interaction_or_None)
+    """
+    statement = select(Interaction).where(
+        Interaction.user_id == user_id,
+        Interaction.post_id == post_id,
+        Interaction.type == itype,
+    )
+    existing = db.exec(statement).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return False, None
+    obj = Interaction(type=itype, post_id=post_id, user_id=user_id)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return True, obj
 
+# 点赞切换
+def toggle_like(db: Session, *, post_id: int, user_id: int) -> bool:
+    """切换帖子点赞，返回操作后是否为点赞状态"""
+    liked, _ = _toggle(db, post_id=post_id, user_id=user_id, itype=InteractionType.LIKE)
+    return liked
+
+# 收藏切换
+def toggle_favorite(db: Session, *, post_id: int, user_id: int) -> bool:
+    """切换帖子收藏，返回操作后是否为收藏状态"""
+    favorited, _ = _toggle(db, post_id=post_id, user_id=user_id, itype=InteractionType.FAVORITE)
+    return favorited
+
+# 批量查询当前用户对所有帖子的点赞/收藏 ID 列表
+def get_user_liked_ids(db: Session, *, user_id: int) -> List[int]:
+    statement = select(Interaction.post_id).where(
+        Interaction.user_id == user_id,
+        Interaction.type == InteractionType.LIKE,
+    )
+    return list(db.exec(statement).all())
+
+def get_user_favorited_ids(db: Session, *, user_id: int) -> List[int]:
+    statement = select(Interaction.post_id).where(
+        Interaction.user_id == user_id,
+        Interaction.type == InteractionType.FAVORITE,
+    )
+    return list(db.exec(statement).all())
+
+# 创建互动（保留兼容旧接口）
+def create(db: Session, *, obj_in: InteractionCreate, user_id: int) -> Optional[Interaction]:
+    if obj_in.type in (InteractionType.LIKE, InteractionType.FAVORITE):
+        _, obj = _toggle(db, post_id=obj_in.post_id, user_id=user_id, itype=obj_in.type)
+        return obj
     db_obj = Interaction(
         type=obj_in.type,
         content=obj_in.content,
         post_id=obj_in.post_id,
-        user_id=user_id
+        user_id=user_id,
     )
     db.add(db_obj)
     db.commit()

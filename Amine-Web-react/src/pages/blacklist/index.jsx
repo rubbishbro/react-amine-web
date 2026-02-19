@@ -3,25 +3,34 @@ import { useNavigate } from 'react-router-dom';
 import styles from './Blacklist.module.css';
 import { useUser } from '../context/UserContext';
 import { buildUserId } from '../utils/userId';
-import { readBlockedList, toggleBlock } from '../utils/blockStore';
+import { syncBlockedFromBackend, toggleBlock } from '../utils/blockStore';
 
 export default function Blacklist() {
-    const { user } = useUser();
+    const { user, authToken } = useUser();
     const navigate = useNavigate();
     const viewerId = useMemo(
         () => (user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : ''),
         [user]
     );
     const [list, setList] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (!viewerId) return;
-        setList(readBlockedList(viewerId));
-    }, [viewerId]);
+        if (!viewerId || !authToken) return;
+        setLoading(true);
+        syncBlockedFromBackend(authToken, viewerId)
+            .then((ids) => setList(ids))
+            .catch(() => setList([]))
+            .finally(() => setLoading(false));
+    }, [viewerId, authToken]);
 
-    const handleUnblock = (targetId) => {
-        toggleBlock(viewerId, targetId);
-        setList(readBlockedList(viewerId));
+    const handleUnblock = async (targetId) => {
+        try {
+            await toggleBlock(authToken, viewerId, targetId);
+            setList((prev) => prev.filter((id) => id !== targetId));
+        } catch (err) {
+            window.alert(err.message || '操作失败，请重试');
+        }
     };
 
     if (!viewerId) {
@@ -43,7 +52,9 @@ export default function Blacklist() {
                     <button className={styles.backButton} onClick={() => navigate(-1)}>← 返回</button>
                     <div className={styles.title}>黑名单管理</div>
                 </div>
-                {list.length === 0 ? (
+                {loading ? (
+                    <div className={styles.notice}>正在加载…</div>
+                ) : list.length === 0 ? (
                     <div className={styles.notice}>暂无被拉黑的用户。</div>
                 ) : (
                     <div className={styles.list}>

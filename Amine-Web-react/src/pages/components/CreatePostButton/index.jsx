@@ -3,7 +3,6 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styles from './CreatePostButton.module.css';
 import { useUser } from '../../context/UserContext';
-import { getUserRestrictions } from '../../utils/adminMeta';
 import { buildUserId } from '../../utils/userId';
 
 const CreatePostButton = () => {
@@ -27,18 +26,14 @@ const CreatePostButton = () => {
       return;
     }
 
-    // 获取用户ID（与帖子作者ID生成方式一致）
-    const userId = buildUserId(userName, user?.id || 'guest');
-    const restrictions = getUserRestrictions(userId);
-
-    // 检查是否被封禁
-    if (restrictions.isBanned) {
+    // 检查是否被封禁（直接读后端同步的 user 对象，不查 localStorage）
+    if (user?.isBanned) {
       window.alert('您的账号已被封禁，无法发帖。');
       return;
     }
 
     // 检查是否被禁言
-    if (restrictions.isMuted) {
+    if (user?.isMuted) {
       window.alert('您已被禁言，暂时无法发帖。');
       return;
     }

@@ -155,13 +155,13 @@ def like_comment(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    点赞评论
+    切换评论点赞状态（已点赞则取消，未点赞则添加）
     """
-    comment = crud_comment.add_like(db, comment_id=comment_id, user_id=current_user.id)
+    comment, liked = crud_comment.toggle_like(db, comment_id=comment_id, user_id=current_user.id)
     if not comment:
         raise HTTPException(status_code=404, detail="评论不存在")
     
-    return {"success": True, "likes": comment.likes}
+    return {"success": True, "likes": comment.likes, "liked": liked}
 
 @router.get("/post/{post_id}/count")
 def get_comment_count(

@@ -110,13 +110,14 @@ def increment_likes(db: Session, comment_id: int) -> Optional[Comment]:
         db.refresh(comment)
     return comment
 
-def add_like(db: Session, *, comment_id: int, user_id: int) -> Optional[Comment]:
+def toggle_like(db: Session, *, comment_id: int, user_id: int):
     """
-    给评论点赞（用户唯一）
+    切换评论点赞状态（已点赞则取消，未点赞则添加）
+    返回 (comment, liked: bool)
     """
     comment = db.get(Comment, comment_id)
     if not comment:
-        return None
+        return None, False
 
     statement = select(CommentLike).where(
         CommentLike.comment_id == comment_id,
@@ -124,14 +125,25 @@ def add_like(db: Session, *, comment_id: int, user_id: int) -> Optional[Comment]
     )
     existing = db.exec(statement).first()
     if existing:
-        return comment
+        # 取消点赞
+        db.delete(existing)
+        comment.likes = max(0, comment.likes - 1)
+        liked = False
+    else:
+        # 添加点赞
+        like = CommentLike(comment_id=comment_id, user_id=user_id)
+        db.add(like)
+        comment.likes += 1
+        liked = True
 
-    like = CommentLike(comment_id=comment_id, user_id=user_id)
-    db.add(like)
-    comment.likes += 1
     db.add(comment)
     db.commit()
     db.refresh(comment)
+    return comment, liked
+
+def add_like(db: Session, *, comment_id: int, user_id: int) -> Optional[Comment]:
+    """@deprecated: 请使用 toggle_like"""
+    comment, _ = toggle_like(db, comment_id=comment_id, user_id=user_id)
     return comment
 
 def get_comment_count(db: Session, post_id: int) -> int:

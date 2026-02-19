@@ -134,3 +134,18 @@ export async function fetchCurrentUser(token) {
 
   return response.json();
 }
+
+/**
+ * 根据用户名获取用户公开信息（无需登录）
+ * GET /users/username/{username}
+ */
+export async function fetchUserByUsername(username) {
+  if (!username) return null;
+  try {
+    const response = await fetch(buildApiUrl(`/users/username/${encodeURIComponent(username)}`));
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}

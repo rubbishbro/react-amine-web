@@ -150,6 +150,11 @@
     font-size: 13px;
 }
 
+.errorMessage {
+    color: #dc2626;
+    font-size: 13px;
+}
+
 .restrictNote {
     margin-top: 6px;
     color: #b45309;
