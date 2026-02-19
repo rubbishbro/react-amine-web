@@ -1,8 +1,9 @@
 """
 管理员 API 端点
 """
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.api import deps
@@ -50,11 +51,21 @@ def list_users(
     current_user: User = Depends(deps.get_current_superuser),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    q: Optional[str] = Query(default=None, max_length=100),
 ) -> Any:
     """
     获取用户列表（仅管理员）
+    支持通过 q 参数按昵称/邮箱模糊搜索。
     """
-    users = db.exec(select(User).offset(skip).limit(limit)).all()
+    statement = select(User)
+    keyword = (q or "").strip()
+    if keyword:
+        pattern = f"%{keyword}%"
+        statement = statement.where(
+            or_(User.username.ilike(pattern), User.email.ilike(pattern))
+        )
+
+    users = db.exec(statement.offset(skip).limit(limit)).all()
     return users
 
 

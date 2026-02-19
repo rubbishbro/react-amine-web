@@ -44,6 +44,19 @@ export const adminListUsers = async (token, { skip = 0, limit = 50 } = {}) => {
 };
 
 /**
+ * 按昵称/邮箱搜索用户（仅管理员）
+ * GET /admin/users?q=xxx&skip=0&limit=20
+ */
+export const adminSearchUsers = async (token, keyword, { skip = 0, limit = 20 } = {}) => {
+    const q = encodeURIComponent(String(keyword || '').trim());
+    const res = await fetch(buildApiUrl(`/admin/users?q=${q}&skip=${skip}&limit=${limit}`), {
+        headers: { ...authHeaders(token) },
+    });
+    if (!res.ok) throw new Error(await extractError(res));
+    return res.json();
+};
+
+/**
  * 设置用户头衔（仅管理员）
  * PUT /admin/users/{user_id}/title
  */

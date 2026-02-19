@@ -19,8 +19,13 @@
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 16px;
+}
+
+.headerMain {
+    flex: 1;
+    min-width: 0;
 }
 
 .title {
@@ -34,6 +39,85 @@
     margin: 6px 0 0;
     color: #6b7280;
     font-size: 14px;
+}
+
+.searchForm {
+    margin-top: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.searchInputWrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 0 10px;
+    background: #fff;
+    flex: 1;
+    min-width: 260px;
+}
+
+.searchIcon {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.searchInput {
+    border: none;
+    outline: none;
+    width: 100%;
+    color: #111827;
+    background: transparent;
+}
+
+.searchError {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #dc2626;
+}
+
+.searchResults {
+    margin-top: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 12px;
+    background: #f8fafc;
+    max-height: 220px;
+    overflow: auto;
+}
+
+.searchResultItem {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.searchResultItem:last-child {
+    border-bottom: none;
+}
+
+.searchResultItem:hover {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.searchResultName {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.searchResultEmail {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #6b7280;
 }
 
 .notice {
@@ -241,5 +325,9 @@
     .header {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .searchInputWrap {
+        min-width: 100%;
     }
 }
