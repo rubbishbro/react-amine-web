@@ -36,6 +36,33 @@ def authenticate(db: Session, *, email: str, password: str) -> Optional[User]:
         return None
     return user
 
+# 更新用户个人资料（username / userSchool / userClass）
+def update_profile(
+    db: Session,
+    *,
+    user: User,
+    username: Optional[str] = None,
+    user_school: Optional[str] = None,
+    user_class: Optional[str] = None,
+    bio: Optional[str] = None,
+) -> User:
+    if username is not None and username.strip() and username.strip() != user.username:
+        existing = get_by_username(db, username=username.strip())
+        if existing and existing.id != user.id:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="该用户名已被占用")
+        user.username = username.strip()
+    if user_school is not None:
+        user.userSchool = user_school or None
+    if user_class is not None:
+        user.userClass = user_class or None
+    if bio is not None:
+        user.bio = bio or None
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
 # 认证用户（支持邮箱或用户名）
 def authenticate_flexible(db: Session, *, identifier: str, password: str) -> Optional[User]:
     """

@@ -8,6 +8,7 @@ import {
   readStoredToken,
   requestToken,
   saveToken,
+  updateUserProfile,
 } from '../../services/auth.js';
 import { getMyInteractionStatus, togglePostLike, togglePostFavorite } from '../../services/interactApi.js';
 
@@ -76,6 +77,10 @@ const normalizeBackendUser = (backendUser, extraProfile = defaultProfile) => {
       ...extraProfile,
       name: backendUser.username || backendUser.email || extraProfile.name || '',
       email: backendUser.email || extraProfile.email || '',
+      // 学校/班级/简介：后端字段优先，localStorage 仅作旧数据兜底
+      school: backendUser.userSchool || extraProfile.school || '',
+      className: backendUser.userClass || extraProfile.className || '',
+      bio: backendUser.bio || extraProfile.bio || '',
       // 头像和头图：后端 URL 优先，如无则用本地缓存（未迁移时的降级）
       avatar: backendUser.avatar_url || extraProfile.avatar || '',
       cover: backendUser.cover_url || extraProfile.cover || '',
@@ -305,6 +310,15 @@ export function UserProvider({ children }) {
     const mergedProfile = normalizeExtraProfile({ ...user.profile, ...profile }, user.profile?.email);
     persistExtraProfile(user.id, mergedProfile);
     setUser((prev) => (prev ? attachTagInfo({ ...prev, profile: mergedProfile }) : prev));
+    // 同步昵称/学校/班级到后端，使 refreshUser 后不再被覆盖
+    if (authToken) {
+      updateUserProfile(authToken, {
+        username: mergedProfile.name || undefined,
+        userSchool: mergedProfile.school || undefined,
+        userClass: mergedProfile.className || undefined,
+        bio: mergedProfile.bio ?? undefined,
+      }).catch((err) => console.warn('[updateProfile] 后端同步失败', err));
+    }
   };
 
   // Admin role is controlled by backend; keep as read-only to avoid confusion.
