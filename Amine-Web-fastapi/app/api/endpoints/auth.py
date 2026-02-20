@@ -6,6 +6,8 @@ import secrets
 import smtplib
 from typing import Any
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
@@ -17,6 +19,8 @@ from app.core.config import settings
 from app.core.code_store import code_store
 from app.core.limiter import limiter
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 from app.schemas.auth import (
     EmailCodeSendRequest,
     EmailCodeSendResponse,
@@ -92,7 +96,7 @@ def _send_email_code(email: str, code: str, purpose: str) -> None:
         except Exception as e:
             # 邮件发送失败，记录错误但不抛出异常
             # 在生产环境中，可以考虑记录到日志系统
-            print(f"邮件发送失败: {e}")
+            logger.error("邮件发送失败 [%s -> %s]: %s", settings.SMTP_USERNAME, email, e)
             # 如果是调试模式，继续；否则抛出异常
             if not settings.EMAIL_CODE_DEBUG:
                 raise HTTPException(status_code=500, detail=f"邮件发送失败: {str(e)}")
