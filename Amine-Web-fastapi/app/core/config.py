@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     QINIU_BUCKET_NAME: str = ""
     QINIU_DOMAIN: str = ""   # 例: https://xxx.bkt.clouddn.com
 
+    # Redis（可选，用于验证码持久化；不配置则退回内存模式）
+    # 生产环境建议配置，多进程/重启后验证码不会丢失
+    REDIS_URL: str = ""  # 例: redis://localhost:6379/0
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 # 读取.env配置文件，生成

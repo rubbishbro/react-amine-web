@@ -2,8 +2,9 @@ import os
 import uuid
 import asyncio
 from typing import Any
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.models.user import User
 from app.api import deps
 
@@ -43,7 +44,9 @@ def _local_upload(data: bytes, filename: str) -> str:
 
 
 @router.post("/")
+@limiter.limit("30/minute")  # 防止大量上传耗尽存储空间
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:

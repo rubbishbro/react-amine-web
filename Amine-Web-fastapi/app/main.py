@@ -1,11 +1,17 @@
 # 入口文件
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles # 静态资源托管
 from fastapi.middleware.cors import CORSMiddleware # 前后端跨域
+from fastapi.responses import JSONResponse
 import uvicorn # 运行服务器
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
 from app.core.config import settings # 配置中心，管理项目名，API前缀，CORS白名单，数据库
+from app.core.limiter import limiter  # 全局速率限制器
 from app.api.api import api_router # 路由注册（入口）
 from app.db.database import init_db # 初始化数据库
 from app import models 
@@ -16,6 +22,11 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+# 注册速率限制器
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # 设置所有 CORS 允许的源，告诉浏览器哪些前端合法
 app.add_middleware(
