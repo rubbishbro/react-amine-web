@@ -72,7 +72,7 @@ def upgrade() -> None:
     op.create_table(
         'interaction',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('type', interactiontype, nullable=False),
+        sa.Column('type', sa.Enum('like', 'comment', 'favorite', name='interactiontype', create_type=False), nullable=False),
         sa.Column('content', sa.String(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=True),
@@ -114,7 +114,7 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('from_user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
         sa.Column('to_user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
-        sa.Column('relation_type', relationtype, nullable=False),
+        sa.Column('relation_type', sa.Enum('follow', 'block', 'mute', name='relationtype', create_type=False), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.UniqueConstraint('from_user_id', 'to_user_id', 'relation_type', name='unique_user_relation'),
     )
