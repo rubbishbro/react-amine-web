@@ -6,29 +6,36 @@ Create Date: 2026-02-20 10:01:18.541794
 
 """
 from typing import Sequence, Union
-
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import ARRAY
 
-
-# revision identifiers, used by Alembic.
 revision: str = '9f42c2b69d95'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# 枚举类型
-interactiontype = sa.Enum('like', 'comment', 'favorite', name='interactiontype')
-relationtype = sa.Enum('follow', 'block', 'mute', name='relationtype')
-
 
 def upgrade() -> None:
-    # 创建枚举类型
-    interactiontype.create(op.get_bind(), checkfirst=True)
-    relationtype.create(op.get_bind(), checkfirst=True)
+    conn = op.get_bind()
 
-    # 1. user 表（无外键依赖）
+    # ── 1. 创建枚举类型（DO...EXCEPTION 幂等，兼容 PG < 12）──
+    conn.execute(sa.text("""
+        DO $$ BEGIN
+            CREATE TYPE interactiontype AS ENUM ('like', 'comment', 'favorite');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """))
+    conn.execute(sa.text("""
+        DO $$ BEGIN
+            CREATE TYPE relationtype AS ENUM ('follow', 'block', 'mute');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """))
+
+    # ── 2. 建表（枚举列用 VARCHAR，完全不碰 sa.Enum，杜绝自动 CREATE TYPE）──
+
+    # user
     op.create_table(
         'user',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -53,7 +60,7 @@ def upgrade() -> None:
     op.create_index('ix_user_email', 'user', ['email'])
     op.create_index('ix_user_username', 'user', ['username'])
 
-    # 2. post 表（依赖 user）
+    # post
     op.create_table(
         'post',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -68,18 +75,21 @@ def upgrade() -> None:
         sa.Column('author_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=True),
     )
 
-    # 3. interaction 表（依赖 user, post）
+    # interaction — 先用 VARCHAR 建表，再 ALTER 为枚举类型
     op.create_table(
         'interaction',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('type', sa.Enum('like', 'comment', 'favorite', name='interactiontype', create_type=False), nullable=False),
+        sa.Column('type', sa.VARCHAR(), nullable=False),
         sa.Column('content', sa.String(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=True),
         sa.Column('post_id', sa.Integer(), sa.ForeignKey('post.id'), nullable=True),
     )
+    conn.execute(sa.text(
+        'ALTER TABLE interaction ALTER COLUMN type TYPE interactiontype USING type::interactiontype;'
+    ))
 
-    # 4. comment 表（依赖 post, user, comment 自引用）
+    # comment
     op.create_table(
         'comment',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -96,7 +106,7 @@ def upgrade() -> None:
     op.create_index('ix_comment_author_id', 'comment', ['author_id'])
     op.create_index('ix_comment_parent_id', 'comment', ['parent_id'])
 
-    # 5. comment_like 表（依赖 comment, user）
+    # comment_like
     op.create_table(
         'comment_like',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -108,16 +118,19 @@ def upgrade() -> None:
     op.create_index('ix_comment_like_comment_id', 'comment_like', ['comment_id'])
     op.create_index('ix_comment_like_user_id', 'comment_like', ['user_id'])
 
-    # 6. user_relation 表（依赖 user）
+    # user_relation — 同样先 VARCHAR 再 ALTER
     op.create_table(
         'user_relation',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('from_user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
         sa.Column('to_user_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
-        sa.Column('relation_type', sa.Enum('follow', 'block', 'mute', name='relationtype', create_type=False), nullable=False),
+        sa.Column('relation_type', sa.VARCHAR(), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.UniqueConstraint('from_user_id', 'to_user_id', 'relation_type', name='unique_user_relation'),
     )
+    conn.execute(sa.text(
+        'ALTER TABLE user_relation ALTER COLUMN relation_type TYPE relationtype USING relation_type::relationtype;'
+    ))
     op.create_index('ix_user_relation_from_user_id', 'user_relation', ['from_user_id'])
     op.create_index('ix_user_relation_to_user_id', 'user_relation', ['to_user_id'])
     op.create_index('ix_user_relation_relation_type', 'user_relation', ['relation_type'])
@@ -130,5 +143,6 @@ def downgrade() -> None:
     op.drop_table('interaction')
     op.drop_table('post')
     op.drop_table('user')
-    relationtype.drop(op.get_bind(), checkfirst=True)
-    interactiontype.drop(op.get_bind(), checkfirst=True)
+    conn = op.get_bind()
+    conn.execute(sa.text('DROP TYPE IF EXISTS relationtype;'))
+    conn.execute(sa.text('DROP TYPE IF EXISTS interactiontype;'))
