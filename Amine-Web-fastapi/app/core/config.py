@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # 生产环境建议配置，多进程/重启后验证码不会丢失
     REDIS_URL: str = ""  # 例: redis://localhost:6379/0
 
+    # 运行环境：development | production
+    # 生产环境自动关闭 Swagger 文档
+    ENVIRONMENT: str = "development"
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
 # 读取.env配置文件，生成
