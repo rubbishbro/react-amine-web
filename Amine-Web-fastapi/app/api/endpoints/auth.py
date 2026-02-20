@@ -4,10 +4,9 @@ from email.message import EmailMessage
 import re
 import secrets
 import smtplib
-from threading import Lock
-from typing import Any, Dict
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 
@@ -15,6 +14,8 @@ from app.crud import crud_user
 from app.api import deps
 from app.core import security
 from app.core.config import settings
+from app.core.code_store import code_store
+from app.core.limiter import limiter
 from app.models.user import User
 from app.schemas.auth import (
     EmailCodeSendRequest,
@@ -27,8 +28,6 @@ from app.schemas.user import User as UserSchema
 
 router = APIRouter()
 
-_EMAIL_CODE_STORE: Dict[str, Dict[str, Any]] = {}
-_EMAIL_CODE_LOCK = Lock()
 _PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
 
 
@@ -105,17 +104,12 @@ def _send_email_code(email: str, code: str, purpose: str) -> None:
 
 def _verify_email_code_or_raise(email: str, purpose: str, code: str) -> None:
     key = _build_code_key(email, purpose)
-    now = _utcnow()
-    with _EMAIL_CODE_LOCK:
-        payload = _EMAIL_CODE_STORE.get(key)
-        if not payload:
-            raise HTTPException(status_code=400, detail="验证码不存在或已失效")
-        if payload["expires_at"] < now:
-            _EMAIL_CODE_STORE.pop(key, None)
-            raise HTTPException(status_code=400, detail="验证码已过期")
-        if payload["code"] != (code or "").strip():
-            raise HTTPException(status_code=400, detail="验证码错误")
-        _EMAIL_CODE_STORE.pop(key, None)
+    payload = code_store.get(key)
+    if not payload:
+        raise HTTPException(status_code=400, detail="验证码不存在或已失效")
+    if payload.get("code") != (code or "").strip():
+        raise HTTPException(status_code=400, detail="验证码错误")
+    code_store.delete(key)
 
 
 def _build_unique_username(db: Session, email: str) -> str:
@@ -129,7 +123,9 @@ def _build_unique_username(db: Session, email: str) -> str:
     return candidate
 
 @router.post("/login/access-token", response_model=Token)
+@limiter.limit("20/minute")  # 防止暴力破解密码
 def login_access_token(
+    request: Request,
     db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
@@ -154,7 +150,9 @@ def login_access_token(
 
 
 @router.post("/auth/email-code/send", response_model=EmailCodeSendResponse)
+@limiter.limit("5/minute")  # 防止刺刀密码攻击和爆破邮箔
 def send_email_code(
+    request: Request,
     *,
     db: Session = Depends(deps.get_db),
     req: EmailCodeSendRequest,
@@ -170,20 +168,22 @@ def send_email_code(
     key = _build_code_key(email, purpose)
     now = _utcnow()
 
-    with _EMAIL_CODE_LOCK:
-        previous = _EMAIL_CODE_STORE.get(key)
-        if previous and previous["next_send_at"] > now:
-            remain = int((previous["next_send_at"] - now).total_seconds())
+    # 冷却检查：读取现有记录
+    previous = code_store.get(key)
+    if previous:
+        next_send_at_ts = previous.get("next_send_at_ts", 0)
+        if next_send_at_ts > now.timestamp():
+            remain = int(next_send_at_ts - now.timestamp())
             raise HTTPException(status_code=429, detail=f"发送过于频繁，请 {max(remain, 1)} 秒后重试")
 
-        code = _generate_code()
-        expires_at = now + timedelta(minutes=settings.EMAIL_CODE_EXPIRE_MINUTES)
-        next_send_at = now + timedelta(seconds=settings.EMAIL_CODE_SEND_COOLDOWN_SECONDS)
-        _EMAIL_CODE_STORE[key] = {
-            "code": code,
-            "expires_at": expires_at,
-            "next_send_at": next_send_at,
-        }
+    code = _generate_code()
+    expire_minutes = settings.EMAIL_CODE_EXPIRE_MINUTES
+    cooldown = settings.EMAIL_CODE_SEND_COOLDOWN_SECONDS
+    ttl = max(expire_minutes * 60, cooldown) + 5  # Redis TTL 取两者较大值再加一点缓冲
+    code_store.set(key, {
+        "code": code,
+        "next_send_at_ts": (now + timedelta(seconds=cooldown)).timestamp(),
+    }, ttl_seconds=ttl)
 
     try:
         _send_email_code(email=email, code=code, purpose=purpose)
@@ -198,7 +198,9 @@ def send_email_code(
 
 
 @router.post("/auth/register-email", response_model=UserSchema)
+@limiter.limit("10/minute")
 def register_by_email(
+    request: Request,
     *,
     db: Session = Depends(deps.get_db),
     req: RegisterByEmailRequest,
@@ -225,7 +227,9 @@ def register_by_email(
 
 
 @router.post("/auth/password-reset")
+@limiter.limit("10/minute")
 def reset_password_by_email_code(
+    request: Request,
     *,
     db: Session = Depends(deps.get_db),
     req: PasswordResetByCodeRequest,
