@@ -10,6 +10,7 @@ import './index.css'
 import './pages/config/markdown.css'
 import App from './App.jsx'
 import { UserProvider } from './pages/context/UserContext'
+import './utils/cleanStorage.js' // 加载清理工具（开发环境使用）
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -6,31 +6,33 @@ from app import crud
 from app.crud import crud_post
 from app.api import deps
 from app.models.user import User
-from app.schemas.post import Post, PostCreate, PostUpdate
+from app.schemas.post import Post, PostCreate, PostUpdate, PostPage
 
 router = APIRouter()
 
-@router.get("/", response_model=List[Post])
+@router.get("/", response_model=PostPage)
 def read_posts(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
-    limit: int = 1000,
+    limit: int = 20,
+    category: Optional[str] = None,
 ) -> Any:
     """
-    Retrieve posts.
+    读取已发布的帖子列表
     """
-    posts = crud_post.get_multi(db, skip=skip, limit=limit)
-    return posts
+    posts = crud_post.get_multi(db, skip=skip, limit=limit, category=category)
+    total = crud_post.count(db, category=category)
+    return {"items": posts, "total": total, "skip": skip, "limit": limit}
 
 @router.post("/", response_model=Post)
 def create_post(
     *,
     db: Session = Depends(deps.get_db),
     post_in: PostCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.check_not_muted),
 ) -> Any:
     """
-    Create new post.
+    创建新帖子
     """
     post = crud_post.create(db, obj_in=post_in, author_id=current_user.id)
     return post
@@ -42,7 +44,7 @@ def read_post(
     id: int,
 ) -> Any:
     """
-    Get post by ID.
+    读取指定ID的帖子
     """
     post = crud_post.get(db, id=id)
     if not post:
@@ -57,7 +59,8 @@ def delete_post(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Delete a post.
+    删除指定ID的帖子
+    只有超级用户或帖子作者本人可以删除帖子
     """
     post = crud_post.get(db, id=id)
     if not post:
@@ -76,7 +79,8 @@ def update_post(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Update a post.
+    更新指定ID的帖子
+    只有超级用户或帖子作者本人可以更新帖子
     """
     post = crud_post.get(db, id=id)
     if not post:

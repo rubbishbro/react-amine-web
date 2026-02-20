@@ -110,6 +110,35 @@
   flex: 1;
 }
 
+.postFooter {
+  margin-top: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.postStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  color: var(--text-sub);
+  font-size: 0.85rem;
+  margin-top: 0;
+}
+
+.statItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 133, 161, 0.08);
+  border: 1px solid rgba(255, 133, 161, 0.15);
+}
+
 .summary {
   font-size: 0.95rem;
   color: var(--text-sub);
@@ -265,7 +294,7 @@
 }
 
 .readMore {
-  margin-top: 1.5rem;
+  margin-top: 0;
   text-align: right;
 }
 
@@ -386,11 +415,22 @@
 
 .adminBadge {
   margin-left: 6px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: #22c55e;
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 1;
+  color: #fff;
+  background: linear-gradient(90deg, var(--md-accent), var(--md-accent-2));
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.28);
+}
+
+.userBadge {
+  background: linear-gradient(120deg, #ff8fb1, #ffc1d6);
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.22);
 }

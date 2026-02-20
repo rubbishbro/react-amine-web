@@ -2,7 +2,6 @@ from typing import Any, List
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app import crud
 from app.crud import crud_interact
 from app.api import deps
 from app.models.user import User
@@ -10,7 +9,67 @@ from app.schemas.interact import Interaction, InteractionCreate
 
 router = APIRouter()
 
-@router.post("/", response_model=Interaction)
+# ─── 切换点赞 ───────────────────────────────────────────────────────────────
+@router.post("/posts/{post_id}/like")
+def toggle_like(
+    post_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    切换帖子点赞状态（已点赞则取消，未点赞则添加）
+    """
+    liked = crud_interact.toggle_like(db, post_id=post_id, user_id=current_user.id)
+    return {"liked": liked, "post_id": post_id}
+
+# ─── 切换收藏 ───────────────────────────────────────────────────────────────
+@router.post("/posts/{post_id}/favorite")
+def toggle_favorite(
+    post_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    切换帖子收藏状态（已收藏则取消，未收藏则添加）
+    """
+    favorited = crud_interact.toggle_favorite(db, post_id=post_id, user_id=current_user.id)
+    return {"favorited": favorited, "post_id": post_id}
+
+# ─── 查询当前用户对某帖子的交互状态 ─────────────────────────────────────────
+@router.get("/posts/{post_id}/me")
+def get_my_post_status(
+    post_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    查询当前用户是否已点赞/收藏某帖子
+    """
+    liked_ids = crud_interact.get_user_liked_ids(db, user_id=current_user.id)
+    favorited_ids = crud_interact.get_user_favorited_ids(db, user_id=current_user.id)
+    return {
+        "liked": post_id in liked_ids,
+        "favorited": post_id in favorited_ids,
+    }
+
+# ─── 批量查询当前用户所有已点赞/收藏的帖子 ID ───────────────────────────────
+@router.get("/me/status")
+def get_my_status(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    返回当前用户所有已点赞和已收藏的帖子 ID 列表（用于前端登录后批量初始化）
+    """
+    liked_ids = crud_interact.get_user_liked_ids(db, user_id=current_user.id)
+    favorited_ids = crud_interact.get_user_favorited_ids(db, user_id=current_user.id)
+    return {
+        "liked_ids": liked_ids,
+        "favorited_ids": favorited_ids,
+    }
+
+# ─── 以下保留旧接口兼容 ───────────────────────────────────────────────────────
+@router.post("/", response_model=Interaction, deprecated=True)
 def create_interaction(
     *,
     db: Session = Depends(deps.get_db),
@@ -18,7 +77,7 @@ def create_interaction(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Create an interaction (like/comment) on a post.
+    [已弃用] 通用互动接口，请使用 /posts/{post_id}/like 或 /posts/{post_id}/favorite
     """
     interaction = crud_interact.create(db, obj_in=interaction_in, user_id=current_user.id)
     return interaction
@@ -31,7 +90,7 @@ def read_my_interactions(
     limit: int = 100,
 ) -> Any:
     """
-    Get current user's interactions.
+    获取当前用户的交互记录
     """
     interactions = crud_interact.get_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
     return interactions
@@ -44,7 +103,7 @@ def read_post_interactions(
     limit: int = 100,
 ) -> Any:
     """
-    Get interactions for a post.
+    获取指定帖子的交互记录
     """
     interactions = crud_interact.get_by_post(db, post_id=post_id, skip=skip, limit=limit)
     return interactions

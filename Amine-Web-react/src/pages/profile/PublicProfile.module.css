@@ -1,23 +1,530 @@
 .page {
-    padding: 16px 24px;
+    padding: 20px 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
 }
 
-.header {
+.hero {
+    position: relative;
+    background: #12131b;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(15, 15, 25, 0.25);
+    padding-top: 220px;
+}
+
+.cover {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    background: linear-gradient(120deg, #4c6fff, #8b5cf6 55%, #ec4899);
+    background-size: cover;
+    background-position: center;
+    z-index: 1;
+}
+
+.coverMask {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(12, 12, 18, 0.05) 0%, rgba(12, 12, 18, 0.4) 55%, rgba(12, 12, 18, 0.9) 100%);
+}
+
+.hero::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 110px;
+    background: linear-gradient(180deg, rgba(18, 19, 27, 0) 0%, rgba(18, 19, 27, 0.65) 70%, rgba(18, 19, 27, 0.95) 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.heroContent {
     display: flex;
-    gap: 16px;
-    align-items: center;
+    align-items: flex-end;
+    gap: 20px;
+    padding: 0 28px 20px;
+    margin-top: -64px;
+    position: relative;
+    z-index: 2;
+}
+
+.avatarWrap {
+    width: 120px;
+    height: 120px;
+    border-radius: 28px;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 6px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
 }
 
 .avatar {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    background: #eee;
+    width: 100%;
+    height: 100%;
+    border-radius: 24px;
+    background: #f1f1f5;
     background-size: cover;
     background-position: center;
 }
 
+.identity {
+    flex: 1;
+    color: #f5f6fb;
+}
+
+.nameRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.name {
+    font-size: 28px;
+    margin: 0;
+    font-weight: 700;
+}
+
+.userId {
+    margin-top: 6px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
 .meta {
-    color: #666;
+    color: rgba(255, 255, 255, 0.8);
     margin-top: 4px;
+    font-size: 14px;
+}
+
+.adminBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, var(--md-accent), var(--md-accent-2));
+    box-shadow: 0 6px 16px rgba(255, 133, 161, 0.35);
+}
+
+.userBadge {
+    background: linear-gradient(120deg, #ff8fb1, #ffc1d6);
+    box-shadow: 0 6px 16px rgba(255, 133, 161, 0.28);
+}
+
+.bannedBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.mutedBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.heroActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.actionStack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 140px;
+}
+
+.actionButton {
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    padding: 9px 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.actionButton:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.actionButtonPrimary {
+    background: linear-gradient(120deg, #2563eb, #3b82f6);
+    border-color: rgba(59, 130, 246, 0.6);
+}
+
+.actionButtonPrimary:hover {
+    background: linear-gradient(120deg, #1d4ed8, #3b82f6);
+}
+
+.actionButtonAdmin {
+    background: rgba(249, 115, 22, 0.25);
+    border-color: rgba(249, 115, 22, 0.5);
+    color: #fed7aa;
+}
+
+.actionButtonFollow {
+    background: linear-gradient(120deg, #ec4899, #f97316);
+    border-color: rgba(236, 72, 153, 0.6);
+}
+
+.actionButtonFollow:hover {
+    background: linear-gradient(120deg, #db2777, #f97316);
+}
+
+.actionButtonMuted {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.actionButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+}
+
+.dmOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 16px;
+}
+
+.dmModal {
+    width: min(720px, 92vw);
+    max-height: 85vh;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.dmHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    background: #f8fafc;
+}
+
+.dmTitle {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.dmClose {
+    border: none;
+    background: transparent;
+    font-size: 22px;
+    cursor: pointer;
+    color: #64748b;
+}
+
+.dmBody {
+    padding: 16px 18px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    background: #f1f5f9;
+}
+
+.dmEmpty {
+    color: #64748b;
+    text-align: center;
+    padding: 24px 0;
+}
+
+.dmItem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 80%;
+}
+
+.dmItemSelf {
+    align-self: flex-end;
+    text-align: right;
+}
+
+.dmItemOther {
+    align-self: flex-start;
+}
+
+.dmBubble {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.dmItemSelf .dmBubble {
+    background: #2563eb;
+    color: #fff;
+}
+
+.dmTime {
+    font-size: 12px;
+    color: #64748b;
+}
+
+.dmFooter {
+    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 12px 16px 16px;
+    display: grid;
+    gap: 10px;
+    background: #ffffff;
+}
+
+.dmInput {
+    width: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit;
+}
+
+.dmSend {
+    align-self: flex-end;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(120deg, #2563eb, #3b82f6);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.statsBar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 16px 20px 22px;
+    background: #161725;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+    z-index: 2;
+}
+
+.statCard {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 12px;
+    text-align: center;
+    color: #f9fafb;
+}
+
+.statValue {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.statLabel {
+    display: block;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2.1fr);
+    gap: 20px;
+}
+
+.leftColumn,
+.rightColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.section {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 18px 20px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+
+    .bioMarkdown {
+        color: inherit;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .bioMarkdown p {
+        margin: 0 0 8px;
+    }
+
+    .bioMarkdown p:last-child {
+        margin-bottom: 0;
+    }
+
+    .bioMarkdown ul,
+    .bioMarkdown ol {
+        padding-left: 20px;
+        margin: 6px 0;
+    }
+
+    .bioMarkdown a {
+        color: #2563eb;
+    }
+}
+
+.sectionHeader {
+    font-size: 16px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 12px;
+}
+
+.sectionBody {
+    color: #4b5563;
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.sectionNotice {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 13px;
+    border: 1px solid rgba(251, 146, 60, 0.4);
+}
+
+.activityList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.activityItem {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: #1f2937;
+    font-size: 14px;
+}
+
+.activityBadge {
+    background: #6366f1;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.activityText {
+    color: #1f2937;
+}
+
+.activityDate {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.postsWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.loading,
+.empty {
+    padding: 20px;
+    text-align: center;
+    color: #6b7280;
+    background: #f9fafb;
+    border-radius: 12px;
+}
+
+@media (max-width: 980px) {
+    .body {
+        grid-template-columns: 1fr;
+    }
+
+    .heroContent {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .heroActions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .actionStack {
+        width: 100%;
+        max-width: 240px;
+    }
+}
+
+@media (max-width: 640px) {
+    .page {
+        padding: 16px;
+    }
+
+    .heroContent {
+        padding: 0 18px 18px;
+    }
+
+    .avatarWrap {
+        width: 96px;
+        height: 96px;
+    }
+
+    .name {
+        font-size: 22px;
+    }
 }

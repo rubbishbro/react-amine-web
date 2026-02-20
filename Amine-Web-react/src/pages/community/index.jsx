@@ -4,20 +4,30 @@
   改为使用router进行页面导航和内容切换
 */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './index.css'
 import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle } from './index.js'
 import PostList from '../components/PostList'
 import PostDetail from '../components/PostDetail'
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useUser } from '../context/UserContext'
+import { buildUserId } from '../utils/userId'
+import { getUnreadNotificationCount } from '../utils/notifications'
 
 //用户面板组件
 import UserPanel from '../components/UserPanel'
 import Profile from '../profile';
 import PublicProfile from '../profile/PublicProfile';
+import AdminPanel from '../admin';
+import Messages from '../messages';
+import Blacklist from '../blacklist';
+import Login from '../login';
 
 //帖子编辑器组件
 import PostEditor from '../components/PostEditor';
+
+//搜索结果组件
+import SearchResults from '../components/SearchResults';
 
 //社团介绍页面
 import { Content as AboutContent } from '../about/about.jsx'
@@ -42,6 +52,62 @@ export default function CommunityBoard() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setTitle } = usePageTitle();
+  const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useUser();
+  const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const readThread = (key) => {
+    if (!key) return [];
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const readThreadReadAt = (viewer, other) => {
+    if (!viewer || !other) return '';
+    try {
+      return localStorage.getItem(`aw_dm_read_${viewer}_${other}`) || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const getUnreadCount = (messages, viewer, other) => {
+    if (!messages.length || !viewer || !other) return 0;
+    const readAt = readThreadReadAt(viewer, other);
+    const readTime = readAt ? new Date(readAt).getTime() : 0;
+    return messages.reduce((count, msg) => {
+      if (msg.from !== other) return count;
+      const msgTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
+      return msgTime > readTime ? count + 1 : count;
+    }, 0);
+  };
+
+  const refreshUnreadCount = () => {
+    if (!viewerId) {
+      setUnreadCount(0);
+      return;
+    }
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('aw_dm_')) continue;
+      if (!key.includes(viewerId)) continue;
+      const list = readThread(key);
+      if (!list.length) continue;
+      const last = list[list.length - 1];
+      const otherId = last.from === viewerId ? last.to : last.from;
+      total += getUnreadCount(list, viewerId, otherId);
+    }
+    total += getUnreadNotificationCount(viewerId);
+    setUnreadCount(total);
+  };
 
   // 根据当前路径设置标题
   useEffect(() => {
@@ -55,13 +121,21 @@ export default function CommunityBoard() {
       '/tech': '动漫社基地 | 前沿技术',
       '/resources': '动漫社基地 | 网络资源',
       '/musicgames': '动漫社基地 | 音游区',
-      '/favorites': '动漫社基地 | 我的收藏夹'
+      '/favorites': '动漫社基地 | 我的收藏夹',
+      '/messages': '动漫社基地 | 私信'
+      , '/blacklist': '动漫社基地 | 黑名单'
+      , '/login': '动漫社基地 | 登录'
+      , '/search': '动漫社基地 | 搜索结果'
     };
 
     if (pageTitles[location.pathname]) {
       setTitle(pageTitles[location.pathname]);
     } else if (location.pathname.startsWith('/post/')) {
       setTitle('动漫社基地 | 帖子详情');
+    } else if (location.pathname.startsWith('/messages/')) {
+      setTitle('动漫社基地 | 私信');
+    } else if (location.pathname.startsWith('/blacklist')) {
+      setTitle('动漫社基地 | 黑名单');
     }
   }, [location, setTitle]);
 
@@ -71,12 +145,34 @@ export default function CommunityBoard() {
     return () => teardownCommunityBoard();
   }, []);
 
+  useEffect(() => {
+    refreshUnreadCount();
+    const handleUpdate = () => refreshUnreadCount();
+    window.addEventListener('aw-messages-updated', handleUpdate);
+    window.addEventListener('aw-notifications-updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('aw-messages-updated', handleUpdate);
+      window.removeEventListener('aw-notifications-updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [viewerId, location.key]);
+
   // 处理阅读全文点击
   const handleReadMore = (postId) => {
     navigate(`/post/${postId}`, {
       state: { from: location.pathname }
     });
     closeSidebar();
+  };
+
+  // 处理搜索
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      closeSidebar();
+    }
   };
 
   useEffect(() => {
@@ -116,6 +212,14 @@ export default function CommunityBoard() {
         <Link to="/resources" className="nav-item" onClick={closeSidebar}><span>💾 网络资源</span></Link>
         <Link to="/musicgames" className="nav-item" onClick={closeSidebar}><span>🎵 音游区</span></Link>
         <Link to="/favorites" className="nav-item" onClick={closeSidebar}><span>⭐ 收藏夹</span></Link>
+        <Link to="/messages" className="nav-item nav-item--with-badge" onClick={closeSidebar}>
+          <span>✉️ 消息</span>
+          {unreadCount > 0 && (
+            <span className="nav-badge" aria-label={`未读消息 ${unreadCount} 条`}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </Link>
       </nav>
 
       {/*主内容区*/}
@@ -124,12 +228,21 @@ export default function CommunityBoard() {
         {/*上边栏*/}
         <header className="card-header">
           <div className="logo-area">
-            <h1>动漫社 · 基地</h1>
+            <img className="logo-image" src="/e.jpg" alt="E=mc²动漫社" />
+            <h1 className="logo-text">E=mc²动漫社·基地</h1>
           </div>
-          <div className="search-bar">
+          <form className="search-bar" onSubmit={handleSearch}>
             <span>🔍</span>
-            <input type="text" placeholder="搜索帖子、番剧..." />
-          </div>
+            <input
+              type="text"
+              placeholder="搜索帖子、用户... (以 # 开头搜索标签)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery.trim().startsWith('#') && (
+              <span className="tag-mode">标签模式</span>
+            )}
+          </form>
         </header>
 
         <section className="card-content" style={{ position: 'relative', minHeight: '200px' }}>
@@ -163,6 +276,12 @@ export default function CommunityBoard() {
             <Route path="/editor" element={<PostEditor />} />
             <Route path="/editor/:id" element={<PostEditor isEditMode={true} />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/messages/:id" element={<Messages />} />
+            <Route path="/blacklist" element={<Blacklist />} />
+            <Route path="/search" element={<SearchResults />} />
           </Routes>
         </section>
       </main>

@@ -1,10 +1,10 @@
-import shutil
 import os
-import time
 import uuid
+import asyncio
 from typing import Any
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.models.user import User
 from app.api import deps
 
@@ -15,51 +15,61 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".mp3", ".wav", ".mp4"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
+# 检测是否已配置七牛云
+_qiniu_enabled = bool(
+    settings.QINIU_ACCESS_KEY
+    and settings.QINIU_SECRET_KEY
+    and settings.QINIU_BUCKET_NAME
+    and settings.QINIU_DOMAIN
+)
+
+
+def _qiniu_upload_sync(data: bytes, key: str) -> str:
+    """同步上传到七牛云，返回公开地址。通过 asyncio.to_thread 调用。"""
+    from qiniu import Auth, put_data  # 延迟导入，未安装 qiniu 时不影响启动
+    q = Auth(settings.QINIU_ACCESS_KEY, settings.QINIU_SECRET_KEY)
+    token = q.upload_token(settings.QINIU_BUCKET_NAME, key, 3600)
+    ret, info = put_data(token, key, data)
+    if info.status_code != 200:
+        raise RuntimeError(f"七牛上传失败: {info.error}")
+    return f"{settings.QINIU_DOMAIN.rstrip('/')}/{key}"
+
+
+def _local_upload(data: bytes, filename: str) -> str:
+    """保存到本地 static/uploads，返回相对 URL。"""
+    path = os.path.join(UPLOAD_DIR, filename)
+    with open(path, "wb") as f:
+        f.write(data)
+    return f"/static/uploads/{filename}"
+
+
 @router.post("/")
+@limiter.limit("30/minute")  # 防止大量上传耗尽存储空间
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
-    current_user: User = Depends(deps.get_current_active_user), # 1. 限制登录
+    current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    上传音频或者图片文件，返回文件的访问URL
+    上传图片或音频。
+    - 配置了七牛云：存至七牛 CDN，返回公开 URL
+    - 未配置：存至本地 static/uploads，返回相对路径
     """
-    try:
-        # 2. 限制后缀
-        file_ext = os.path.splitext(file.filename)[1].lower()
-        if file_ext not in ALLOWED_EXTENSIONS:
-             raise HTTPException(status_code=400, detail=f"文件类型不允许。只支持: {ALLOWED_EXTENSIONS}")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"文件类型不支持，可用: {ALLOWED_EXTENSIONS}")
 
-        # 3. 限制大小 (这个需要在读取content后或者chunk读取时判断，简单方法是seek到最后看位置，或者读取content检查长度，或者Middleware处理)
-        # 简单检查 content-length header 如果有
-        # file.file.seek(0, 2)
-        # file_size = file.file.tell()
-        # file.file.seek(0)
-        # if file_size > MAX_FILE_SIZE:
-        #     raise HTTPException(status_code=400, detail="文件过大")
-        # 由于 UploadFile 是 SpooledTemporaryFile，上面的方法可能有效。
-        
-        # 4. 防止同名冲突：使用 UUID + 时间戳 + 原后缀
-        unique_filename = f"{uuid.uuid4().hex}_{int(time.time())}{file_ext}"
-        file_location = f"{UPLOAD_DIR}/{unique_filename}"
-        
-        with open(file_location, "wb+") as file_object:
-            # 边读边检查大小
-            size = 0
-            while content := await file.read(1024 * 1024): # 每次读 1MB
-                size += len(content)
-                if size > MAX_FILE_SIZE:
-                    raise HTTPException(status_code=400, detail=f"文件过大，最大允许 {MAX_FILE_SIZE/1024/1024}MB")
-                file_object.write(content)
-        
-        # Return URL relative to server root
-        return {"url": f"/static/uploads/{unique_filename}"}
-    except HTTPException:
-        # 如果是我们要抛出的错误，重新抛出，且记得清理可能的垃圾文件(虽然还没写完可能不需要清理或者 open "wb+" 会截断)
-        # 如果写入一半出错，应该删除垃圾文件
-        if 'file_location' in locals() and os.path.exists(file_location):
-            os.remove(file_location)
-        raise
+    data = await file.read()
+    if len(data) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"文件超过 {MAX_FILE_SIZE // 1024 // 1024}MB 限制")
+
+    key = f"uploads/{uuid.uuid4().hex}{ext}"
+
+    try:
+        if _qiniu_enabled:
+            url = await asyncio.to_thread(_qiniu_upload_sync, data, key)
+        else:
+            url = _local_upload(data, os.path.basename(key))
+        return {"url": url}
     except Exception as e:
-        if 'file_location' in locals() and os.path.exists(file_location):
-            os.remove(file_location)
         raise HTTPException(status_code=500, detail=str(e))

@@ -11,11 +11,13 @@ import styles from './PostEditor.module.css';
 import { getAllCategories, loadPostContent, upsertLocalPost } from '../../utils/postLoader';
 import { getCategoryTextColor } from '../../config';
 import { useUser } from '../../context/UserContext';
+import { buildUserId } from '../../utils/userId';
+import { calculatePostReadTime, getPostWordCount } from '../../utils/postReadTime';
 
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
   const { id: postId } = useParams();
-  const { user } = useUser();
+  const { user, authToken } = useUser();
   const [loading, setLoading] = useState(false); // 保持用于编辑模式加载
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
@@ -34,7 +36,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       title: '',
       category: '',
       summary: '',
-      content: '# 请输入内容\n\n从这里开始编辑...',
+      content: '',
       status: 'draft'
     }
   });
@@ -78,7 +80,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
               title: postData.title || '',
               category: postData.category || '',
               summary: postData.summary || '',
-              content: postData.content || postData.summary || '# 请输入内容\n\n从这里开始编辑...',
+              content: postData.content || '',
               status: postData.status || 'draft',
               id: postData.id,
               tags: postData.tags || [],
@@ -126,14 +128,6 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   }, [tags]);
 
-  // 自动计算阅读时间
-  const calculateReadTime = useCallback((content) => {
-    if (!content) return '0 min read';
-    const words = content.trim().split(/\s+/).length;
-    const minutes = Math.max(1, Math.ceil(words / 200));
-    return `${minutes} min read`;
-  }, []);
-
   // 自动生成摘要
   const generateSummary = useCallback((content) => {
     if (!content) return '';
@@ -153,7 +147,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       return false;
     }
 
-    if (!formData.content.trim() || formData.content.trim() === '# 请输入内容\n\n从这里开始编辑...') {
+    if (!formData.content.trim()) {
       logMessage('请输入帖子内容', 'warn');
       return false;
     }
@@ -163,14 +157,17 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
 
   // 准备保存数据
   const preparePostData = useCallback((status) => {
+    const authorName = user?.profile?.name || '匿名';
+    const authorId = buildUserId(authorName, user?.id || 'local');
     const author = {
-      id: user?.id || 'local',
-      name: user?.profile?.name || '匿名',
+      id: authorId,
+      name: authorName,
       avatar: user?.profile?.avatar || '',
       school: user?.profile?.school || '',
       className: user?.profile?.className || '',
       email: user?.profile?.email || '',
       isAdmin: user?.isAdmin === true,
+      tagInfo: user?.tagInfo || null,
     };
 
     const postData = {
@@ -178,7 +175,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       tags: tags,
       date: new Date().toISOString().split('T')[0],
       author,
-      readTime: calculateReadTime(formData.content),
+      readTime: calculatePostReadTime(formData.content),
       status: status
     };
 
@@ -193,31 +190,42 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     }
 
     return postData;
-  }, [formData, tags, calculateReadTime, generateSummary, isEditMode, user]);
+  }, [formData, tags, generateSummary, isEditMode, user]);
 
   // 保存函数（不包含状态管理）
   const savePostData = useCallback(async (postData, status) => {
     try {
-      // 本地缓存保存
-      upsertLocalPost({ ...postData, status });
-
-      // 根据状态显示不同的通知
-      console.log('保存完成，显示通知，状态:', status);
       if (status === 'draft') {
+        // 本地缓存保存
+        upsertLocalPost({ ...postData, status });
+        console.log('保存完成，显示通知，状态:', status);
         logMessage('草稿已保存到本地缓存', 'info');
-      } else {
-        logMessage('帖子已成功发布（本地缓存）', 'info');
+        setHasUnsavedChanges(false);
+        return true;
       }
 
+      if (!authToken) {
+        throw new Error('缺少登录令牌，无法发布');
+      }
+
+      // 发布到后端
+      const PostAPI = (await import('../../../services/getpostfromback.js')).default;
+      const api = new PostAPI();
+      const created = await api.createPost(postData, authToken);
+      if (!created?.id) {
+        throw new Error('后端未返回帖子ID');
+      }
+
+      // 清理本地草稿（如果存在）
+      upsertLocalPost({ ...postData, status: 'published' });
+
+      console.log('发布成功，准备跳转');
+      logMessage('帖子已成功发布', 'info');
       setHasUnsavedChanges(false);
 
-      // 只有发布状态才跳转
-      if (status === 'published') {
-        console.log('发布成功，准备跳转');
-        setTimeout(() => {
-          navigate(`/post/${postData.id}`);
-        }, 1500);
-      }
+      setTimeout(() => {
+        navigate(`/post/${created.id}`);
+      }, 300);
 
       return true;
     } catch (error) {
@@ -225,7 +233,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       logMessage('保存失败，请检查网络连接', 'error');
       throw error;
     }
-  }, [logMessage, navigate]);
+  }, [authToken, logMessage, navigate]);
 
   // 保存草稿
   const handleSaveDraft = useCallback(async () => {
@@ -522,6 +530,9 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         <div className={styles.formGroup}>
           <label className={styles.label}>内容 *</label>
           <div className={styles.markdownContainer}>
+            <div className={styles.editorStatsBadge}>
+              字数: {getPostWordCount(formData.content)}
+            </div>
             <MarkdownEditor
               value={formData.content}
               style={{ height: '500px' }}
@@ -535,7 +546,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                 </ReactMarkdown>
               )}
               config={mdEditorConfig}
-              placeholder="在这里输入Markdown格式的内容..."
+              placeholder="# 请输入内容..."
             />
           </div>
           {errors.content && (
@@ -546,7 +557,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         {/* 阅读时间预览 */}
         <div className={styles.previewInfo}>
           <div className={styles.readTimePreview}>
-            ⏱️ 预计阅读时间: {calculateReadTime(formData.content)}
+            ⏱️ 预计阅读时间: {calculatePostReadTime(formData.content)}
           </div>
         </div>
       </div>
