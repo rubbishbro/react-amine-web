@@ -4,7 +4,6 @@
 """
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
 import os
-import asyncio
 import uuid
 import asyncio
 from typing import Any
@@ -82,13 +81,13 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 async def _qiniu_download_sync(key: str):
-    """同步从七牛云下载，返回文件流。通过 asyncio.to_thread 调用。"""
-    from qiniu import Auth, private_download_url  # 延迟导入，未安装 qiniu 时不影响启动
+    """同步从七牛云下载，返回文件流。"""
+    from qiniu import Auth  # 延迟导入，未安装 qiniu 时不影响启动
     q = Auth(settings.QINIU_ACCESS_KEY, settings.QINIU_SECRET_KEY)
     private_url = q.private_download_url(key, expires=3600)
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(private_url)
+            response = await client.get("http://" + private_url)
             if response.status_code == 200:
                 return StreamingResponse(response.iter_bytes(), media_type=response.headers['Content-Type'])
             else:
@@ -103,7 +102,7 @@ def _local_download(key: str,media_type: str):
 
 @router.get("/download")
 @limiter.limit("30/minute")  # 防止大量下载耗尽存储空间
-async def upload_file(
+async def download_file(
     request: Request,
     key: str,
     media_type: str, 
@@ -113,13 +112,14 @@ async def upload_file(
     下载图片或音频。
     - 配置了七牛云：从七牛 CDN下载，返回文件流
     - 未配置：从本地 static/dm_upload获取，返回文件流
+    key:从upload_file获取的URL中的路径部分
     media_type:#仅开发环境时必配
     - audio/mpeg: 音频
     - image/jpeg: jpg图片
     """
     try:
         if _qiniu_enabled:
-            file = await asyncio.to_thread(_qiniu_upload_sync, key)
+            file = await _qiniu_download_sync(key)
         else:
             file = _local_download(key, media_type)
         return file
