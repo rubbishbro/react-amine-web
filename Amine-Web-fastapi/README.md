@@ -134,6 +134,10 @@ uvicorn app.main:app --reload
 - `POST /{comment_id}/like` - 点赞评论
 - `GET /post/{post_id}/count` - 获取评论总数
 
+### 私信上传模块 (`/api/v1/dm_upload`)
+- `POST /upload` - 私信功能上传文件（需登录，支持图片/音频，最大10MB）
+- `GET /download` - 私信功能下载文件（需登录，支持图片/音频）
+
 ### 搜索模块 (`/api/v1/search`)
 - `GET /posts?q=关键词` - 搜索帖子（关键词或Tag）
 - `GET /users?q=关键词` - 搜索用户

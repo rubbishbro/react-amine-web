@@ -13,3 +13,4 @@ qiniu
 alembic
 redis
 slowapi
+httpx
