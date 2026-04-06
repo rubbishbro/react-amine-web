@@ -8,7 +8,7 @@ import rehypeHighlight from 'rehype-highlight';
 import MarkdownEditor from 'react-markdown-editor-lite';
 import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostDetail.module.css';
-import { loadPostContent, markPostDeleted, publishLocalDraft, removeLocalDraft, setPostPinnedLocally } from '../../utils/postLoader';
+import { clearPostsCache, deletePublishedPost, loadPostContent, publishLocalDraft, removeLocalDraft, setPostPinnedLocally } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config';
 import { useUser } from '../../context/UserContext';
 import {
@@ -360,20 +360,29 @@ const PostDetail = () => {
     }
   };
 
-  const handleDeletePost = () => {
+  const handleDeletePost = async () => {
     const canDeletePost = currentUser.isAdmin || isSelfAuthor;
     if (!canDeletePost) {
       window.alert('你没有权限删除该帖子。');
       return;
     }
     if (!window.confirm('确定删除该帖子吗？此操作不可恢复。')) return;
-    if (isLocalDraft) {
-      removeLocalDraft(id);
-    } else {
-      markPostDeleted(id);
+    try {
+      if (isLocalDraft) {
+        removeLocalDraft(id);
+      } else {
+        await deletePublishedPost(id, authToken);
+      }
+      clearPostsCache();
+      setPost(null);
+      const fallbackRoute = typeof location.state?.from === 'string' ? location.state.from : '/';
+      navigate(fallbackRoute, {
+        replace: true,
+        state: { refreshPostsAt: Date.now() },
+      });
+    } catch (err) {
+      window.alert(err?.message || '鍒犻櫎澶辫触锛岃閲嶈瘯');
     }
-    setPost(null);
-    handleBack();
   };
 
   const handleTogglePinned = () => {

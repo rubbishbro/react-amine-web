@@ -148,11 +148,9 @@ export const cacheRemotePost = (post) => {
 
 const filterVisiblePosts = (posts) => {
   const viewerId = getCurrentViewerId();
-  const deletedIds = readDeletedPosts();
 
   return posts.filter((post) => {
     if (!post) return false;
-    if (deletedIds.includes(post.id)) return false;
     const normalizedAuthor = normalizeAuthor(post.author);
     const authorId = normalizedAuthor?.id || buildUserId(normalizedAuthor?.name || '', '');
     if (viewerId && authorId) {
@@ -266,6 +264,15 @@ const writeDeletedPosts = (ids) => {
   }
 };
 
+export const clearDeletedPostMarker = (postId) => {
+  if (!postId) return;
+  const ids = readDeletedPosts();
+  const nextIds = ids.filter((id) => id !== postId);
+  if (nextIds.length !== ids.length) {
+    writeDeletedPosts(nextIds);
+  }
+};
+
 const readPinnedPosts = () => {
   try {
     const raw = localStorage.getItem(LOCAL_PINNED_POSTS_KEY);
@@ -292,14 +299,53 @@ const isPostDeleted = (postId) => {
 };
 
 export const markPostDeleted = (postId) => {
-  const ids = readDeletedPosts();
-  if (!ids.includes(postId)) {
-    ids.push(postId);
-    writeDeletedPosts(ids);
-  }
+  clearDeletedPostMarker(postId);
   const posts = readLocalPosts();
   const nextPosts = posts.filter((item) => item.id !== postId);
-  writeLocalPosts(nextPosts);
+  if (nextPosts.length !== posts.length) {
+    writeLocalPosts(nextPosts);
+  }
+};
+
+export const removeRemotePostFromCache = (postId) => {
+  if (!postId) return;
+  const cachedPosts = readRemotePostsCache();
+  const nextCachedPosts = cachedPosts.filter((item) => item?.id !== postId);
+  if (nextCachedPosts.length !== cachedPosts.length) {
+    writeRemotePostsCache(nextCachedPosts);
+  }
+};
+
+export const deletePublishedPost = async (postId, token = '') => {
+  const resolvedToken = token || readStoredToken();
+  if (!resolvedToken) {
+    throw new Error('登录状态已失效，请重新登录后删除帖子');
+  }
+
+  const PostAPI = (await import('../../services/getpostfromback.js')).default;
+  const api = new PostAPI();
+
+  try {
+    const deletedPost = await api.deletePost(postId, resolvedToken);
+    removeRemotePostFromCache(postId);
+    clearDeletedPostMarker(postId);
+    clearPostsCache();
+    return deletedPost;
+  } catch (error) {
+    if (error?.status === 404) {
+      removeRemotePostFromCache(postId);
+      clearDeletedPostMarker(postId);
+      clearPostsCache();
+      return null;
+    }
+    throw error;
+  } finally {
+  const posts = readLocalPosts();
+  const nextPosts = posts.filter((item) => item.id !== postId);
+    if (nextPosts.length !== posts.length) {
+      writeLocalPosts(nextPosts);
+    }
+  }
 };
 
 export const isPostPinnedLocally = (postId) => {
@@ -499,10 +545,6 @@ export const loadPostMetadata = async () => {
  */
 export const loadPostContent = async (postId) => {
   try {
-    if (isPostDeleted(postId)) {
-      return null;
-    }
-    
     // 1. 优先查找本地帖子（草稿等）
     const localPost = getLocalPostById(postId);
     if (localPost) {
