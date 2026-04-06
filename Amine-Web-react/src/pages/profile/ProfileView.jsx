@@ -1,20 +1,27 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import styles from './PublicProfile.module.css';
 import { useUser } from '../context/UserContext';
 import { adminGetUser } from '../../services/adminApi';
-import { fetchUserByUsername } from '../../services/auth';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { fetchCurrentUser, fetchUserByUsername, readStoredToken } from '../../services/auth';
+import { getFollowing } from '../../services/relationsApi';
 import Post from '../components/Post';
 import { loadAllPosts } from '../utils/postLoader';
 import { getPostStats } from '../utils/postStats';
 import { buildTagInfo, readAdminMeta } from '../utils/adminMeta';
 import { buildUserId, getMappedUserId, isSupportedUserId } from '../utils/userId';
-import { getFollowerCount, isFollowingUser, toggleFollowUser, syncFollowFromBackend } from '../utils/followStore';
-import { isBlocked, toggleBlock, syncBlockedFromBackend } from '../utils/blockStore';
+import {
+    getFollowerCount,
+    isFollowingUser,
+    toggleFollowUser,
+    syncFollowFromBackend,
+} from '../utils/followStore';
+import { isBlocked, syncBlockedFromBackend } from '../utils/blockStore';
 
 const normalizeText = (value) => (value ?? '').toString().trim();
+
 const decodeSafe = (value) => {
     try {
         return decodeURIComponent(value);
@@ -22,6 +29,7 @@ const decodeSafe = (value) => {
         return value;
     }
 };
+
 const buildCandidates = (value) => {
     const raw = normalizeText(value);
     if (!raw) return [];
@@ -49,11 +57,37 @@ const isSamePerson = (left, right) => {
     return leftCandidates.some((value) => rightCandidates.includes(value));
 };
 
+const isCredentialError = (error) => {
+    const message = normalizeText(error?.message || error);
+    return /could not validate credentials/i.test(message)
+        || /validate credentials/i.test(message)
+        || /http 401/i.test(message)
+        || /http 403/i.test(message);
+};
+
+const mapRelationUserToAuthor = (backendUser) => {
+    const id = backendUser?.id ? String(backendUser.id) : '';
+    return {
+        id,
+        name: backendUser?.username || backendUser?.email || `用户 ${id || ''}`.trim(),
+        avatar: backendUser?.avatar_url || '',
+        cover: backendUser?.cover_url || '',
+        school: backendUser?.userSchool || '',
+        className: backendUser?.userClass || '',
+        email: backendUser?.email || '',
+        bio: backendUser?.bio || '',
+        isAdmin: backendUser?.is_superuser === true,
+    };
+};
+
 export default function ProfileView() {
     const { state } = useLocation();
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user, authToken } = useUser();
+    const { user, authToken, logout } = useUser();
+
+    const storedToken = readStoredToken();
+    const effectiveAuthToken = authToken || storedToken || '';
     const mappedRouteId = id ? getMappedUserId(id) : '';
     const routeId = mappedRouteId || id || '';
 
@@ -66,28 +100,39 @@ export default function ProfileView() {
         favorites: 0,
         replies: 0,
     });
-    const [followVersion, setFollowVersion] = useState(0);
     const [isFollowing, setIsFollowing] = useState(false);
     const [followerCount, setFollowerCount] = useState(0);
     const [followLoading, setFollowLoading] = useState(false);
     const [blockedByViewer, setBlockedByViewer] = useState(false);
     const [blockedByAuthor, setBlockedByAuthor] = useState(false);
+    const [actionNotice, setActionNotice] = useState('');
+    const [followingPanelOpen, setFollowingPanelOpen] = useState(false);
+    const [followingUsers, setFollowingUsers] = useState([]);
+    const [followingLoading, setFollowingLoading] = useState(false);
+    const [followingError, setFollowingError] = useState('');
+    const [sessionState, setSessionState] = useState(() => (
+        effectiveAuthToken ? 'checking' : 'ready'
+    ));
+    const [freshTargetUser, setFreshTargetUser] = useState(null);
+    const [targetBackendUser, setTargetBackendUser] = useState(null);
 
     const authorFromState = state?.author
         ? { ...state.author, id: getMappedUserId(state.author.id || '') }
         : null;
-    const authorFromUser = user?.id === routeId ? {
-        id: buildUserId(user?.profile?.name, user?.id || 'local'),
-        name: user.profile?.name || '匿名',
-        avatar: user.profile?.avatar || '',
-        cover: user.profile?.cover || '',
-        school: user.profile?.school || '',
-        className: user.profile?.className || '',
-        email: user.profile?.email || '',
-        bio: user.profile?.bio || '',
-        isAdmin: user.isAdmin === true,
-        tagInfo: user?.tagInfo || null,
-    } : null;
+    const authorFromUser = user?.id === routeId
+        ? {
+            id: buildUserId(user?.profile?.name, user?.id || 'local'),
+            name: user.profile?.name || '匿名',
+            avatar: user.profile?.avatar || '',
+            cover: user.profile?.cover || '',
+            school: user.profile?.school || '',
+            className: user.profile?.className || '',
+            email: user.profile?.email || '',
+            bio: user.profile?.bio || '',
+            isAdmin: user.isAdmin === true,
+            tagInfo: user?.tagInfo || null,
+        }
+        : null;
 
     const author = authorFromUser || authorFromState;
     const authorId = author?.id;
@@ -100,6 +145,7 @@ export default function ProfileView() {
 
     useEffect(() => {
         let active = true;
+
         const load = async () => {
             setLoading(true);
             const allPosts = await loadAllPosts();
@@ -116,11 +162,12 @@ export default function ProfileView() {
                 ];
                 return authorCandidates.some((value) => targetCandidates.includes(value));
             });
-            const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-            if (!active) return;
-            setPosts(sorted);
 
-            const totals = sorted.reduce((acc, post) => {
+            const sorted = filtered.sort((left, right) => new Date(right.date) - new Date(left.date));
+            if (!active) return;
+
+            setPosts(sorted);
+            const totals = sorted.reduce((accumulator, post) => {
                 const base = {
                     views: post?.views ?? 0,
                     likes: post?.likes ?? 0,
@@ -129,11 +176,11 @@ export default function ProfileView() {
                 };
                 const postStats = getPostStats(post.id, base);
                 return {
-                    posts: acc.posts + 1,
-                    views: acc.views + postStats.views,
-                    likes: acc.likes + postStats.likes,
-                    favorites: acc.favorites + postStats.favorites,
-                    replies: acc.replies + postStats.replies,
+                    posts: accumulator.posts + 1,
+                    views: accumulator.views + postStats.views,
+                    likes: accumulator.likes + postStats.likes,
+                    favorites: accumulator.favorites + postStats.favorites,
+                    replies: accumulator.replies + postStats.replies,
                 };
             }, { posts: 0, views: 0, likes: 0, favorites: 0, replies: 0 });
 
@@ -149,17 +196,19 @@ export default function ProfileView() {
 
     const displayAuthor = useMemo(() => {
         let resolved = author || null;
+
         if (!resolved) {
-            const first = posts[0]?.author;
-            if (first && typeof first === 'object') {
-                resolved = first;
-            } else if (typeof first === 'string' && first.trim()) {
-                resolved = { id: buildUserId(first.trim(), 'local'), name: first.trim() };
+            const firstAuthor = posts[0]?.author;
+            if (firstAuthor && typeof firstAuthor === 'object') {
+                resolved = firstAuthor;
+            } else if (typeof firstAuthor === 'string' && firstAuthor.trim()) {
+                resolved = { id: buildUserId(firstAuthor.trim(), 'local'), name: firstAuthor.trim() };
             }
         }
+
         if (resolved && user && isSamePerson(resolved, {
             id: buildUserId(user?.profile?.name, user?.id || 'local'),
-            name: user.profile?.name || '匿名'
+            name: user.profile?.name || '匿名',
         })) {
             resolved = {
                 ...resolved,
@@ -179,13 +228,56 @@ export default function ProfileView() {
         return resolved;
     }, [author, posts, user]);
 
-    const recentActivities = useMemo(() => posts.slice(0, 5), [posts]);
     const isViewerLoggedIn = user?.loggedIn === true;
-    const displayValue = (value) => {
+    const recentActivities = useMemo(() => posts.slice(0, 5), [posts]);
+    const profileId = getMappedUserId(displayAuthor?.id || routeId || '');
+    const viewerId = isViewerLoggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
+    const adminMeta = useMemo(() => readAdminMeta(profileId), [profileId]);
+    const isViewerAdmin = user?.isAdmin === true;
+
+    const handleCredentialFailure = useCallback((error, fallbackMessage = '登录状态已失效，请重新登录后重试') => {
+        if (!isCredentialError(error)) return false;
+        setActionNotice(fallbackMessage);
+        logout();
+        return true;
+    }, [logout]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!effectiveAuthToken || !isViewerLoggedIn) {
+            setSessionState('ready');
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        setSessionState('checking');
+        fetchCurrentUser(effectiveAuthToken)
+            .then(() => {
+                if (!cancelled) {
+                    setSessionState('ready');
+                }
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                if (handleCredentialFailure(error)) {
+                    setSessionState('invalid');
+                    return;
+                }
+                setSessionState('ready');
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [effectiveAuthToken, handleCredentialFailure, isViewerLoggedIn]);
+
+    const displayValue = useCallback((value) => {
         if (!isViewerLoggedIn) return '-';
-        const normalized = (value ?? '').toString().trim();
-        return normalized ? normalized : '-';
-    };
+        const normalized = normalizeText(value);
+        return normalized || '-';
+    }, [isViewerLoggedIn]);
 
     const displayPosts = isViewerLoggedIn ? posts : [];
     const displayStats = isViewerLoggedIn
@@ -195,9 +287,10 @@ export default function ProfileView() {
         if (!displayAuthor || !user) return false;
         return isSamePerson(displayAuthor, {
             id: buildUserId(user?.profile?.name, user?.id || 'local'),
-            name: user.profile?.name || '匿名'
+            name: user.profile?.name || '匿名',
         });
     }, [displayAuthor, user]);
+
     const displayName = isViewerLoggedIn ? (displayAuthor?.name || '匿名') : '未登录';
     const mappedDisplayId = getMappedUserId(displayAuthor?.id || '');
     const resolvedId = isSupportedUserId(mappedDisplayId)
@@ -214,156 +307,223 @@ export default function ProfileView() {
         }));
     }, [isViewerLoggedIn, recentActivities]);
 
-    const handleReadMore = (postId) => {
-        navigate(`/post/${postId}`, { state: { from: `/user/${routeId}` } });
-    };
-
-    const profileId = getMappedUserId(displayAuthor?.id || routeId || '');
-    const adminMeta = useMemo(() => readAdminMeta(profileId), [profileId]);
-
-    // 直接从后端拉取目标用户最新数据，确保 title（头衔）与后端同步
-    // 不依赖导航 state 快照（可能含旧 tagInfo），也不依赖 posts（帖子可能为空）
-    const [freshTargetUser, setFreshTargetUser] = useState(null);
     useEffect(() => {
         if (!displayAuthor?.name || isSelf) {
             setFreshTargetUser(null);
             return;
         }
+
         let cancelled = false;
         fetchUserByUsername(displayAuthor.name)
-            .then((data) => { if (!cancelled && data) setFreshTargetUser(data); })
+            .then((data) => {
+                if (!cancelled && data) {
+                    setFreshTargetUser(data);
+                }
+            })
             .catch(() => {});
-        return () => { cancelled = true; };
+
+        return () => {
+            cancelled = true;
+        };
     }, [displayAuthor?.name, isSelf]);
 
-    // freshTargetUser 含后端 title/is_superuser/avatar_url，直接构建 tagInfo 不经过旧快照
     const tagInfo = useMemo(() => {
         if (freshTargetUser) return buildTagInfo(freshTargetUser);
         return buildTagInfo(displayAuthor, adminMeta);
-    }, [displayAuthor, adminMeta, freshTargetUser]);
+    }, [adminMeta, displayAuthor, freshTargetUser]);
 
-    // 用后端最新头像/头图覆盖导航快照里的旧数据（仅他人主页）
     const freshAvatar = freshTargetUser?.avatar_url || null;
     const freshCover = freshTargetUser?.cover_url || null;
 
-    const [targetBackendUser, setTargetBackendUser] = useState(null);
-    const isViewerAdmin = user?.isAdmin === true;
     useEffect(() => {
-        if (!isViewerAdmin || !profileId || isSelf || !authToken) {
+        if (!isViewerAdmin || !profileId || isSelf || !effectiveAuthToken || sessionState !== 'ready') {
             setTargetBackendUser(null);
             return;
         }
+
         let cancelled = false;
-        adminGetUser(authToken, profileId)
-            .then((data) => { if (!cancelled) setTargetBackendUser(data); })
-            .catch(() => { if (!cancelled) setTargetBackendUser(null); });
-        return () => { cancelled = true; };
-    }, [isViewerAdmin, profileId, isSelf, authToken]);
+        adminGetUser(effectiveAuthToken, profileId)
+            .then((data) => {
+                if (!cancelled) {
+                    setTargetBackendUser(data);
+                }
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    if (!handleCredentialFailure(error)) {
+                        setTargetBackendUser(null);
+                    }
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [effectiveAuthToken, handleCredentialFailure, isSelf, isViewerAdmin, profileId, sessionState]);
 
     const userRestrictions = useMemo(() => {
         if (isSelf) {
-            // 查看自己：直接读登录用户对象
             return { isMuted: user?.isMuted === true, isBanned: user?.isBanned === true };
         }
         if (targetBackendUser) {
-            return { isMuted: targetBackendUser.is_muted === true, isBanned: targetBackendUser.is_banned === true };
+            return {
+                isMuted: targetBackendUser.is_muted === true,
+                isBanned: targetBackendUser.is_banned === true,
+            };
         }
         return { isMuted: false, isBanned: false };
-    }, [isSelf, user, targetBackendUser]);
+    }, [isSelf, targetBackendUser, user]);
+
     const adminTarget = useMemo(() => (
         displayAuthor || {
             id: profileId || 'local',
             name: authorName || '匿名',
         }
-    ), [displayAuthor, profileId, authorName]);
-    const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
+    ), [authorName, displayAuthor, profileId]);
+
     const displayFollowerCount = isViewerLoggedIn ? followerCount : '-';
 
-    // 从后端初始化关注状态与拉黑状态
     useEffect(() => {
-        if (!profileId || !isViewerLoggedIn) {
+        if (!profileId) {
             setIsFollowing(false);
             setFollowerCount(0);
             setBlockedByViewer(false);
             setBlockedByAuthor(false);
             return;
         }
+
         let cancelled = false;
-        // 快速读缓存
+        const canQueryRelation = isViewerLoggedIn && sessionState === 'ready' && !!effectiveAuthToken;
+
         setIsFollowing(isFollowingUser(viewerId, profileId));
         setFollowerCount(getFollowerCount(profileId));
-        setBlockedByViewer(isBlocked(viewerId, profileId));
-        // 从后端同步关注
-        syncFollowFromBackend(profileId, authToken, viewerId).then(({ followerCount: fc, isFollowing: isF }) => {
-            if (cancelled) return;
-            setIsFollowing(isF);
-            setFollowerCount(fc);
-        });
-        // 从后端同步拉黑列表
-        if (authToken) {
-            syncBlockedFromBackend(authToken, viewerId).then((ids) => {
+        setBlockedByViewer(viewerId ? isBlocked(viewerId, profileId) : false);
+        setBlockedByAuthor(false);
+
+        syncFollowFromBackend(profileId, canQueryRelation ? effectiveAuthToken : '', viewerId)
+            .then(({ followerCount: nextFollowerCount, isFollowing: nextIsFollowing }) => {
                 if (cancelled) return;
-                setBlockedByViewer(ids.includes(String(profileId)));
+                setFollowerCount(nextFollowerCount);
+                if (canQueryRelation) {
+                    setIsFollowing(nextIsFollowing);
+                }
             });
+
+        if (viewerId && canQueryRelation) {
+            syncBlockedFromBackend(effectiveAuthToken, viewerId)
+                .then((ids) => {
+                    if (!cancelled) {
+                        setBlockedByViewer(ids.includes(String(profileId)));
+                    }
+                });
         }
-        return () => { cancelled = true; };
-    }, [profileId, viewerId, isViewerLoggedIn, authToken]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [effectiveAuthToken, isViewerLoggedIn, profileId, sessionState, viewerId]);
+
+    useEffect(() => {
+        if (!followingPanelOpen) return;
+        if (!profileId) {
+            setFollowingUsers([]);
+            setFollowingError('当前用户没有可用的关注列表。');
+            return;
+        }
+
+        let cancelled = false;
+        setFollowingLoading(true);
+        setFollowingError('');
+
+        getFollowing(profileId, { skip: 0, limit: 100 })
+            .then((items) => {
+                if (cancelled) return;
+                const normalized = Array.isArray(items) ? items.map(mapRelationUserToAuthor) : [];
+                setFollowingUsers(normalized);
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                setFollowingUsers([]);
+                setFollowingError(error?.message || '关注列表加载失败，请稍后重试。');
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setFollowingLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [followingPanelOpen, profileId]);
+
+    const handleReadMore = (postId) => {
+        navigate(`/post/${postId}`, { state: { from: `/user/${routeId}` } });
+    };
 
     const handleToggleFollow = async () => {
-        if (!viewerId) {
-            window.alert('请先登录');
+        setActionNotice('');
+
+        if (!isViewerLoggedIn || !viewerId || !effectiveAuthToken) {
+            setActionNotice('请先登录后再关注该用户。');
+            navigate('/login');
             return;
         }
         if (!profileId) return;
         if (viewerId === profileId) {
-            window.alert('不能对自己执行操作');
+            setActionNotice('不能关注自己。');
+            return;
+        }
+        if (sessionState === 'checking') {
+            setActionNotice('正在校验登录状态，请稍后再试。');
             return;
         }
         if (followLoading) return;
+
         setFollowLoading(true);
         try {
-            const result = await toggleFollowUser(authToken, viewerId, profileId);
+            const result = await toggleFollowUser(effectiveAuthToken, viewerId, profileId);
             setIsFollowing(result.isFollowing);
             setFollowerCount(result.followerCount);
-        } catch (err) {
-            window.alert(err.message || '操作失败，请重试');
+            setActionNotice(result.isFollowing ? '已关注该用户。' : '已取消关注。');
+        } catch (error) {
+            if (handleCredentialFailure(error, '登录状态已失效，请重新登录后再关注。')) return;
+            setActionNotice(error?.message || '关注操作失败，请稍后重试。');
         } finally {
             setFollowLoading(false);
         }
     };
 
-    const handleOpenDm = () => {
-        if (!viewerId) {
-            window.alert('请先登录后再私信');
+    const handleToggleFollowingPanel = () => {
+        setActionNotice('');
+        setFollowingPanelOpen((current) => !current);
+    };
+
+    const handleOpenMessageList = () => {
+        setActionNotice('');
+
+        if (!isViewerLoggedIn || !viewerId || !effectiveAuthToken) {
+            setActionNotice('请先登录后查看私信列表。');
+            navigate('/login');
             return;
         }
-        if (!profileId || viewerId === profileId) {
+        if (sessionState === 'checking') {
+            setActionNotice('正在校验登录状态，请稍后再试。');
             return;
         }
-        if (userRestrictions.isBanned) {
-            window.alert('你的账号已被封禁，无法发送私信。');
-            return;
-        }
-        if (userRestrictions.isMuted) {
-            window.alert('你已被禁言，暂时无法发送私信。');
-            return;
-        }
-        if (isBlocked(viewerId, profileId) || blockedByViewer) {
-            window.alert('你已拉黑对方，无法发送私信。');
-            return;
-        }
-        if (isBlocked(profileId, viewerId) || blockedByAuthor) {
-            window.alert('对方已拉黑你，无法发送私信。');
-            return;
-        }
-        navigate(`/messages/${profileId}`, {
-            state: { author: displayAuthor || { id: profileId, name: authorName || '匿名' } },
-        });
+        navigate('/messages');
+    };
+
+    const handleOpenFollowingProfile = (targetAuthor) => {
+        const targetId = getMappedUserId(targetAuthor?.id || '') || targetAuthor?.id || '';
+        if (!targetId) return;
+        navigate(`/user/${targetId}`, { state: { author: targetAuthor } });
     };
 
     const canUseAdminTools = user?.isAdmin === true;
-
-    const coverImage = isViewerLoggedIn ? (freshCover || displayAuthor?.cover || freshAvatar || displayAuthor?.avatar) : '';
+    const coverImage = isViewerLoggedIn
+        ? (freshCover || displayAuthor?.cover || freshAvatar || displayAuthor?.avatar)
+        : '';
     const coverStyle = coverImage
         ? { backgroundImage: `linear-gradient(120deg, rgba(20, 20, 40, 0.4), rgba(30, 30, 60, 0.7)), url(${coverImage})` }
         : undefined;
@@ -371,8 +531,8 @@ export default function ProfileView() {
     if (!author && !displayAuthor) {
         return (
             <div className={styles.page}>
-                <p>无法加载用户资料（id: {routeId}）</p>
-                <button onClick={() => navigate(-1)}>返回</button>
+                <p>无法加载用户资料（ID: {routeId}）。</p>
+                <button type="button" onClick={() => navigate(-1)}>返回</button>
             </div>
         );
     }
@@ -387,31 +547,29 @@ export default function ProfileView() {
                     <div className={styles.avatarWrap}>
                         <div
                             className={styles.avatar}
-                            style={isViewerLoggedIn && (freshAvatar || displayAuthor?.avatar) ? { backgroundImage: `url(${freshAvatar || displayAuthor.avatar})` } : undefined}
+                            style={
+                                isViewerLoggedIn && (freshAvatar || displayAuthor?.avatar)
+                                    ? { backgroundImage: `url(${freshAvatar || displayAuthor.avatar})` }
+                                    : undefined
+                            }
                         />
                     </div>
                     <div className={styles.identity}>
                         <div className={styles.nameRow}>
                             <h2 className={styles.name}>{displayName}</h2>
                             {isViewerLoggedIn && tagInfo && (
-                                <span
-                                    className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}
-                                >
+                                <span className={`${styles.adminBadge} ${tagInfo.variant === 'user' ? styles.userBadge : ''}`}>
                                     {tagInfo.label}
                                 </span>
                             )}
                             {isViewerLoggedIn && userRestrictions.isBanned && (
-                                <span className={styles.bannedBadge}>
-                                    🚫 账号已被管理员封禁
-                                </span>
+                                <span className={styles.bannedBadge}>账号已被管理员封禁</span>
                             )}
                             {isViewerLoggedIn && userRestrictions.isMuted && !userRestrictions.isBanned && (
-                                <span className={styles.mutedBadge}>
-                                    🔇 已被禁言
-                                </span>
+                                <span className={styles.mutedBadge}>已被禁言</span>
                             )}
                         </div>
-                        <div className={styles.userId}>ID：{displayId}</div>
+                        <div className={styles.userId}>ID: {displayId}</div>
                         <div className={styles.meta}>{displayValue(displayAuthor?.school)} · {displayValue(displayAuthor?.className)}</div>
                         <div className={styles.meta}>{displayValue(displayAuthor?.email)}</div>
                     </div>
@@ -445,23 +603,30 @@ export default function ProfileView() {
                                     黑名单
                                 </button>
                             )}
-                            {profileId && viewerId && (
+                            <button
+                                type="button"
+                                className={`${styles.actionButton} ${styles.actionButtonFollow}`}
+                                onClick={handleToggleFollowingPanel}
+                                disabled={!profileId}
+                            >
+                                查看关注列表
+                            </button>
+                            {profileId && viewerId && !isSelf && (
                                 <button
                                     type="button"
-                                    className={`${styles.actionButton} ${styles.actionButtonFollow}`}
+                                    className={`${styles.actionButton} ${styles.actionButtonMuted}`}
                                     onClick={handleToggleFollow}
-                                    disabled={isSelf || followLoading}
+                                    disabled={followLoading || sessionState === 'checking'}
                                 >
-                                    {followLoading ? '...' : isFollowing ? '已关注' : '关注'}
+                                    {followLoading ? '处理中...' : (isFollowing ? '已关注' : '关注TA')}
                                 </button>
                             )}
                             <button
                                 type="button"
                                 className={`${styles.actionButton} ${styles.actionButtonPrimary}`}
-                                onClick={handleOpenDm}
-                                disabled={!profileId || viewerId === profileId}
+                                onClick={handleOpenMessageList}
                             >
-                                私信
+                                查看私信列表
                             </button>
                             <button
                                 type="button"
@@ -475,6 +640,11 @@ export default function ProfileView() {
                             >
                                 管理员
                             </button>
+                            {actionNotice && (
+                                <div className={styles.actionNotice} role="status">
+                                    {actionNotice}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -507,17 +677,72 @@ export default function ProfileView() {
                     <div className={styles.section}>
                         <div className={styles.sectionHeader}>个人简介</div>
                         <div className={styles.sectionBody}>
-                            {isViewerLoggedIn && displayAuthor?.bio
-                                ? (
-                                    <div className={styles.bioMarkdown}>
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                            {displayAuthor.bio}
-                                        </ReactMarkdown>
-                                    </div>
-                                )
-                                : (isViewerLoggedIn ? '暂无资料' : '-')}
+                            {isViewerLoggedIn && displayAuthor?.bio ? (
+                                <div className={styles.bioMarkdown}>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {displayAuthor.bio}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : (isViewerLoggedIn ? '暂无资料' : '-')}
                         </div>
                     </div>
+
+                    {followingPanelOpen && (
+                        <div className={styles.section}>
+                            <div className={styles.sectionHeaderRow}>
+                                <div className={styles.sectionHeader}>关注列表</div>
+                                <button
+                                    type="button"
+                                    className={styles.inlineAction}
+                                    onClick={handleToggleFollowingPanel}
+                                >
+                                    收起
+                                </button>
+                            </div>
+                            {followingLoading && (
+                                <div className={styles.followingState}>正在加载关注列表...</div>
+                            )}
+                            {!followingLoading && followingError && (
+                                <div className={styles.followingError}>{followingError}</div>
+                            )}
+                            {!followingLoading && !followingError && followingUsers.length === 0 && (
+                                <div className={styles.followingState}>暂时还没有关注任何人。</div>
+                            )}
+                            {!followingLoading && !followingError && followingUsers.length > 0 && (
+                                <div className={styles.followingList}>
+                                    {followingUsers.map((item) => {
+                                        const meta = [item.school, item.className].filter(Boolean).join(' · ') || item.email || '暂未完善资料';
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                className={styles.followingItem}
+                                                onClick={() => handleOpenFollowingProfile(item)}
+                                            >
+                                                <div
+                                                    className={styles.followingAvatar}
+                                                    style={item.avatar ? { backgroundImage: `url(${item.avatar})` } : undefined}
+                                                />
+                                                <div className={styles.followingContent}>
+                                                    <div className={styles.followingNameRow}>
+                                                        <span className={styles.followingName}>{item.name}</span>
+                                                        {item.isAdmin && (
+                                                            <span className={styles.followingBadge}>管理员</span>
+                                                        )}
+                                                    </div>
+                                                    <div className={styles.followingMeta}>{meta}</div>
+                                                    {item.bio && (
+                                                        <div className={styles.followingBio}>{item.bio}</div>
+                                                    )}
+                                                </div>
+                                                <span className={styles.followingLink}>查看主页</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className={styles.section}>
                         <div className={styles.sectionHeader}>最新动态</div>
@@ -546,7 +771,7 @@ export default function ProfileView() {
                             <div className={styles.sectionNotice}>
                                 {blockedByAuthor
                                     ? '你已被该用户拉黑，无法查看对方发布的帖子。'
-                                    : '你已拉黑该用户，帖子已隐藏。'}
+                                    : '你已拉黑该用户，帖子内容已隐藏。'}
                             </div>
                         )}
                         <div className={styles.postsWrap}>
