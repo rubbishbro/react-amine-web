@@ -8,37 +8,43 @@ import remarkIns from 'remark-ins';
 import rehypeHighlight from 'rehype-highlight';
 import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostEditor.module.css';
-import { getAllCategories, loadPostContent, upsertLocalPost } from '../../utils/postLoader';
+import { getAllCategories, loadPostContent, publishLocalDraft, saveLocalDraft } from '../../utils/postLoader';
 import { getCategoryTextColor } from '../../config';
 import { useUser } from '../../context/UserContext';
 import { buildUserId } from '../../utils/userId';
 import { calculatePostReadTime, getPostWordCount } from '../../utils/postReadTime';
 
+const buildDefaultValues = (initialData = null) => initialData || {
+  title: '',
+  category: '',
+  summary: '',
+  content: '',
+  status: 'draft',
+};
+
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
   const { id: postId } = useParams();
   const { user, authToken } = useUser();
-  const [loading, setLoading] = useState(false); // 保持用于编辑模式加载
+  const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
   const [currentTag, setCurrentTag] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
-  // 添加独立的状态管理
   const [savingDraft, setSavingDraft] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [feedback, setFeedback] = useState(null);
   const publishLockRef = useRef(false);
   const draftLockRef = useRef(false);
 
-  // 初始化表单
-  const { register, formState: { errors }, setValue, watch, reset } = useForm({
-    defaultValues: initialData || {
-      title: '',
-      category: '',
-      summary: '',
-      content: '',
-      status: 'draft'
-    }
+  const {
+    register,
+    formState: { errors },
+    setValue,
+    watch,
+    reset,
+  } = useForm({
+    defaultValues: buildDefaultValues(initialData),
   });
 
   const formData = watch();
@@ -46,14 +52,19 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const logMessage = useCallback((message, level = 'warn') => {
     if (level === 'error') {
       console.error(message);
-    } else if (level === 'info') {
-      console.info(message);
-    } else {
-      console.warn(message);
+      return;
     }
+    if (level === 'info') {
+      console.info(message);
+      return;
+    }
+    console.warn(message);
   }, []);
 
-  // 加载分类列表
+  const showFeedback = useCallback((type, message) => {
+    setFeedback({ type, message });
+  }, []);
+
   useEffect(() => {
     const loadCategories = async () => {
       try {
@@ -62,50 +73,48 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       } catch (error) {
         console.error('加载分类失败:', error);
         logMessage('加载分类失败', 'error');
+        showFeedback('error', '分类加载失败，请刷新后重试');
       }
     };
 
     loadCategories();
-  }, [logMessage]);
+  }, [logMessage, showFeedback]);
 
-  // 如果是编辑模式，加载帖子数据
   useEffect(() => {
-    if (isEditMode && postId) {
-      const loadPost = async () => {
-        setLoading(true);
-        try {
-          const postData = await loadPostContent(postId);
-          if (postData) {
-            reset({
-              title: postData.title || '',
-              category: postData.category || '',
-              summary: postData.summary || '',
-              content: postData.content || '',
-              status: postData.status || 'draft',
-              id: postData.id,
-              tags: postData.tags || [],
-            });
+    if (!isEditMode || !postId) return;
 
-            if (postData.tags) {
-              setTags(postData.tags);
-            } else {
-              setTags([]);
-            }
-            setHasUnsavedChanges(false);
-          }
-        } catch (error) {
-          console.error('加载帖子失败:', error);
-          logMessage('加载帖子失败', 'error');
-        } finally {
-          setLoading(false);
+    const loadPost = async () => {
+      setLoading(true);
+      try {
+        const postData = await loadPostContent(postId);
+        if (!postData) {
+          showFeedback('error', '未找到可编辑的帖子或草稿');
+          return;
         }
-      };
 
-      loadPost();
-    }
-  }, [isEditMode, postId, reset, logMessage]);
+        reset({
+          title: postData.title || '',
+          category: postData.category || '',
+          summary: postData.summary || '',
+          content: postData.content || '',
+          status: postData.status || 'draft',
+          id: postData.id,
+          tags: postData.tags || [],
+        });
+        setTags(Array.isArray(postData.tags) ? postData.tags : []);
+        setHasUnsavedChanges(false);
+      } catch (error) {
+        console.error('加载帖子失败:', error);
+        logMessage('加载帖子失败', 'error');
+        showFeedback('error', '加载帖子失败，请稍后重试');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // 监听表单变化
+    loadPost();
+  }, [isEditMode, postId, reset, logMessage, showFeedback]);
+
   useEffect(() => {
     const subscription = watch(() => {
       setHasUnsavedChanges(true);
@@ -113,49 +122,46 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // 标签处理函数
-  const handleAddTag = useCallback((e) => {
-    if (e.key === 'Enter' && currentTag.trim()) {
-      e.preventDefault();
-      if (!tags.includes(currentTag.trim())) {
-        setTags([...tags, currentTag.trim()]);
-      }
-      setCurrentTag('');
+  const handleAddTag = useCallback((event) => {
+    if (event.key !== 'Enter' || !currentTag.trim()) return;
+    event.preventDefault();
+
+    const nextTag = currentTag.trim();
+    if (!tags.includes(nextTag)) {
+      setTags((prev) => [...prev, nextTag]);
     }
+    setCurrentTag('');
   }, [currentTag, tags]);
 
   const handleRemoveTag = useCallback((tagToRemove) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
-  }, [tags]);
+    setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
+  }, []);
 
-  // 自动生成摘要
   const generateSummary = useCallback((content) => {
     if (!content) return '';
     const plainText = content.replace(/[#*`[\]()]/g, '').trim();
     return plainText.substring(0, 200) + (plainText.length > 200 ? '...' : '');
   }, []);
 
-  // 验证表单
   const validateForm = useCallback(() => {
     if (!formData.title.trim()) {
-      logMessage('请输入帖子标题', 'warn');
+      showFeedback('error', '请输入帖子标题');
       return false;
     }
 
     if (!formData.category) {
-      logMessage('请选择帖子分类', 'warn');
+      showFeedback('error', '请选择帖子分类');
       return false;
     }
 
     if (!formData.content.trim()) {
-      logMessage('请输入帖子内容', 'warn');
+      showFeedback('error', '请输入帖子内容');
       return false;
     }
 
     return true;
-  }, [formData, logMessage]);
+  }, [formData.title, formData.category, formData.content, showFeedback]);
 
-  // 准备保存数据
   const preparePostData = useCallback((status) => {
     const authorName = user?.profile?.name || '匿名';
     const authorId = buildUserId(authorName, user?.id || 'local');
@@ -170,87 +176,60 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       tagInfo: user?.tagInfo || null,
     };
 
-    const postData = {
+    const nextPost = {
       ...formData,
-      tags: tags,
+      id: formData.id || (!isEditMode ? `post-${Date.now()}` : formData.id),
+      tags,
       date: new Date().toISOString().split('T')[0],
       author,
+      draftOwnerId: authorId,
       readTime: calculatePostReadTime(formData.content),
-      status: status
+      status,
     };
 
-    // 如果摘要为空，自动生成
-    if (!postData.summary) {
-      postData.summary = generateSummary(formData.content);
+    if (!nextPost.summary) {
+      nextPost.summary = generateSummary(formData.content);
     }
 
-    // 如果是编辑模式且没有ID，自动生成ID
-    if (!postData.id && !isEditMode) {
-      postData.id = `post-${Date.now()}`;
-    }
-
-    return postData;
+    return nextPost;
   }, [formData, tags, generateSummary, isEditMode, user]);
 
-  // 保存函数（不包含状态管理）
   const savePostData = useCallback(async (postData, status) => {
     try {
       if (status === 'draft') {
-        // 本地缓存保存
-        upsertLocalPost({ ...postData, status });
-        console.log('保存完成，显示通知，状态:', status);
-        logMessage('草稿已保存到本地缓存', 'info');
+        saveLocalDraft(postData);
         setHasUnsavedChanges(false);
+        showFeedback('success', '草稿已保存到本地，仅当前账号可见');
         return true;
       }
 
-      if (!authToken) {
-        throw new Error('缺少登录令牌，无法发布');
-      }
-
-      // 发布到后端
-      const PostAPI = (await import('../../../services/getpostfromback.js')).default;
-      const api = new PostAPI();
-      const created = await api.createPost(postData, authToken);
-      if (!created?.id) {
-        throw new Error('后端未返回帖子ID');
-      }
-
-      // 清理本地草稿（如果存在）
-      upsertLocalPost({ ...postData, status: 'published' });
-
-      console.log('发布成功，准备跳转');
-      logMessage('帖子已成功发布', 'info');
+      const created = await publishLocalDraft(postData, authToken);
       setHasUnsavedChanges(false);
+      showFeedback('success', '帖子已成功发布');
 
       setTimeout(() => {
         navigate(`/post/${created.id}`);
-      }, 300);
+      }, 200);
 
       return true;
     } catch (error) {
       console.error('保存失败:', error);
-      logMessage('保存失败，请检查网络连接', 'error');
+      const message = error?.message || '发布失败，请稍后重试';
+      showFeedback('error', message);
+      logMessage(message, 'error');
       throw error;
     }
-  }, [authToken, logMessage, navigate]);
+  }, [authToken, logMessage, navigate, showFeedback]);
 
-  // 保存草稿
   const handleSaveDraft = useCallback(async () => {
-    console.log('开始保存草稿');
-
-    if (draftLockRef.current || savingDraft || publishing) {
-      return;
-    }
+    if (draftLockRef.current || savingDraft || publishing) return;
 
     draftLockRef.current = true;
-
     setSavingDraft(true);
+    setFeedback(null);
 
     try {
       const postData = preparePostData('draft');
-      console.log('准备保存草稿，数据状态:', postData.status);
-
       await savePostData(postData, 'draft');
     } catch (error) {
       console.error('保存草稿失败:', error);
@@ -258,31 +237,20 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       setSavingDraft(false);
       draftLockRef.current = false;
     }
-  }, [preparePostData, savePostData, savingDraft, publishing]);
+  }, [preparePostData, publishing, savePostData, savingDraft]);
 
-  // 发布帖子
   const handlePublishPost = useCallback(async () => {
-    console.log('开始发布帖子');
-
-    if (publishLockRef.current || publishing || savingDraft) {
-      return;
-    }
-
-    // 验证表单
-    if (!validateForm()) {
-      return;
-    }
+    if (publishLockRef.current || publishing || savingDraft) return;
+    if (!validateForm()) return;
 
     publishLockRef.current = true;
-
     setPublishing(true);
+    setFeedback(null);
 
     let didPublish = false;
 
     try {
       const postData = preparePostData('published');
-      console.log('准备发布，数据状态:', postData.status);
-
       await savePostData(postData, 'published');
       didPublish = true;
     } catch (error) {
@@ -293,38 +261,37 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         publishLockRef.current = false;
       }
     }
-  }, [validateForm, preparePostData, savePostData]);
+  }, [preparePostData, publishing, savePostData, savingDraft, validateForm]);
 
-  // 处理取消
   const handleCancel = useCallback(() => {
-    if (hasUnsavedChanges) {
-      if (window.confirm('您有未保存的更改，确定要离开吗？')) {
-        navigate(-1);
-      }
-    } else {
+    if (!hasUnsavedChanges) {
+      navigate(-1);
+      return;
+    }
+
+    if (window.confirm('您有未保存的更改，确定要离开吗？')) {
       navigate(-1);
     }
   }, [hasUnsavedChanges, navigate]);
 
-  // Markdown编辑器配置
   const mdEditorConfig = {
     view: {
       menu: true,
       md: true,
-      html: true
+      html: true,
     },
     canView: {
       menu: true,
       md: true,
       html: true,
       fullScreen: true,
-      hideMenu: true
+      hideMenu: true,
     },
     htmlClass: 'markdown-body markdown-preview',
     markdownClass: 'markdown-editor',
     syncScrollMode: ['leftFollowRight', 'rightFollowLeft'],
     imageAccept: '.jpg,.jpeg,.png,.gif,.webp',
-    linkAccept: '.*'
+    linkAccept: '.*',
   };
 
   if (loading && isEditMode) {
@@ -338,10 +305,9 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
 
   return (
     <div className={styles.postEditor}>
-      {/* 头部操作栏 */}
       <div className={styles.editorHeader}>
         <button onClick={handleCancel} className={styles.backButton}>
-          ← 返回
+          返回
         </button>
 
         <div className={styles.headerTitle}>
@@ -352,7 +318,6 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         </div>
 
         <div className={styles.headerActions}>
-          {/* 保存草稿按钮 */}
           <button
             onClick={handleSaveDraft}
             className={`${styles.actionButton} ${styles.saveDraftButton}`}
@@ -361,7 +326,6 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
             {savingDraft ? '保存中...' : '保存草稿'}
           </button>
 
-          {/* 发布按钮 */}
           <button
             onClick={handlePublishPost}
             className={`${styles.actionButton} ${styles.publishButton}`}
@@ -372,9 +336,16 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
         </div>
       </div>
 
-      {/* 主编辑区域 */}
+      {feedback?.message && (
+        <div
+          className={`${styles.feedbackBanner} ${feedback.type === 'error' ? styles.feedbackError : styles.feedbackSuccess}`}
+          role="status"
+        >
+          {feedback.message}
+        </div>
+      )}
+
       <div className={styles.editorContent}>
-        {/* 标题输入 */}
         <div className={styles.formGroup}>
           <input
             type="text"
@@ -382,19 +353,16 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
             className={`${styles.titleInput} ${errors.title ? styles.error : ''}`}
             {...register('title', {
               required: '标题不能为空',
-              minLength: { value: 2, message: '标题至少2个字' },
-              maxLength: { value: 100, message: '标题最多100个字' }
+              minLength: { value: 2, message: '标题至少 2 个字' },
+              maxLength: { value: 100, message: '标题最多 100 个字' },
             })}
           />
           {errors.title && (
             <span className={styles.errorMessage}>{errors.title.message}</span>
           )}
-          <div className={styles.charCount}>
-            {formData.title.length}/100
-          </div>
+          <div className={styles.charCount}>{formData.title.length}/100</div>
         </div>
 
-        {/* 基本信息 */}
         <div className={styles.basicInfo}>
           <div className={styles.formGroup}>
             <label className={styles.label}>分类 *</label>
@@ -405,14 +373,16 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
               style={{
                 borderColor: formData.category ? getCategoryTextColor(formData.category) : '#e0e0e0',
                 color: formData.category ? getCategoryTextColor(formData.category) : 'var(--text-sub)',
-                backgroundColor: 'white'
+                backgroundColor: 'white',
               }}
-              onChange={(e) => {
-                setValue('category', e.target.value, { shouldDirty: true, shouldTouch: true });
+              onChange={(event) => {
+                setValue('category', event.target.value, { shouldDirty: true, shouldTouch: true });
               }}
             >
-              <option value="" style={{ color: 'var(--text-sub)', backgroundColor: 'white' }}>选择分类</option>
-              {categories.map(cat => {
+              <option value="" style={{ color: 'var(--text-sub)', backgroundColor: 'white' }}>
+                选择分类
+              </option>
+              {categories.map((cat) => {
                 const categoryColor = getCategoryTextColor(cat.name);
                 return (
                   <option
@@ -421,7 +391,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                     style={{
                       color: categoryColor,
                       backgroundColor: 'white',
-                      fontWeight: '600'
+                      fontWeight: '600',
                     }}
                   >
                     {cat.name}
@@ -436,9 +406,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
 
           <div className={styles.formGroup}>
             <label className={styles.label}>作者</label>
-            <div className={styles.authorDisplay}>
-              {user?.profile?.name || '匿名'}
-            </div>
+            <div className={styles.authorDisplay}>{user?.profile?.name || '匿名'}</div>
           </div>
 
           <div className={styles.formGroup}>
@@ -448,13 +416,12 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
-                weekday: 'long'
+                weekday: 'long',
               })}
             </div>
           </div>
         </div>
 
-        {/* 标签输入 */}
         <div className={styles.formGroup}>
           <label className={styles.label}>标签</label>
           <div className={styles.tagInputContainer}>
@@ -462,7 +429,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
               type="text"
               placeholder="输入标签后按回车添加"
               value={currentTag}
-              onChange={(e) => setCurrentTag(e.target.value)}
+              onChange={(event) => setCurrentTag(event.target.value)}
               onKeyDown={handleAddTag}
               className={styles.tagInput}
             />
@@ -474,8 +441,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                   { bg: 'rgba(255, 209, 102, 0.1)', color: '#FFD166', border: 'rgba(255, 209, 102, 0.3)' },
                   { bg: 'rgba(102, 187, 106, 0.1)', color: '#06D6A0', border: 'rgba(102, 187, 106, 0.3)' },
                 ];
-                const colorIndex = index % tagColors.length;
-                const tagStyle = tagColors[colorIndex];
+                const tagStyle = tagColors[index % tagColors.length];
 
                 return (
                   <span
@@ -484,7 +450,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                     style={{
                       backgroundColor: tagStyle.bg,
                       color: tagStyle.color,
-                      borderColor: tagStyle.border
+                      borderColor: tagStyle.border,
                     }}
                   >
                     #{tag}
@@ -504,44 +470,35 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           </div>
         </div>
 
-        {/* 摘要输入 */}
         <div className={styles.formGroup}>
           <label className={styles.label}>
             摘要
             <span className={styles.optional}>(可选，不填将自动生成)</span>
           </label>
           <textarea
-            placeholder="输入帖子摘要，建议不超过200字..."
+            placeholder="输入帖子摘要，建议不超过 200 字..."
             className={`${styles.summaryInput} ${errors.summary ? styles.error : ''}`}
             {...register('summary', {
-              maxLength: { value: 300, message: '摘要最多300个字' }
+              maxLength: { value: 300, message: '摘要最多 300 个字' },
             })}
             rows="3"
           />
           {errors.summary && (
             <span className={styles.errorMessage}>{errors.summary.message}</span>
           )}
-          <div className={styles.charCount}>
-            {formData.summary?.length || 0}/300
-          </div>
+          <div className={styles.charCount}>{formData.summary?.length || 0}/300</div>
         </div>
 
-        {/* Markdown编辑器 */}
         <div className={styles.formGroup}>
           <label className={styles.label}>内容 *</label>
           <div className={styles.markdownContainer}>
-            <div className={styles.editorStatsBadge}>
-              字数: {getPostWordCount(formData.content)}
-            </div>
+            <div className={styles.editorStatsBadge}>字数: {getPostWordCount(formData.content)}</div>
             <MarkdownEditor
               value={formData.content}
               style={{ height: '500px' }}
-              onChange={({ text }) => setValue('content', text)}
+              onChange={({ text }) => setValue('content', text, { shouldDirty: true, shouldTouch: true })}
               renderHTML={(text) => (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkIns]}
-                  rehypePlugins={[rehypeHighlight]}
-                >
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkIns]} rehypePlugins={[rehypeHighlight]}>
                   {text}
                 </ReactMarkdown>
               )}
@@ -554,14 +511,12 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           )}
         </div>
 
-        {/* 阅读时间预览 */}
         <div className={styles.previewInfo}>
           <div className={styles.readTimePreview}>
-            ⏱️ 预计阅读时间: {calculatePostReadTime(formData.content)}
+            预计阅读时间: {calculatePostReadTime(formData.content)}
           </div>
         </div>
       </div>
-
     </div>
   );
 };

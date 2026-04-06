@@ -12,6 +12,7 @@ import { getMappedUserId } from '../../utils/userId';
 const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
   const { user } = useUser();
   const isViewerLoggedIn = user?.loggedIn === true;
+  const isDraft = post?.isDraft === true || post?.status === 'draft';
   // 如果是预览模式，只显示摘要
   const displayContent = preview
     ? (post?.summary || '')
@@ -101,6 +102,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
           >
             {post.category}
           </span>
+          {isDraft && <span className={styles.draftBadge}>草稿</span>}
           <span className={styles.date}>
             📅 {new Date(post.date).toLocaleDateString('zh-CN')}
           </span>
@@ -184,6 +186,7 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
 
       <div className={styles.postFooter}>
         <div className={styles.postStats}>
+          {isDraft && <span className={styles.draftHint}>仅自己可见</span>}
           <span className={styles.statItem}>👀 {isViewerLoggedIn ? stats.views : '-'}</span>
           <span className={styles.statItem}>❤️ {isViewerLoggedIn ? stats.likes : '-'}</span>
           <span className={styles.statItem}>⭐ {isViewerLoggedIn ? stats.favorites : '-'}</span>

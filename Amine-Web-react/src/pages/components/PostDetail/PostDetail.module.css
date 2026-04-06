@@ -208,6 +208,23 @@
   margin-top: 1.2rem;
 }
 
+.draftNotice {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  color: #92400e;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.draftNoticeError {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .tag {
   display: inline-block;
   background: rgba(255, 133, 161, 0.1);
@@ -254,9 +271,24 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.actionButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .actionButton:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 20px rgba(255, 133, 161, 0.35);
+}
+
+.publishDraftButton {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.28);
+}
+
+.publishDraftButton:hover {
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.32);
 }
 
 .dangerButton {
