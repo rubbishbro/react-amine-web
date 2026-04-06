@@ -8,7 +8,7 @@ import rehypeHighlight from 'rehype-highlight';
 import MarkdownEditor from 'react-markdown-editor-lite';
 import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostDetail.module.css';
-import { loadPostContent, markPostDeleted, setPostPinnedLocally } from '../../utils/postLoader';
+import { loadPostContent, markPostDeleted, publishLocalDraft, removeLocalDraft, setPostPinnedLocally } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config';
 import { useUser } from '../../context/UserContext';
 import {
@@ -54,6 +54,8 @@ const PostDetail = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followLoading, setFollowLoading] = useState(false);
+  const [draftActionLoading, setDraftActionLoading] = useState(false);
+  const [draftFeedback, setDraftFeedback] = useState('');
   const [replySort, setReplySort] = useState('time');
   const adminMenuRef = useRef(null);
   const viewTrackedRef = useRef(null);
@@ -61,6 +63,7 @@ const PostDetail = () => {
   // 评论点赞本地状态（{ [commentId]: { liked: bool, count: number } }）
   // 初始值来自后端返回的 likes 字段，点赞后乐观更新
   const [replyLikeMap, setReplyLikeMap] = useState({});
+  const isLocalDraft = post?.isDraft === true || post?.status === 'draft';
 
   const getReplyLikeInfo = (_, replyId) => {
     if (!replyId) return { count: 0, liked: false };
@@ -140,7 +143,11 @@ const PostDetail = () => {
 
   // 从后端加载评论列表
   useEffect(() => {
-    if (!id) return;
+    if (!id || isLocalDraft) {
+      setReplies([]);
+      setRepliesLoading(false);
+      return;
+    }
     let cancelled = false;
     setRepliesLoading(true);
     // 尝试将 id 转换为数字（后端帖子 ID 是整数）
@@ -193,7 +200,7 @@ const PostDetail = () => {
         if (!cancelled) setRepliesLoading(false);
       });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, isLocalDraft]);
 
   useEffect(() => {
     setIsPinned(post?.isPinnedGlobally === true);
@@ -354,14 +361,17 @@ const PostDetail = () => {
   };
 
   const handleDeletePost = () => {
-    const authorId = getMappedUserId(post?.author?.id || '');
-    const canDeletePost = currentUser.isAdmin || (authorId && currentUser.id === authorId);
+    const canDeletePost = currentUser.isAdmin || isSelfAuthor;
     if (!canDeletePost) {
       window.alert('你没有权限删除该帖子。');
       return;
     }
     if (!window.confirm('确定删除该帖子吗？此操作不可恢复。')) return;
-    markPostDeleted(id);
+    if (isLocalDraft) {
+      removeLocalDraft(id);
+    } else {
+      markPostDeleted(id);
+    }
     setPost(null);
     handleBack();
   };
@@ -387,10 +397,24 @@ const PostDetail = () => {
 
   const handleEditPost = () => {
     // 只有自己可以编辑自己的帖子
-    const authorId = getMappedUserId(authorInfo.id || '');
-    const canEdit = authorId && currentUser.id === authorId;
+    const canEdit = isSelfAuthor;
     if (!canEdit) return;
     navigate(`/editor/${id}`);
+  };
+
+  const handlePublishDraft = async () => {
+    if (!post) return;
+    setDraftFeedback('');
+    setDraftActionLoading(true);
+
+    try {
+      const published = await publishLocalDraft(post, authToken);
+      navigate(`/post/${published.id}`);
+    } catch (err) {
+      setDraftFeedback(err?.message || '草稿发布失败，请稍后重试');
+    } finally {
+      setDraftActionLoading(false);
+    }
   };
 
   const handleDeleteReply = async (replyId) => {
@@ -435,18 +459,18 @@ const PostDetail = () => {
   }, [post?.id, baseStats]);
 
   useEffect(() => {
-    if (!post?.id) return;
+    if (!post?.id || isLocalDraft) return;
     if (viewTrackedRef.current === post.id) return;
     viewTrackedRef.current = post.id;
     if (isViewerLoggedIn) {
       incrementPostViews(post.id);
     }
-  }, [post?.id, isViewerLoggedIn]);
+  }, [post?.id, isViewerLoggedIn, isLocalDraft]);
 
   useEffect(() => {
-    if (!id || !isViewerLoggedIn) return;
+    if (!id || !isViewerLoggedIn || isLocalDraft) return;
     syncPostReplies(id, replies.length);
-  }, [id, replies.length, isViewerLoggedIn]);
+  }, [id, replies.length, isViewerLoggedIn, isLocalDraft]);
 
   const handleToggleLike = () => {
     if (!isViewerLoggedIn) {
@@ -560,7 +584,7 @@ const PostDetail = () => {
     });
     return map;
   }, [replies, isViewerLoggedIn]);
-  const canDeletePost = currentUser.isAdmin || (authorId && currentUser.id === authorId);
+  const canDeletePost = currentUser.isAdmin || isSelfAuthor;
   const sortedReplies = useMemo(() => {
     const list = [...replies];
     if (replySort === 'likes') {
@@ -741,6 +765,14 @@ const PostDetail = () => {
                 ))}
               </div>
             )}
+
+            {isLocalDraft && (
+              <div className={styles.draftNotice}>
+                <strong>本地草稿</strong>
+                <span>这篇内容仅当前账号可见，还没有发布到服务器。</span>
+                {draftFeedback && <span className={styles.draftNoticeError}>{draftFeedback}</span>}
+              </div>
+            )}
           </div>
 
           <div className={`${styles.postContent} markdown-body`}>
@@ -753,6 +785,26 @@ const PostDetail = () => {
           </div>
 
           <div className={styles.actionBar}>
+            {isLocalDraft && (
+              <>
+                <button className={styles.actionButton} onClick={handleEditPost} title="继续编辑草稿">
+                  继续编辑
+                </button>
+                <button
+                  className={`${styles.actionButton} ${styles.publishDraftButton}`}
+                  onClick={handlePublishDraft}
+                  disabled={draftActionLoading}
+                  title="发布草稿"
+                >
+                  {draftActionLoading ? '发布中...' : '立即发布'}
+                </button>
+                <button className={`${styles.actionButton} ${styles.dangerButton}`} onClick={handleDeletePost} title="删除草稿">
+                  删除草稿
+                </button>
+              </>
+            )}
+            {!isLocalDraft && (
+              <>
             <button
               className={`${styles.actionButton} ${isLiked(id) ? styles.liked : ''}`}
               onClick={handleToggleLike}
@@ -790,8 +842,11 @@ const PostDetail = () => {
                 ✏️
               </button>
             )}
+              </>
+            )}
           </div>
 
+          {!isLocalDraft && (
           <div className={styles.replySection}>
             <div className={styles.replyHeaderRow}>
               <h3 className={styles.replyTitle}>回复</h3>
@@ -987,6 +1042,7 @@ const PostDetail = () => {
               </div>
             )}
           </div>
+          )}
         </>
       )}
 

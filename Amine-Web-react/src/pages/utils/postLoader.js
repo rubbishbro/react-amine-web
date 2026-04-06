@@ -4,6 +4,7 @@ import { isBlocked } from './blockStore.js';
 import { ensurePostReadTime } from './postReadTime.js';
 import { buildUserId, getCurrentViewerId } from './userId.js';
 import { API_BASE_URL } from '../config/api.js';
+import { readStoredToken } from '../../services/auth.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
 const REMOTE_POSTS_CACHE_KEY = 'aw_posts_cache';
@@ -53,6 +54,21 @@ const normalizeAuthor = (author) => {
     isAdmin: author.isAdmin === true || author.is_superuser === true,
     tagInfo,
   };
+};
+
+const isDraftPost = (post) => post?.isDraft === true || post?.status === 'draft';
+
+const getDraftOwnerId = (post) => {
+  if (!post) return '';
+  if (post.draftOwnerId) return String(post.draftOwnerId);
+  const normalizedAuthor = normalizeAuthor(post.author);
+  return normalizedAuthor?.id ? String(normalizedAuthor.id) : '';
+};
+
+const canViewerAccessDraft = (post, viewerId = getCurrentViewerId()) => {
+  if (!isDraftPost(post)) return true;
+  if (!viewerId) return false;
+  return getDraftOwnerId(post) === String(viewerId);
 };
 
 /**
@@ -113,6 +129,21 @@ const writeRemotePostsCache = (posts) => {
   } catch (error) {
     console.error('Error writing remote posts cache:', error);
   }
+};
+
+export const cacheRemotePost = (post) => {
+  const transformed = transformBackendPost(post);
+  if (!transformed?.id) return null;
+
+  const cached = readRemotePostsCache();
+  const index = cached.findIndex((item) => item.id === transformed.id);
+  if (index >= 0) {
+    cached[index] = transformed;
+  } else {
+    cached.unshift(transformed);
+  }
+  writeRemotePostsCache(cached);
+  return transformed;
 };
 
 const filterVisiblePosts = (posts) => {
@@ -319,9 +350,58 @@ export const upsertLocalPost = (postData) => {
   return normalized;
 };
 
+export const saveLocalDraft = (postData) => {
+  const normalizedAuthor = normalizeAuthor(postData.author);
+  const draftOwnerId = postData.draftOwnerId || normalizedAuthor.id || getCurrentViewerId() || '';
+  return upsertLocalPost({
+    ...postData,
+    author: normalizedAuthor,
+    draftOwnerId,
+    status: 'draft',
+    isDraft: true,
+    is_published: false,
+  });
+};
+
+export const removeLocalDraft = (postId) => {
+  if (!postId) return;
+  const posts = readLocalPosts();
+  const nextPosts = posts.filter((item) => item.id !== postId);
+  if (nextPosts.length !== posts.length) {
+    writeLocalPosts(nextPosts);
+  }
+};
+
+export const replaceDraftAfterPublish = (draftId, backendPost) => {
+  const cached = cacheRemotePost(backendPost);
+  if (draftId) {
+    removeLocalDraft(draftId);
+  }
+  return cached;
+};
+
+export const publishLocalDraft = async (postData, token = '') => {
+  const resolvedToken = token || readStoredToken();
+  if (!resolvedToken) {
+    throw new Error('登录已失效，请重新登录后发布');
+  }
+
+  const PostAPI = (await import('../../services/getpostfromback.js')).default;
+  const api = new PostAPI();
+  const created = await api.createPost(postData, resolvedToken);
+
+  if (!created?.id) {
+    throw new Error('发布失败：后端未返回帖子 ID');
+  }
+
+  return replaceDraftAfterPublish(postData?.id, created) || transformBackendPost(created);
+};
+
 const getLocalPostById = (postId) => {
   const posts = readLocalPosts();
-  return posts.find((item) => item.id === postId) || null;
+  const matched = posts.find((item) => item.id === postId) || null;
+  if (!matched) return null;
+  return canViewerAccessDraft(matched) ? matched : null;
 };
 
 const getCachedPostById = (postId) => {
@@ -335,7 +415,10 @@ const getCachedPostById = (postId) => {
  */
 const getLocalDraftPosts = () => {
   const posts = readLocalPosts();
+  const viewerId = getCurrentViewerId();
+  if (!viewerId) return [];
   return posts.filter((item) => {
+    if (!canViewerAccessDraft(item, viewerId)) return false;
     // 只返回草稿状态的帖子
     const isPublished = item.status === 'published' || item.is_published === true;
     return !isPublished;
@@ -390,7 +473,7 @@ const buildMergedPosts = () => {
   const localDrafts = getLocalDraftPosts();
   localDrafts.forEach((post) => {
     // 为草稿添加标识
-    const draftPost = { ...post, isDraft: true };
+    const draftPost = { ...post, isDraft: true, status: 'draft', is_published: false };
     merged.set(post.id, applyPinned(draftPost, pinnedIds));
   });
 
@@ -423,7 +506,7 @@ export const loadPostContent = async (postId) => {
     // 1. 优先查找本地帖子（草稿等）
     const localPost = getLocalPostById(postId);
     if (localPost) {
-      return applyPinned(localPost, readPinnedPosts());
+      return applyPinned({ ...localPost, isDraft: true, status: 'draft', is_published: false }, readPinnedPosts());
     }
     
     // 2. 从后端 API 获取
@@ -435,16 +518,7 @@ export const loadPostContent = async (postId) => {
       if (rawPost) {
         const transformedPost = transformBackendPost(rawPost);
         if (transformedPost) {
-          // 更新缓存
-          const cached = readRemotePostsCache();
-          const index = cached.findIndex(p => p.id === transformedPost.id);
-          if (index >= 0) {
-            cached[index] = transformedPost;
-          } else {
-            cached.push(transformedPost);
-          }
-          writeRemotePostsCache(cached);
-          
+          cacheRemotePost(rawPost);
           return applyPinned(transformedPost, readPinnedPosts());
         }
       }

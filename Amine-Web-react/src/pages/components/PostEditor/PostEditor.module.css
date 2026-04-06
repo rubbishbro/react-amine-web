@@ -92,6 +92,26 @@
   gap: 15px;
 }
 
+.feedbackBanner {
+  margin: -10px 40px 0;
+  padding: 14px 18px;
+  border-radius: 16px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.feedbackSuccess {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.feedbackError {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
 /* 内容区域 */
 .editorContent {
   grid-row: 2;
@@ -515,6 +535,10 @@
     padding-top: 20px;
   }
 
+  .feedbackBanner {
+    margin: -5px 25px 0;
+  }
+
   .editorFooter {
     padding-bottom: 20px;
   }
@@ -544,6 +568,10 @@
   .editorContent,
   .editorFooter {
     padding: 0 20px;
+  }
+
+  .feedbackBanner {
+    margin: 0 20px;
   }
 
   .editorFooter {
@@ -599,6 +627,11 @@
   .editorContent,
   .editorFooter {
     padding: 0 15px;
+  }
+
+  .feedbackBanner {
+    margin: 0 15px;
+    border-radius: 12px;
   }
 
   .editorHeader {
