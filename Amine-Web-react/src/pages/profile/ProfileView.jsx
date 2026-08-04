@@ -19,6 +19,7 @@ import {
     syncFollowFromBackend,
 } from '../utils/followStore';
 import { isBlocked, syncBlockedFromBackend } from '../utils/blockStore';
+import { resolveMediaUrl } from '../config/api.js';
 
 const normalizeText = (value) => (value ?? '').toString().trim();
 
@@ -70,8 +71,8 @@ const mapRelationUserToAuthor = (backendUser) => {
     return {
         id,
         name: backendUser?.username || backendUser?.email || `用户 ${id || ''}`.trim(),
-        avatar: backendUser?.avatar_url || '',
-        cover: backendUser?.cover_url || '',
+        avatar: resolveMediaUrl(backendUser?.avatar_url),
+        cover: resolveMediaUrl(backendUser?.cover_url),
         school: backendUser?.userSchool || '',
         className: backendUser?.userClass || '',
         email: backendUser?.email || '',

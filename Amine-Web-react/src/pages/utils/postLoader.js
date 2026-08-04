@@ -3,7 +3,7 @@ import { isUserBanned } from './adminMeta.js';
 import { isBlocked } from './blockStore.js';
 import { ensurePostReadTime } from './postReadTime.js';
 import { buildUserId, getCurrentViewerId } from './userId.js';
-import { API_BASE_URL } from '../config/api.js';
+import { API_BASE_URL, resolveMediaUrl } from '../config/api.js';
 import { readStoredToken } from '../../services/auth.js';
 
 const LOCAL_POSTS_KEY = 'aw_local_posts';
@@ -46,8 +46,8 @@ const normalizeAuthor = (author) => {
     ...author,
     id,
     name,
-    avatar: author.avatar || author.avatarUrl || author.avatarURL || author.avatar_url || '',
-    cover: author.cover || author.coverUrl || author.coverURL || author.cover_url || '',
+    avatar: resolveMediaUrl(author.avatar || author.avatarUrl || author.avatarURL || author.avatar_url),
+    cover: resolveMediaUrl(author.cover || author.coverUrl || author.coverURL || author.cover_url),
     school: author.school || author.college || author.userSchool || '',
     className: author.className || author.class || author.grade || author.userClass || '',
     email: author.email || '',

@@ -1,6 +1,12 @@
-import { buildApiUrl } from '../pages/config/api.js';
+import { buildApiUrl, resolveMediaUrl } from '../pages/config/api.js';
 
 const TOKEN_KEY = 'aw_access_token';
+
+const normalizeUserMedia = (user) => user ? {
+  ...user,
+  avatar_url: resolveMediaUrl(user.avatar_url),
+  cover_url: resolveMediaUrl(user.cover_url),
+} : user;
 
 const parseErrorMessage = async (response) => {
   try {
@@ -132,7 +138,7 @@ export async function fetchCurrentUser(token) {
     throw new Error(detail || `获取用户信息失败（HTTP ${response.status}）`);
   }
 
-  return response.json();
+  return normalizeUserMedia(await response.json());
 }
 
 /**
@@ -144,7 +150,7 @@ export async function fetchUserByUsername(username) {
   try {
     const response = await fetch(buildApiUrl(`/users/username/${encodeURIComponent(username)}`));
     if (!response.ok) return null;
-    return response.json();
+    return normalizeUserMedia(await response.json());
   } catch {
     return null;
   }
@@ -166,7 +172,8 @@ export async function uploadFile(token, file) {
     const detail = await parseErrorMessage(response);
     throw new Error(detail || `上传失败（HTTP ${response.status}）`);
   }
-  return response.json(); // { url: '...' }
+  const result = await response.json();
+  return { ...result, url: resolveMediaUrl(result?.url) };
 }
 
 /**
@@ -198,5 +205,5 @@ export async function updateUserAvatar(token, { avatarUrl, coverUrl } = {}) {
     const detail = await parseErrorMessage(response);
     throw new Error(detail || '头像更新失败');
   }
-  return response.json();
+  return normalizeUserMedia(await response.json());
 }

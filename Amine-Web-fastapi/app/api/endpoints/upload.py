@@ -69,7 +69,8 @@ async def upload_file(
         if _qiniu_enabled:
             url = await asyncio.to_thread(_qiniu_upload_sync, data, key)
         else:
-            url = _local_upload(data, os.path.basename(key))
+            relative_url = _local_upload(data, os.path.basename(key))
+            url = f"{str(request.base_url).rstrip('/')}{relative_url}"
         return {"url": url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="File upload failed")

@@ -31,3 +31,16 @@ export const buildApiUrl = (path) => {
   const safePath = path?.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${safePath}`;
 };
+
+export const resolveMediaUrl = (value) => {
+  const url = String(value || '').trim();
+  if (!url || /^(?:https?:|data:|blob:)/i.test(url)) return url;
+  if (!url.startsWith('/') || typeof window === 'undefined') return url;
+
+  try {
+    const apiUrl = new URL(API_BASE_URL, window.location.origin);
+    return new URL(url, apiUrl.origin).toString();
+  } catch {
+    return url;
+  }
+};
