@@ -1,41 +1,14 @@
-from typing import Any, List, Optional
-from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.encoders import jsonable_encoder
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from pydantic import BaseModel
 
 from app.crud import crud_user
 from app.api import deps
 from app.models.user import User
-from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
+from app.schemas.user import User as UserSchema, UserPublic
 
 router = APIRouter()
-
-@router.post("/", response_model=UserSchema)
-def create_user(
-    *,
-    db: Session = Depends(deps.get_db),
-    user_in: UserCreate,
-) -> Any:
-    """
-    创建用户
-    """
-    # 检查邮箱是否已存在
-    user = crud_user.get_by_email(db, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="该邮箱已被注册",
-        )
-    # 检查用户名是否已存在
-    user = crud_user.get_by_username(db, username=user_in.username)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="该用户名已被占用",
-        )
-    user = crud_user.create(db, obj_in=user_in)
-    return user
 
 @router.get("/me", response_model=UserSchema)
 def read_user_me(
@@ -46,7 +19,7 @@ def read_user_me(
     """
     return current_user
 
-@router.get("/username/{username}", response_model=UserSchema)
+@router.get("/username/{username}", response_model=UserPublic)
 def read_user_by_username(
     username: str,
     db: Session = Depends(deps.get_db),

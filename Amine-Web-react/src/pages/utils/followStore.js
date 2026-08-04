@@ -104,28 +104,21 @@ export const toggleFollowUser = async (token, viewerId, targetId) => {
     return { isFollowing: false, followerCount: getFollowerCount(targetId) };
   }
   const currentlyFollowing = isFollowingUser(viewerId, targetId);
-  try {
-    if (currentlyFollowing) {
-      await unfollowUser(token, targetId);
-    } else {
-      await followUser(token, targetId);
-    }
-    const nextFollowing = !currentlyFollowing;
-    const cache = readCache();
-    const prevCount = cache[String(targetId)]?.followerCount ?? 0;
-    const nextCount = Math.max(0, prevCount + (nextFollowing ? 1 : -1));
-    cache[String(targetId)] = { followerCount: nextCount, isFollowing: nextFollowing, viewerId: String(viewerId) };
-    writeCache(cache);
-    return { isFollowing: nextFollowing, followerCount: nextCount };
-  } catch (err) {
-    throw err;
+  if (currentlyFollowing) {
+    await unfollowUser(token, targetId);
+  } else {
+    await followUser(token, targetId);
   }
+  const nextFollowing = !currentlyFollowing;
+  const cache = readCache();
+  const prevCount = cache[String(targetId)]?.followerCount ?? 0;
+  const nextCount = Math.max(0, prevCount + (nextFollowing ? 1 : -1));
+  cache[String(targetId)] = { followerCount: nextCount, isFollowing: nextFollowing, viewerId: String(viewerId) };
+  writeCache(cache);
+  return { isFollowing: nextFollowing, followerCount: nextCount };
 };
 
 /**
  * @deprecated 已迁移至后端，不再维护本地关系图
  * 保留空实现以避免旧调用处报错
  */
-export const removeFollowRelation = (_viewerId, _targetId) => {
-  // no-op: 关注关系由后端管理
-};

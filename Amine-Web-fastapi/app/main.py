@@ -3,10 +3,9 @@
 import logging
 import logging.config
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles # 静态资源托管
 from fastapi.middleware.cors import CORSMiddleware # 前后端跨域
-from fastapi.responses import JSONResponse
 import uvicorn # 运行服务器
 
 from slowapi import _rate_limit_exceeded_handler
@@ -78,14 +77,13 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-    allow_credentials=True, # 允许携带cookie和authorization头
-    allow_methods=["*"], # 允许所有方法（GET, POST, PUT, DELETE, OPTIONS 等）
-    allow_headers=["*"], # 允许所有请求头
-    expose_headers=["*"], # 暴露所有响应头给前端
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 # 静态资源托管(图片/音频上传）
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static/uploads", StaticFiles(directory="static/uploads"), name="uploads")
 
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)

@@ -10,7 +10,7 @@ import { initCommunityBoard, teardownCommunityBoard, closeSidebar, usePageTitle 
 import PostList from '../components/PostList'
 import PostDetail from '../components/PostDetail'
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
-import { useUser } from '../context/UserContext'
+import { useUser } from '../context/userContext.js'
 import { buildUserId } from '../utils/userId'
 import { getUnreadNotificationCount } from '../utils/notifications'
 
@@ -48,6 +48,38 @@ import { Content as MusicGamesContent } from '../musicgames/musicgames.jsx'
 //收藏夹页面
 import { Content as FavoritesContent } from '../favorites/index.jsx'
 
+const readThread = (key) => {
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const readThreadReadAt = (viewer, other) => {
+  if (!viewer || !other) return '';
+  try {
+    return localStorage.getItem(`aw_dm_read_${viewer}_${other}`) || '';
+  } catch {
+    return '';
+  }
+};
+
+const getThreadUnreadCount = (messages, viewer, other) => {
+  if (!messages.length || !viewer || !other) return 0;
+  const readAt = readThreadReadAt(viewer, other);
+  const readTime = readAt ? new Date(readAt).getTime() : 0;
+  return messages.reduce((count, msg) => {
+    if (msg.from !== other) return count;
+    const msgTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
+    return msgTime > readTime ? count + 1 : count;
+  }, 0);
+};
+
 export default function CommunityBoard() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -56,58 +88,6 @@ export default function CommunityBoard() {
   const { user } = useUser();
   const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const readThread = (key) => {
-    if (!key) return [];
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const readThreadReadAt = (viewer, other) => {
-    if (!viewer || !other) return '';
-    try {
-      return localStorage.getItem(`aw_dm_read_${viewer}_${other}`) || '';
-    } catch {
-      return '';
-    }
-  };
-
-  const getUnreadCount = (messages, viewer, other) => {
-    if (!messages.length || !viewer || !other) return 0;
-    const readAt = readThreadReadAt(viewer, other);
-    const readTime = readAt ? new Date(readAt).getTime() : 0;
-    return messages.reduce((count, msg) => {
-      if (msg.from !== other) return count;
-      const msgTime = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
-      return msgTime > readTime ? count + 1 : count;
-    }, 0);
-  };
-
-  const refreshUnreadCount = () => {
-    if (!viewerId) {
-      setUnreadCount(0);
-      return;
-    }
-    let total = 0;
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith('aw_dm_')) continue;
-      if (!key.includes(viewerId)) continue;
-      const list = readThread(key);
-      if (!list.length) continue;
-      const last = list[list.length - 1];
-      const otherId = last.from === viewerId ? last.to : last.from;
-      total += getUnreadCount(list, viewerId, otherId);
-    }
-    total += getUnreadNotificationCount(viewerId);
-    setUnreadCount(total);
-  };
 
   // 根据当前路径设置标题
   useEffect(() => {
@@ -146,7 +126,25 @@ export default function CommunityBoard() {
   }, []);
 
   useEffect(() => {
-    refreshUnreadCount();
+    const refreshUnreadCount = () => {
+      if (!viewerId) {
+        setUnreadCount(0);
+        return;
+      }
+      let total = 0;
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith('aw_dm_') || !key.includes(viewerId)) continue;
+        const list = readThread(key);
+        if (!list.length) continue;
+        const last = list[list.length - 1];
+        const otherId = last.from === viewerId ? last.to : last.from;
+        total += getThreadUnreadCount(list, viewerId, otherId);
+      }
+      total += getUnreadNotificationCount(viewerId);
+      setUnreadCount(total);
+    };
+    queueMicrotask(refreshUnreadCount);
     const handleUpdate = () => refreshUnreadCount();
     window.addEventListener('aw-messages-updated', handleUpdate);
     window.addEventListener('aw-notifications-updated', handleUpdate);

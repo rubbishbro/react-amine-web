@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Blacklist.module.css';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { buildUserId } from '../utils/userId';
 import { syncBlockedFromBackend, toggleBlock } from '../utils/blockStore';
 
@@ -17,7 +17,6 @@ export default function Blacklist() {
 
     useEffect(() => {
         if (!viewerId || !authToken) return;
-        setLoading(true);
         syncBlockedFromBackend(authToken, viewerId)
             .then((ids) => setList(ids))
             .catch(() => setList([]))

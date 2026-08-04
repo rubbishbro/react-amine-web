@@ -293,11 +293,6 @@ const writePinnedPosts = (ids) => {
   }
 };
 
-const isPostDeleted = (postId) => {
-  const ids = readDeletedPosts();
-  return ids.includes(postId);
-};
-
 export const markPostDeleted = (postId) => {
   clearDeletedPostMarker(postId);
   const posts = readLocalPosts();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -10,7 +10,7 @@ import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostDetail.module.css';
 import { clearPostsCache, deletePublishedPost, loadPostContent, publishLocalDraft, removeLocalDraft, setPostPinnedLocally } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config';
-import { useUser } from '../../context/UserContext';
+import { useUser } from '../../context/userContext.js';
 import {
   getPostStats,
   incrementPostViews,
@@ -22,7 +22,6 @@ import {
 import { buildTagInfo } from '../../utils/adminMeta';
 import { buildUserId, getMappedUserId } from '../../utils/userId';
 import { getFollowerCount, isFollowingUser, syncFollowFromBackend, toggleFollowUser } from '../../utils/followStore';
-import { pushNotification } from '../../utils/notifications';
 import { getPostComments, createComment, deleteComment, likeComment } from '../../../services/commentsApi';
 
 const isSameUser = (left, right) => {
@@ -47,7 +46,6 @@ const PostDetail = () => {
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [replyDraft, setReplyDraft] = useState('');
   const [replies, setReplies] = useState([]);
-  const [repliesLoading, setRepliesLoading] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   // 关注状态（从后端初始化）
@@ -65,11 +63,11 @@ const PostDetail = () => {
   const [replyLikeMap, setReplyLikeMap] = useState({});
   const isLocalDraft = post?.isDraft === true || post?.status === 'draft';
 
-  const getReplyLikeInfo = (_, replyId) => {
+  const getReplyLikeInfo = useCallback((_, replyId) => {
     if (!replyId) return { count: 0, liked: false };
     const info = replyLikeMap[String(replyId)];
     return info || { count: 0, liked: false };
-  };
+  }, [replyLikeMap]);
 
   const isReplyLikedByUser = (_, replyId) => {
     return getReplyLikeInfo(_, replyId).liked;
@@ -81,7 +79,7 @@ const PostDetail = () => {
   // 构建当前用户信息，ID生成方式与帖子作者一致
   const currentUserName = user?.profile?.name || '游客';
   const currentUserId = buildUserId(currentUserName, user?.id || 'guest');
-  const currentUser = {
+  const currentUser = useMemo(() => ({
     id: currentUserId,
     backendId: user?.id || null,
     name: currentUserName,
@@ -90,22 +88,22 @@ const PostDetail = () => {
     className: user?.profile?.className || '',
     email: user?.profile?.email || '',
     isAdmin: user?.isAdmin === true,
-  };
+  }), [
+    currentUserId,
+    currentUserName,
+    user?.id,
+    user?.isAdmin,
+    user?.profile?.avatar,
+    user?.profile?.school,
+    user?.profile?.className,
+    user?.profile?.email,
+  ]);
 
   // 获取当前用户的禁言/封禁状态（直接读后端同步的 user 对象）
   const userRestrictions = useMemo(() => ({
     isMuted: user?.isMuted === true,
     isBanned: user?.isBanned === true,
   }), [user?.isMuted, user?.isBanned]);
-
-  const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-  const buildPreview = (text, limit = 18) => {
-    if (!text) return '';
-    const plain = text.toString().replace(/\s+/g, ' ').trim();
-    if (plain.length <= limit) return plain;
-    return `${plain.slice(0, limit)}...`;
-  };
 
   const handleBack = () => {
     if (location.state?.from) {
@@ -145,15 +143,12 @@ const PostDetail = () => {
   useEffect(() => {
     if (!id || isLocalDraft) {
       setReplies([]);
-      setRepliesLoading(false);
       return;
     }
     let cancelled = false;
-    setRepliesLoading(true);
     // 尝试将 id 转换为数字（后端帖子 ID 是整数）
     const numericId = Number(id);
     if (Number.isNaN(numericId)) {
-      setRepliesLoading(false);
       return;
     }
     getPostComments(numericId)
@@ -195,9 +190,6 @@ const PostDetail = () => {
         if (cancelled) return;
         console.warn('[PostDetail] 加载评论失败，回退到空列表:', err.message);
         setReplies([]);
-      })
-      .finally(() => {
-        if (!cancelled) setRepliesLoading(false);
       });
     return () => { cancelled = true; };
   }, [id, isLocalDraft]);
@@ -260,19 +252,6 @@ const PostDetail = () => {
         replyToName: null,
         likes: 0,
       };
-      const authorId = getMappedUserId(post?.author?.id || '');
-      if (authorId && authorId !== currentUser.id) {
-        pushNotification({
-          userId: authorId,
-          targetType: 'post',
-          action: 'reply',
-          postId: id,
-          replyId: newReply.id,
-          preview: buildPreview(post?.summary || post?.title || post?.content || ''),
-          fromUserId: currentUser.id,
-          fromUserName: currentUser.name,
-        }, authToken);
-      }
       setReplies((prev) => [...prev, newReply]);
       setReplyLikeMap((prev) => ({ ...prev, [newReply.id]: { count: 0, liked: false } }));
       setReplyDraft('');
@@ -338,19 +317,6 @@ const PostDetail = () => {
         replyToName: target?.author?.name || '用户',
         likes: 0,
       };
-      const targetAuthorId = getMappedUserId(target?.author?.id || '');
-      if (targetAuthorId && targetAuthorId !== currentUser.id) {
-        pushNotification({
-          userId: targetAuthorId,
-          targetType: 'reply',
-          action: 'reply',
-          postId: id,
-          replyId: newReply.id,
-          preview: buildPreview(target?.content || ''),
-          fromUserId: currentUser.id,
-          fromUserName: currentUser.name,
-        }, authToken);
-      }
       setReplies((prev) => [...prev, newReply]);
       setReplyLikeMap((prev) => ({ ...prev, [newReply.id]: { count: 0, liked: false } }));
       setNestedDraft('');
@@ -499,18 +465,6 @@ const PostDetail = () => {
     const wasLiked = isLiked(id);
     toggleLike(id);
     updatePostLikes(id, wasLiked ? -1 : 1);
-    const authorId = getMappedUserId(post?.author?.id || '');
-    if (!wasLiked && authorId && authorId !== currentUser.id) {
-      pushNotification({
-        userId: authorId,
-        targetType: 'post',
-        action: 'like',
-        postId: id,
-        preview: buildPreview(post?.summary || post?.title || post?.content || ''),
-        fromUserId: currentUser.id,
-        fromUserName: currentUser.name,
-      }, authToken);
-    }
   };
 
   const handleToggleFavorite = () => {
@@ -554,9 +508,12 @@ const PostDetail = () => {
   };
 
   const author = post?.author;
-  const authorInfo = typeof author === 'object' && author !== null
-    ? author
-    : { name: author || '匿名' };
+  const authorInfo = useMemo(
+    () => (typeof author === 'object' && author !== null
+      ? author
+      : { name: author || '匿名' }),
+    [author],
+  );
   const mappedAuthorId = getMappedUserId(authorInfo.id || '');
   const hasAuthorLink = !!mappedAuthorId;
   const authorTagInfo = useMemo(() => buildTagInfo(authorInfo), [authorInfo]);
@@ -606,7 +563,7 @@ const PostDetail = () => {
     }
     list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     return list;
-  }, [replies, replySort, id, replyLikeMap]);
+  }, [replies, replySort, id, getReplyLikeInfo]);
 
   if (loading) {
     return (
@@ -970,19 +927,6 @@ const PostDetail = () => {
                                   ...prev,
                                   [String(reply.id)]: { count: result.likes ?? nextCount, liked: trueLiked },
                                 }));
-                                const replyAuthorId = reply?.author?.id || '';
-                                if (trueLiked && replyAuthorId && String(replyAuthorId) !== String(currentUser.backendId || currentUser.id)) {
-                                  pushNotification({
-                                    userId: replyAuthorId,
-                                    targetType: 'reply',
-                                    action: 'like',
-                                    postId: id,
-                                    replyId: reply.id,
-                                    preview: buildPreview(reply?.content || ''),
-                                    fromUserId: currentUser.id,
-                                    fromUserName: currentUser.name,
-                                  }, authToken);
-                                }
                               } catch {
                                 // 回滚乐观更新
                                 setReplyLikeMap((prev) => ({

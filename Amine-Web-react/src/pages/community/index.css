@@ -41,7 +41,7 @@
   content: '';
   position: fixed;
   inset: 0;
-  background: #f0f2f5 url('../../../BackGround.png') center / cover no-repeat;
+  background: #f0f2f5 url('/BackGround.png') center / cover no-repeat;
   background-attachment: fixed;
   z-index: -1;
   pointer-events: none;

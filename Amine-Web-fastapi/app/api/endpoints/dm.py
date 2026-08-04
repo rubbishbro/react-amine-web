@@ -6,12 +6,13 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from sqlmodel import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api import deps
-from app.crud import crud_dm
+from app.crud import crud_dm, crud_relation
 from app.models.direct_message import DirectMessage
 from app.models.user import User
+from app.models.user_relation import RelationType
 
 router = APIRouter()
 
@@ -73,7 +74,21 @@ class MessageOut(BaseModel):
 
 class SendMessageIn(BaseModel):
     receiver_id: int
-    content: str
+    content: str = Field(min_length=1, max_length=2000)
+
+
+def _ensure_can_message(db: Session, sender_id: int, receiver_id: int) -> User:
+    receiver = db.get(User, receiver_id)
+    if not receiver or not receiver.is_active or receiver.is_banned:
+        raise HTTPException(status_code=404, detail="User not found")
+    blocked = crud_relation.check_relation(
+        db, sender_id, receiver_id, RelationType.BLOCK
+    ) or crud_relation.check_relation(
+        db, receiver_id, sender_id, RelationType.BLOCK
+    )
+    if blocked:
+        raise HTTPException(status_code=403, detail="Messaging is blocked")
+    return receiver
 
 
 class ThreadSummary(BaseModel):
@@ -156,6 +171,7 @@ async def send_message(
         raise HTTPException(status_code=400, detail="消息内容不能为空")
     if payload.receiver_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能给自己发私信")
+    _ensure_can_message(db, current_user.id, payload.receiver_id)
 
     msg = crud_dm.send(
         db,
@@ -258,7 +274,7 @@ async def websocket_endpoint(
         payload_data = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         token_data = TokenPayload(**payload_data)
         auth_user = db.get(User, int(token_data.sub))
-        if not auth_user or not auth_user.is_active or auth_user.id != user_id:
+        if not auth_user or not auth_user.is_active or auth_user.is_banned or auth_user.id != user_id:
             await websocket.close(code=4001)
             return
     except Exception:
@@ -288,6 +304,12 @@ async def websocket_endpoint(
                     continue
                 if receiver_id == user_id:
                     await websocket.send_text(json.dumps({"event": "error", "detail": "不能给自己发私信"}))
+                    continue
+                try:
+                    _ensure_can_message(db, user_id, int(receiver_id))
+                except (HTTPException, TypeError, ValueError) as error:
+                    detail = error.detail if isinstance(error, HTTPException) else "Invalid receiver_id"
+                    await websocket.send_text(json.dumps({"event": "error", "detail": detail}))
                     continue
                 msg = crud_dm.send(db, sender_id=user_id, receiver_id=receiver_id, content=content)
                 msg_dict = {

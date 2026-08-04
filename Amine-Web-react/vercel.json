@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://api.lnssy-cykj.online/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

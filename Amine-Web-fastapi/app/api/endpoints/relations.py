@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
 from app.api import deps
-from app.crud import crud_relation
+from app.crud import crud_relation, crud_notification
+from app.models.notification import NotificationType
 from app.models.user import User
 from app.models.user_relation import RelationType
 from app.schemas.user_relation import RelationActionResponse, RelationStatus
-from app.schemas.user import User as UserSchema
+from app.schemas.user import UserPublic
 
 router = APIRouter()
 
@@ -46,6 +47,13 @@ def follow_user(
         from_user_id=current_user.id,
         to_user_id=user_id,
         relation_type=RelationType.FOLLOW,
+    )
+    crud_notification.create(
+        db,
+        recipient_id=user_id,
+        sender_id=current_user.id,
+        type=NotificationType.FOLLOW,
+        content=f"{current_user.username} followed you",
     )
     return {"success": True, "relation": relation}
 
@@ -125,7 +133,7 @@ def unblock_user(
     
     return {"success": True, "relation": None}
 
-@router.get("/{user_id}/followers", response_model=List[UserSchema])
+@router.get("/{user_id}/followers", response_model=List[UserPublic])
 def get_followers(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -139,7 +147,7 @@ def get_followers(
     followers = crud_relation.get_followers(db, user_id=user_id, skip=skip, limit=limit, order=order)
     return followers
 
-@router.get("/{user_id}/following", response_model=List[UserSchema])
+@router.get("/{user_id}/following", response_model=List[UserPublic])
 def get_following(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -153,7 +161,7 @@ def get_following(
     following = crud_relation.get_following(db, user_id=user_id, skip=skip, limit=limit, order=order)
     return following
 
-@router.get("/me/blocked", response_model=List[UserSchema])
+@router.get("/me/blocked", response_model=List[UserPublic])
 def get_my_blocked_users(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),

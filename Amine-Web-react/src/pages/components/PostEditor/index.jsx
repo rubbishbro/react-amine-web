@@ -10,7 +10,7 @@ import 'react-markdown-editor-lite/lib/index.css';
 import styles from './PostEditor.module.css';
 import { getAllCategories, loadPostContent, publishLocalDraft, saveLocalDraft } from '../../utils/postLoader';
 import { getCategoryTextColor } from '../../config';
-import { useUser } from '../../context/UserContext';
+import { useUser } from '../../context/userContext.js';
 import { buildUserId } from '../../utils/userId';
 import { calculatePostReadTime, getPostWordCount } from '../../utils/postReadTime';
 

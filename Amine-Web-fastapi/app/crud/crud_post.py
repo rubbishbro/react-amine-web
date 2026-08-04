@@ -23,7 +23,11 @@ def get_multi(
     from sqlalchemy.orm import selectinload
     
     # 使用 selectinload 预加载 author，避免 N+1 查询问题
-    statement = select(Post).options(selectinload(Post.author))
+    statement = (
+        select(Post)
+        .options(selectinload(Post.author))
+        .where(Post.is_published.is_(True))
+    )
     if category:
         statement = statement.where(Post.category == category)
     statement = statement.order_by(Post.created_at.desc()).offset(skip).limit(limit)
@@ -32,7 +36,11 @@ def get_multi(
 
 
 def count(db: Session, *, category: Optional[str] = None) -> int:
-    statement = select(func.count()).select_from(Post)
+    statement = (
+        select(func.count())
+        .select_from(Post)
+        .where(Post.is_published.is_(True))
+    )
     if category:
         statement = statement.where(Post.category == category)
     result = db.exec(statement).one()

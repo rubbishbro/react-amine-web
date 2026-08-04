@@ -1,5 +1,5 @@
 
-.tech-root { font-family: 'Quicksand', 'Noto Sans SC', sans-serif; background-image:url('../assets/BackGround.png'); background-size:cover; background-position:center; min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--text-main,#4A4A4A); }
+.tech-root { font-family: 'Quicksand', 'Noto Sans SC', sans-serif; background-image:url('/BackGround.png'); background-size:cover; background-position:center; min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--text-main,#4A4A4A); }
 .tech-root .main-card{ width:85%; height:85%; background:rgba(255,255,255,0.94); border-radius:18px; box-shadow:0 10px 25px rgba(0,0,0,0.06)}
 .tech-root .card-content{ padding:28px 36px }
 

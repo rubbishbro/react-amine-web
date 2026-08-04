@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
 from app.api import deps
-from app.crud import crud_comment
+from app.crud import crud_comment, crud_notification
+from app.models.notification import NotificationType
 from app.models.user import User
 from app.models.post import Post
 from app.models.comment import Comment
@@ -43,6 +44,19 @@ def create_comment(
             raise HTTPException(status_code=400, detail="父评论不属于该帖子")
     
     comment = crud_comment.create(db, obj_in=comment_in, author_id=current_user.id)
+    recipient_id = post.author_id
+    if comment_in.parent_id:
+        recipient_id = parent_comment.author_id
+    if recipient_id and recipient_id != current_user.id:
+        crud_notification.create(
+            db,
+            recipient_id=recipient_id,
+            sender_id=current_user.id,
+            type=NotificationType.REPLY,
+            post_id=comment_in.post_id,
+            comment_id=comment.id,
+            content=comment.content[:300],
+        )
     return comment
 
 @router.get("/post/{post_id}", response_model=List[CommentWithAuthor])
@@ -156,9 +170,20 @@ def like_comment(
     """
     切换评论点赞状态（已点赞则取消，未点赞则添加）
     """
-    comment, liked = crud_comment.toggle_like(db, comment_id=comment_id, user_id=current_user.id)
-    if not comment:
+    existing_comment = db.get(Comment, comment_id)
+    if not existing_comment or existing_comment.is_deleted:
         raise HTTPException(status_code=404, detail="评论不存在")
+    comment, liked = crud_comment.toggle_like(db, comment_id=comment_id, user_id=current_user.id)
+    if liked and comment.author_id != current_user.id:
+        crud_notification.create(
+            db,
+            recipient_id=comment.author_id,
+            sender_id=current_user.id,
+            type=NotificationType.LIKE,
+            post_id=comment.post_id,
+            comment_id=comment.id,
+            content=comment.content[:300],
+        )
     
     return {"success": True, "likes": comment.likes, "liked": liked}
 

@@ -6,7 +6,7 @@ import { getCategoryColor } from '../../config';
 import { Link, useNavigate } from 'react-router-dom';
 import { getPostStats, onPostStatsUpdated } from '../../utils/postStats';
 import { buildTagInfo } from '../../utils/adminMeta';
-import { useUser } from '../../context/UserContext';
+import { useUser } from '../../context/userContext.js';
 import { getMappedUserId } from '../../utils/userId';
 
 const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCategory = null }) => {
@@ -55,36 +55,49 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     );
   };
 
-  const authorInfo = typeof post.author === 'object' && post.author !== null
-    ? post.author
-    : { name: post.author || '匿名' };
+  const authorInfo = useMemo(
+    () => (typeof post?.author === 'object' && post.author !== null
+      ? post.author
+      : { name: post?.author || '匿名' }),
+    [post?.author],
+  );
   const authorLinkId = getMappedUserId(authorInfo.id || '');
   const hasAuthorLink = !!authorLinkId;
 
   // 直接从后端数据构建 tagInfo，不依赖 localStorage
   const tagInfo = useMemo(() => buildTagInfo(authorInfo), [authorInfo]);
 
-  const baseStats = useMemo(() => ({
+  const baseStats = {
     views: post?.views ?? 0,
     likes: post?.likes ?? 0,
     favorites: post?.favorites ?? 0,
     replies: post?.replies ?? 0,
-  }), [post?.views, post?.likes, post?.favorites, post?.replies]);
+  };
 
   const navigate = useNavigate();
 
-  const [stats, setStats] = useState(() => getPostStats(post?.id, baseStats));
+  const [statsOverride, setStatsOverride] = useState(null);
+  const stats = statsOverride?.postId === post?.id
+    ? statsOverride.value
+    : getPostStats(post?.id, baseStats);
 
   useEffect(() => {
     if (!post?.id) return;
-    setStats(getPostStats(post.id, baseStats));
     const unsubscribe = onPostStatsUpdated((event) => {
       if (event?.detail?.postId === post.id) {
-        setStats(getPostStats(post.id, baseStats));
+        setStatsOverride({
+          postId: post.id,
+          value: getPostStats(post.id, {
+            views: post?.views ?? 0,
+            likes: post?.likes ?? 0,
+            favorites: post?.favorites ?? 0,
+            replies: post?.replies ?? 0,
+          }),
+        });
       }
     });
     return unsubscribe;
-  }, [post?.id, baseStats]);
+  }, [post?.id, post?.views, post?.likes, post?.favorites, post?.replies]);
 
   // 提前返回检查放在所有hooks之后
   if (!post) return null;

@@ -1,9 +1,11 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from app.crud import crud_interact
+from app.crud import crud_interact, crud_notification
 from app.api import deps
+from app.models.notification import NotificationType
+from app.models.post import Post
 from app.models.user import User
 from app.schemas.interact import Interaction, InteractionCreate
 
@@ -19,7 +21,19 @@ def toggle_like(
     """
     切换帖子点赞状态（已点赞则取消，未点赞则添加）
     """
+    post = db.get(Post, post_id)
+    if not post or not post.is_published:
+        raise HTTPException(status_code=404, detail="Post not found")
     liked = crud_interact.toggle_like(db, post_id=post_id, user_id=current_user.id)
+    if liked and post.author_id and post.author_id != current_user.id:
+        crud_notification.create(
+            db,
+            recipient_id=post.author_id,
+            sender_id=current_user.id,
+            type=NotificationType.LIKE,
+            post_id=post.id,
+            content=(post.summary or post.title)[:300],
+        )
     return {"liked": liked, "post_id": post_id}
 
 # ─── 切换收藏 ───────────────────────────────────────────────────────────────
@@ -32,6 +46,9 @@ def toggle_favorite(
     """
     切换帖子收藏状态（已收藏则取消，未收藏则添加）
     """
+    post = db.get(Post, post_id)
+    if not post or not post.is_published:
+        raise HTTPException(status_code=404, detail="Post not found")
     favorited = crud_interact.toggle_favorite(db, post_id=post_id, user_id=current_user.id)
     return {"favorited": favorited, "post_id": post_id}
 

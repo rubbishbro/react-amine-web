@@ -2,13 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import styles from './SearchResults.module.css';
 import Post from '../Post';
-import { useUser } from '../../context/UserContext';
 import { API_BASE_URL } from '../../config/api';
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useUser();
   const query = searchParams.get('q') || '';
   
   const [results, setResults] = useState({ posts: [], users: [], isTagSearch: false });

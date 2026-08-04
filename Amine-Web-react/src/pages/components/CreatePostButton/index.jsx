@@ -2,8 +2,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styles from './CreatePostButton.module.css';
-import { useUser } from '../../context/UserContext';
-import { buildUserId } from '../../utils/userId';
+import { useUser } from '../../context/userContext.js';
 
 const CreatePostButton = () => {
   const navigate = useNavigate();

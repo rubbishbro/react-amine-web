@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import styles from './Profile.module.css';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { buildUserId, getMappedUserId } from '../utils/userId';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { adminActivate } from '../../services/adminApi';
@@ -17,28 +17,11 @@ const emptyProfile = {
 };
 
 export default function Profile() {
-    const { user, updateProfile, logout, setAdmin, authToken, refreshUser } = useUser();
+    const { user, updateProfile, logout, authToken, refreshUser } = useUser();
     const location = useLocation();
     const navigate = useNavigate();
 
     const isLoggedIn = user?.loggedIn === true;
-
-    useEffect(() => {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    }, []);
-
-    useEffect(() => {
-        if (location.state?.openAdmin) {
-            setAdminOpen(true);
-        }
-    }, [location.state?.openAdmin]);
-
-    useEffect(() => {
-        if (!isLoggedIn) {
-            navigate('/login');
-        }
-    }, [isLoggedIn, navigate]);
-
     const [form, setForm] = useState(() => ({
         ...emptyProfile,
         ...(user?.profile || {})
@@ -51,23 +34,32 @@ export default function Profile() {
     const isAdmin = user?.isAdmin === true;
 
     useEffect(() => {
-        const currentUserId = user?.id || '';
-        if (currentUserId !== lastUserIdRef.current) {
-            lastUserIdRef.current = currentUserId;
-            formDirtyRef.current = false;
-            setForm({
-                ...emptyProfile,
-                ...(user?.profile || {})
-            });
-            return;
-        }
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }, []);
 
-        if (!formDirtyRef.current) {
-            setForm({
-                ...emptyProfile,
-                ...(user?.profile || {})
-            });
+    useEffect(() => {
+        if (!isLoggedIn) {
+            navigate('/login');
         }
+    }, [isLoggedIn, navigate]);
+
+    useEffect(() => {
+        let cancelled = false;
+        queueMicrotask(() => {
+            if (cancelled) return;
+            const currentUserId = user?.id || '';
+            if (currentUserId !== lastUserIdRef.current) {
+                lastUserIdRef.current = currentUserId;
+                formDirtyRef.current = false;
+            }
+            if (!formDirtyRef.current) {
+                setForm({
+                    ...emptyProfile,
+                    ...(user?.profile || {})
+                });
+            }
+        });
+        return () => { cancelled = true; };
     }, [user?.profile, user?.id]);
 
     const handleChange = (e) => {

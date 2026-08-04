@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import styles from './Messages.module.css';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { buildUserId, getMappedUserId } from '../utils/userId';
-import { isBlocked, toggleBlock, readBlockedList, syncBlockedFromBackend } from '../utils/blockStore';
+import { isBlocked, toggleBlock, syncBlockedFromBackend } from '../utils/blockStore';
 import {
     getUserNotifications,
     markNotificationRead,
@@ -36,8 +36,6 @@ export default function Messages() {
     const [blocked, setBlocked] = useState(false);
     const [blockedByTarget, setBlockedByTarget] = useState(false);
     const [notifications, setNotifications] = useState([]);
-    const [threadsLoading, setThreadsLoading] = useState(false);
-    const [messagesLoading, setMessagesLoading] = useState(false);
     const wsClientRef = useRef(null);
 
     // 从 user 对象读取封禁/禁言状态（修复旧代码中 restrictions 未定义的 bug）
@@ -49,10 +47,8 @@ export default function Messages() {
     // 加载当前会话的私信（后端优先）
     useEffect(() => {
         if (!targetId || !authToken) return;
-        setMessagesLoading(true);
         const numericOtherId = Number(getMappedUserId(targetId) || targetId);
         if (!numericOtherId || Number.isNaN(numericOtherId)) {
-            setMessagesLoading(false);
             return;
         }
         getDmThread(authToken, numericOtherId)
@@ -72,15 +68,12 @@ export default function Messages() {
                     createdAt: m.created_at,
                 })));
             })
-            .catch(() => { /* fallback to empty */ })
-            .finally(() => setMessagesLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [targetId, authToken]);
+            .catch(() => { /* fallback to empty */ });
+    }, [targetId, authToken, target?.avatar, target?.name, user?.id, viewerAvatar, viewerName]);
 
     // 加载会话列表（后端优先）
     useEffect(() => {
         if (!isListView || !authToken) return;
-        setThreadsLoading(true);
         getDmThreads(authToken)
             .then((data) => {
                 setThreads(data.map((t) => ({
@@ -93,9 +86,7 @@ export default function Messages() {
                     unreadCount: t.unread_count,
                 })));
             })
-            .catch(() => { /* fallback */ })
-            .finally(() => setThreadsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+            .catch(() => { /* fallback */ });
     }, [isListView, authToken]);
 
     // 同步通知（登录后拉取后端，否则读本地缓存）
@@ -121,14 +112,12 @@ export default function Messages() {
         setBlocked(isBlocked(viewerId, targetId));
         setBlockedByTarget(isBlocked(targetId, viewerId));
         // 再从后端同步
-        if (!user?.authToken && !window.__aw_token) return;
-        const token = authToken || '';
-        if (token) {
-            syncBlockedFromBackend(token, viewerId).then((ids) => {
+        if (authToken) {
+            syncBlockedFromBackend(authToken, viewerId).then((ids) => {
                 setBlocked(ids.includes(String(targetId)));
             }).catch(() => {});
         }
-    }, [viewerId, targetId]);
+    }, [viewerId, targetId, authToken]);
 
     // WebSocket 连接（登录且有 targetId 时建立连接）
     useEffect(() => {

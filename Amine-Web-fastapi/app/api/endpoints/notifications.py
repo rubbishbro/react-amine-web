@@ -32,14 +32,6 @@ class NotificationOut(BaseModel):
         from_attributes = True
 
 
-class PushNotificationIn(BaseModel):
-    recipient_id: int
-    type: NotificationType
-    post_id: Optional[int] = None
-    comment_id: Optional[int] = None
-    content: Optional[str] = None
-
-
 # ── 端点 ──────────────────────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[NotificationOut])
@@ -68,28 +60,6 @@ def unread_count(
     """获取未读通知数量（用于 badge）。"""
     count = crud_notification.get_unread_count(db, recipient_id=current_user.id)
     return {"unread_count": count}
-
-
-@router.post("/push", response_model=NotificationOut)
-def push_notification(
-    payload: PushNotificationIn,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-) -> Any:
-    """
-    产生一条通知（由触发动作的用户调用，例如点赞、回复后调用此接口）。
-    current_user 为 sender，payload.recipient_id 为接收者。
-    """
-    notification = crud_notification.create(
-        db,
-        recipient_id=payload.recipient_id,
-        sender_id=current_user.id,
-        type=payload.type,
-        post_id=payload.post_id,
-        comment_id=payload.comment_id,
-        content=payload.content,
-    )
-    return notification
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationOut)

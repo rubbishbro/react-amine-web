@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styles from './AdminPanel.module.css';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { buildTagInfo } from '../utils/adminMeta';
 import { updateAuthorInCaches } from '../utils/postLoader';
 import {
@@ -24,7 +24,7 @@ const formatDateTime = (value) => {
 };
 
 export default function AdminPanel() {
-    const { user, setAdmin, logout } = useUser();
+    const { user, logout } = useUser();
     const location = useLocation();
     const navigate = useNavigate();
 

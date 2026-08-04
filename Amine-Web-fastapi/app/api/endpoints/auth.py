@@ -144,6 +144,8 @@ def login_access_token(
         raise HTTPException(status_code=400, detail="Incorrect email/username or password")
     elif not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    elif user.is_banned:
+        raise HTTPException(status_code=403, detail="Account is banned")
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": security.create_access_token(

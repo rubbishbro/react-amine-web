@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './PublicProfile.module.css';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { adminGetUser } from '../../services/adminApi';
 import { fetchCurrentUser, fetchUserByUsername, readStoredToken } from '../../services/auth';
 import { getFollowing } from '../../services/relationsApi';

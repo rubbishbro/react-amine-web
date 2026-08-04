@@ -20,6 +20,8 @@ def read_posts(
     """
     读取已发布的帖子列表
     """
+    skip = max(skip, 0)
+    limit = min(max(limit, 1), 100)
     posts = crud_post.get_multi(db, skip=skip, limit=limit, category=category)
     total = crud_post.count(db, category=category)
     return {"items": posts, "total": total, "skip": skip, "limit": limit}
@@ -42,12 +44,18 @@ def read_post(
     *,
     db: Session = Depends(deps.get_db),
     id: int,
+    current_user: Optional[User] = Depends(deps.get_optional_current_user),
 ) -> Any:
     """
     读取指定ID的帖子
     """
     post = crud_post.get(db, id=id)
     if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if not post.is_published and (
+        current_user is None
+        or (not current_user.is_superuser and post.author_id != current_user.id)
+    ):
         raise HTTPException(status_code=404, detail="Post not found")
     return post
 

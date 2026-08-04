@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { registerByEmail, resetPasswordByEmailCode, sendEmailCode } from '../../services/auth';
 import styles from './Login.module.css';
 

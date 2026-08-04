@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Post from '../components/Post';
 import './index.css';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../context/userContext.js';
 import { loadPostContent } from '../utils/postLoader';
 
 export const Content = ({ onReadMore }) => {

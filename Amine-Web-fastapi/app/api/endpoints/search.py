@@ -4,13 +4,21 @@
 """
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlmodel import Session, select, or_, col, func
 
 from app.api import deps
 from app.models.post import Post
 from app.models.user import User
 from app.schemas.post import Post as PostSchema
-from app.schemas.user import User as UserSchema
+from app.schemas.user import UserPublic
+
+
+class SearchAllResponse(BaseModel):
+    posts: List[PostSchema]
+    users: List[UserPublic]
+    query: str
+    is_tag_search: bool = False
 
 router = APIRouter()
 
@@ -67,7 +75,7 @@ def search_posts(
     posts = db.exec(statement).all()
     return posts
 
-@router.get("/users", response_model=List[UserSchema])
+@router.get("/users", response_model=List[UserPublic])
 def search_users(
     *,
     db: Session = Depends(deps.get_db),
@@ -103,7 +111,7 @@ def search_users(
     users = db.exec(statement).all()
     return users
 
-@router.get("/all")
+@router.get("/all", response_model=SearchAllResponse)
 def search_all(
     *,
     db: Session = Depends(deps.get_db),

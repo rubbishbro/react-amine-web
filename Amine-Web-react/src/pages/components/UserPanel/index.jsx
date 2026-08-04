@@ -1,6 +1,6 @@
 import React from 'react';
 import styles from './UserPanel.module.css';
-import { useUser } from '../../context/UserContext';
+import { useUser } from '../../context/userContext.js';
 import { useNavigate } from 'react-router-dom';
 import { closeSidebar } from '../../community';
 import { buildUserId, getMappedUserId } from '../../utils/userId';

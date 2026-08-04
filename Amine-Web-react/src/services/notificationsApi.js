@@ -38,21 +38,6 @@ export const getUnreadNotificationCount = async (token) => {
 };
 
 /**
- * 推送一条通知（由触发动作的用户调用）
- * @param {string} token
- * @param {{ recipient_id:number, type:string, post_id?:number, comment_id?:number, content?:string }} payload
- */
-export const pushNotificationApi = async (token, payload) => {
-    const res = await fetch(buildApiUrl('/notifications/push'), {
-        method: 'POST',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(await extractError(res));
-    return res.json();
-};
-
-/**
  * 标记单条通知已读
  * @param {string} token
  * @param {number} notificationId

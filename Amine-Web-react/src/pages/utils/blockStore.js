@@ -89,25 +89,21 @@ export const readBlockedList = (viewerId) => {
 export const toggleBlock = async (token, viewerId, targetId) => {
     if (!token || !viewerId || !targetId) return { blocked: false };
     const currentlyBlocked = isBlocked(viewerId, targetId);
-    try {
-        if (currentlyBlocked) {
-            await unblockUser(token, targetId);
-        } else {
-            await blockUser(token, targetId);
-        }
-        const nextBlocked = !currentlyBlocked;
-        const cache = readCache();
-        const list = Array.isArray(cache[String(viewerId)]) ? [...cache[String(viewerId)]] : [];
-        if (nextBlocked) {
-            if (!list.includes(String(targetId))) list.push(String(targetId));
-        } else {
-            const idx = list.indexOf(String(targetId));
-            if (idx >= 0) list.splice(idx, 1);
-        }
-        cache[String(viewerId)] = list;
-        writeCache(cache);
-        return { blocked: nextBlocked };
-    } catch (err) {
-        throw err;
+    if (currentlyBlocked) {
+        await unblockUser(token, targetId);
+    } else {
+        await blockUser(token, targetId);
     }
+    const nextBlocked = !currentlyBlocked;
+    const cache = readCache();
+    const list = Array.isArray(cache[String(viewerId)]) ? [...cache[String(viewerId)]] : [];
+    if (nextBlocked) {
+        if (!list.includes(String(targetId))) list.push(String(targetId));
+    } else {
+        const idx = list.indexOf(String(targetId));
+        if (idx >= 0) list.splice(idx, 1);
+    }
+    cache[String(viewerId)] = list;
+    writeCache(cache);
+    return { blocked: nextBlocked };
 };

@@ -1,5 +1,5 @@
 # 依赖注入和鉴权的核心
-from typing import Generator
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -17,25 +17,41 @@ from app.models.user import User
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
 )
+optional_oauth2 = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/login/access-token", auto_error=False
+)
 
-# 获取当前用户
-def get_current_user(
-    db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
-) -> User:
+
+def _decode_user(db: Session, token: str) -> User:
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         token_data = TokenPayload(**payload)
-    except (JWTError, ValidationError):
+        user_id = int(token_data.sub)
+    except (JWTError, ValidationError, TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
         )
-    user = db.get(User, int(token_data.sub))
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+# 获取当前用户
+def get_current_user(
+    db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
+) -> User:
+    return _decode_user(db, token)
+
+
+def get_optional_current_user(
+    db: Session = Depends(get_db), token: Optional[str] = Depends(optional_oauth2)
+) -> Optional[User]:
+    if not token:
+        return None
+    return _decode_user(db, token)
 
 # 是否激活当前用户
 def get_current_active_user(
@@ -43,6 +59,8 @@ def get_current_active_user(
 ) -> User:
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    if current_user.is_banned:
+        raise HTTPException(status_code=403, detail="Account is banned")
     return current_user
 
 def get_current_superuser(

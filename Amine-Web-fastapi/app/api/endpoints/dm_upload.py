@@ -6,10 +6,11 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
 import os
 import uuid
 import asyncio
+import mimetypes
+from pathlib import Path
 from typing import Any
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, Response
 import httpx
-import io
 
 from app.core.limiter import limiter
 from app.core.config import settings
@@ -18,8 +19,8 @@ from app.api import deps
 
 router = APIRouter()
 
-UPLOAD_DIR = "static/dm_upload"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = Path("private/dm_upload")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".mp3", ".wav", ".mp4"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -40,14 +41,31 @@ def _qiniu_upload_sync(data: bytes, key: str) -> str:
     ret, info = put_data(token, key, data)
     if info.status_code != 200:
         raise RuntimeError(f"七牛上传失败: {info.error}")
-    return f"{settings.QINIU_DOMAIN.rstrip('/')}/{key}"
+    return key
 
 def _local_upload(data: bytes, filename: str) -> str:
     """保存到本地 static/dm_upload，返回相对 URL。"""
-    path = os.path.join(UPLOAD_DIR, filename)
+    path = UPLOAD_DIR / filename
     with open(path, "wb") as f:
         f.write(data)
-    return path
+    return f"dm_upload/{filename}"
+
+
+def _normalize_key(key: str) -> tuple[str, str]:
+    """Return a safe object key and filename, rejecting path traversal."""
+    normalized = (key or "").strip().replace("\\", "/").lstrip("/")
+    for prefix in ("static/dm_upload/", "private/dm_upload/"):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+    if normalized.startswith("dm_upload/"):
+        normalized = normalized[len("dm_upload/"):]
+    if not normalized or "/" in normalized or normalized in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid file key")
+    ext = Path(normalized).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    return f"dm_upload/{normalized}", normalized
 
 @router.post("/upload")
 @limiter.limit("30/minute")  # 防止大量上传耗尽存储空间
@@ -73,39 +91,52 @@ async def upload_file(
 
     try:
         if _qiniu_enabled:
-            url = await asyncio.to_thread(_qiniu_upload_sync, data, key)
+            stored_key = await asyncio.to_thread(_qiniu_upload_sync, data, key)
         else:
-            url = _local_upload(data, os.path.basename(key))
-        return {"url": url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            stored_key = _local_upload(data, os.path.basename(key))
+        return {
+            "key": stored_key,
+            "url": f"/api/v1/dm_upload/download?key={stored_key}",
+        }
+    except Exception:
+        raise HTTPException(status_code=500, detail="File upload failed")
 
-async def _qiniu_download_sync(key: str):
+async def _qiniu_download(key: str) -> Response:
     """同步从七牛云下载，返回文件流。"""
     from qiniu import Auth  # 延迟导入，未安装 qiniu 时不影响启动
     q = Auth(settings.QINIU_ACCESS_KEY, settings.QINIU_SECRET_KEY)
-    private_url = q.private_download_url(key, expires=3600)
+    public_url = f"{settings.QINIU_DOMAIN.rstrip('/')}/{key}"
+    private_url = q.private_download_url(public_url, expires=3600)
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://" + private_url)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
+            response = await client.get(private_url)
             if response.status_code == 200:
-                return StreamingResponse(response.iter_bytes(), media_type=response.headers['Content-Type'])
+                return Response(
+                    content=response.content,
+                    media_type=response.headers.get("Content-Type", "application/octet-stream"),
+                    headers={"Content-Disposition": "inline"},
+                )
             else:
                 raise HTTPException(status_code=response.status_code, detail="Image not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="File storage is unavailable")
 
-def _local_download(key: str,media_type: str):
+def _local_download(filename: str) -> FileResponse:
     """调取相对路径中的文件，返回文件。"""
-    with open(key, "rb") as f:
-        return StreamingResponse(io.BytesIO(f.read()), media_type=media_type)
+    root = UPLOAD_DIR.resolve()
+    path = (root / filename).resolve()
+    if path.parent != root or not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type, content_disposition_type="inline")
 
 @router.get("/download")
 @limiter.limit("30/minute")  # 防止大量下载耗尽存储空间
 async def download_file(
     request: Request,
     key: str,
-    media_type: str, 
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -118,10 +149,13 @@ async def download_file(
     - image/jpeg: jpg图片
     """
     try:
+        safe_key, filename = _normalize_key(key)
         if _qiniu_enabled:
-            file = await _qiniu_download_sync(key)
+            file = await _qiniu_download(safe_key)
         else:
-            file = _local_download(key, media_type)
+            file = _local_download(filename)
         return file
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="File download failed") from e

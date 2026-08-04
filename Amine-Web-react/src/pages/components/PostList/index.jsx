@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Post from '../Post';
 import styles from './PostList.module.css';
-import { loadPostsPage, getCategoryDisplayName, clearPostsCache } from '../../utils/postLoader';
+import { loadPostsPage, getCategoryDisplayName } from '../../utils/postLoader';
 import { getCategoryColor } from '../../config/colors';
 import { getContrastTextColor, generateGradient } from '../../utils/colorUtils';
 import { getPostStats } from '../../utils/postStats';
@@ -9,7 +9,6 @@ import { getPostStats } from '../../utils/postStats';
 const PostList = ({ onReadMore, category = null }) => {
   const [posts, setPosts] = useState([]);
   const [allPostsCount, setAllPostsCount] = useState(0);
-  const [remoteTotal, setRemoteTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
@@ -63,7 +62,6 @@ const PostList = ({ onReadMore, category = null }) => {
 
       setPosts((prev) => (pageNum === 1 ? sortedPosts : [...prev, ...sortedPosts]));
       setPage(pageNum);
-      setRemoteTotal(nextRemoteTotal);
       setAllPostsCount(nextRemoteTotal + localDraftCount);
       setHasMore(pageNum * postsPerPage < nextRemoteTotal && remoteCount > 0);
       setError(null);
@@ -148,7 +146,7 @@ const PostList = ({ onReadMore, category = null }) => {
   // 获取分类徽章的文本
   const getCategoryBadgeText = useCallback(() => {
     return `共 ${allPostsCount} 篇帖子`;
-  }, [category, posts.length, allPostsCount]);
+  }, [allPostsCount]);
 
   // 获取当前分类的颜色
   const getCurrentCategoryColor = useCallback(() => {

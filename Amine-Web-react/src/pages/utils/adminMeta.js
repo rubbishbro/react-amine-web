@@ -13,26 +13,6 @@
 // Tag 辅助
 // ──────────────────────────────────────────────
 
-const resolveAuthorTag = (author) => {
-    if (!author) return null;
-    const raw = author.tagInfo || author.tag;
-    if (!raw) return null;
-    if (typeof raw === 'string') {
-        const label = raw.trim();
-        if (!label) return null;
-        return { label, variant: author.isAdmin === true ? 'admin' : 'user' };
-    }
-    if (typeof raw === 'object') {
-        const label = (raw.label || raw.title || '').trim();
-        if (!label) return null;
-        return {
-            label,
-            variant: raw.variant || (author.isAdmin === true ? 'admin' : 'user'),
-        };
-    }
-    return null;
-};
-
 /**
  * 根据用户对象和可选的元数据构建 tagInfo
  * author 支持前端字段（isAdmin）和后端字段（is_superuser）

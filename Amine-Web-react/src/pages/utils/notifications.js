@@ -9,7 +9,6 @@
  */
 import {
     getNotifications,
-    pushNotificationApi,
     markNotificationReadApi,
     markAllReadApi,
     clearReadNotificationsApi,
@@ -129,38 +128,6 @@ export const clearReadNotifications = (userId, token) => {
         clearReadNotificationsApi(token).catch(() => { /* ignore */ });
     }
     return next;
-};
-
-/**
- * pushNotification — 本地缓存立即更新 + 后端异步持久化
- * @param {object} payload  - { userId(recipient), action, postId, replyId, preview, ... }
- * @param {string} [token]  - 有 token 时同步后端
- */
-export const pushNotification = (payload, token) => {
-    if (!payload?.userId) return;
-    const entry = {
-        id: payload.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        createdAt: payload.createdAt || new Date().toISOString(),
-        read: false,
-        ...payload,
-    };
-    const list = readCache();
-    list.unshift(entry);
-    writeCache(list);
-
-    // 后端异步推送（不阻塞 UI）
-    if (token) {
-        const recipientId = payload.recipient_id ?? Number(payload.userId);
-        if (recipientId) {
-            pushNotificationApi(token, {
-                recipient_id: Number(recipientId),
-                type: payload.action || 'system',
-                post_id: payload.postId ? Number(payload.postId) : undefined,
-                comment_id: payload.replyId ? Number(payload.replyId) : undefined,
-                content: payload.preview || undefined,
-            }).catch(() => { /* ignore */ });
-        }
-    }
 };
 
 /** 订阅通知更新事件 */

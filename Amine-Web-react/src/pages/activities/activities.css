@@ -2,7 +2,7 @@
 .activities-root {
 	font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
 	background-color: #f7faf8;
-	background-image: url('../assets/BackGround.png');
+	background-image: url('/BackGround.png');
 	background-size: cover;
 	background-position: center;
 	min-height: 100vh;

@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { UserContext } from './userContext.js';
 import { buildTagInfo } from '../utils/adminMeta';
 import { updateAuthorInCaches } from '../utils/postLoader';
 import {
@@ -11,9 +12,6 @@ import {
   updateUserProfile,
 } from '../../services/auth.js';
 import { getMyInteractionStatus, togglePostLike, togglePostFavorite } from '../../services/interactApi.js';
-
-const UserContext = createContext(null);
-export const useUser = () => useContext(UserContext);
 
 const defaultProfile = {
   name: '',
@@ -166,10 +164,7 @@ export function UserProvider({ children }) {
 
   // On token change, fetch the fresh user profile.
   useEffect(() => {
-    if (!authToken) {
-      setUser(null);
-      return;
-    }
+    if (!authToken) return;
     let cancelled = false;
     (async () => {
       try {
@@ -196,24 +191,32 @@ export function UserProvider({ children }) {
   // 如果已登录且有 token，优先从后端拉取；否则 fallback 到 localStorage 缓存。
   useEffect(() => {
     const userId = user?.id || 'guest';
+    let cancelled = false;
     // 未登录 → 直接读 localStorage（guest 缓存）
     if (!userId || userId === 'guest' || !authToken) {
       interactionSyncedRef.current = '';
-      setLikes(readList(getStorageKey('likes', 'guest')));
-      setFavorites(readList(getStorageKey('favorites', 'guest')));
-      return;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setLikes(readList(getStorageKey('likes', 'guest')));
+        setFavorites(readList(getStorageKey('favorites', 'guest')));
+      });
+      return () => { cancelled = true; };
     }
     // 同一用户已同步过，跳过
-    if (interactionSyncedRef.current === userId) return;
+    if (interactionSyncedRef.current === userId) return undefined;
 
     // 先用 localStorage 缓存做快照，避免白屏闪烁
-    setLikes(readList(getStorageKey('likes', userId)));
-    setFavorites(readList(getStorageKey('favorites', userId)));
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLikes(readList(getStorageKey('likes', userId)));
+      setFavorites(readList(getStorageKey('favorites', userId)));
+    });
 
     // 再从后端拉取最新状态覆盖
     interactionSyncedRef.current = userId;
     getMyInteractionStatus(authToken)
       .then(({ liked_ids, favorited_ids }) => {
+        if (cancelled) return;
         // 后端返回数字 ID，统一转 string 与前端保持一致
         const likedStrs = (liked_ids || []).map(String);
         const favoritedStrs = (favorited_ids || []).map(String);
@@ -223,14 +226,15 @@ export function UserProvider({ children }) {
         try {
           localStorage.setItem(getStorageKey('likes', userId), JSON.stringify(likedStrs));
           localStorage.setItem(getStorageKey('favorites', userId), JSON.stringify(favoritedStrs));
-        } catch (_) { /* ignore */ }
+        } catch { /* ignore */ }
       })
       .catch((err) => {
+        if (cancelled) return;
         // 后端失败时保留 localStorage 数据，不影响使用
         console.warn('[UserContext] 从后端同步点赞/收藏失败，使用本地缓存', err);
         interactionSyncedRef.current = ''; // 允许下次重试
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
   }, [user?.id, authToken]);
 
   // Keep post caches in sync with the logged-in user.
@@ -394,9 +398,3 @@ export function UserProvider({ children }) {
     </UserContext.Provider>
   );
 }
-
-export const isProfileComplete = (profile) => {
-  if (!profile) return false;
-  const { name, school, className, email } = profile;
-  return !!(name && school && className && email);
-};
