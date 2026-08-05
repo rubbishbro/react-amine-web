@@ -3,16 +3,19 @@
 路由前缀: /dm
 """
 from typing import Any, Dict, List, Optional
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from collections import deque
+from time import monotonic
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Path
 from sqlmodel import Session
 from pydantic import BaseModel, Field
 
 from app.api import deps
 from app.crud import crud_dm, crud_relation
-from app.models.direct_message import DirectMessage
 from app.models.user import User
 from app.models.user_relation import RelationType
+from app.models.dm_attachment import DMAttachment
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -27,8 +30,12 @@ class ConnectionManager:
         self._connections: Dict[int, List[WebSocket]] = {}
 
     async def connect(self, user_id: int, ws: WebSocket):
+        if len(self._connections.get(user_id, [])) >= 3:
+            await ws.close(code=4008, reason="Too many connections")
+            return False
         await ws.accept()
         self._connections.setdefault(user_id, []).append(ws)
+        return True
 
     def disconnect(self, user_id: int, ws: WebSocket):
         sockets = self._connections.get(user_id, [])
@@ -73,8 +80,9 @@ class MessageOut(BaseModel):
 
 
 class SendMessageIn(BaseModel):
-    receiver_id: int
+    receiver_id: int = Field(gt=0)
     content: str = Field(min_length=1, max_length=2000)
+    attachment_id: Optional[UUID] = None
 
 
 def _ensure_can_message(db: Session, sender_id: int, receiver_id: int) -> User:
@@ -89,6 +97,19 @@ def _ensure_can_message(db: Session, sender_id: int, receiver_id: int) -> User:
     if blocked:
         raise HTTPException(status_code=403, detail="Messaging is blocked")
     return receiver
+
+
+def _attachment_for_send(
+    db: Session, attachment_id: Optional[UUID], sender_id: int
+) -> Optional[DMAttachment]:
+    if attachment_id is None:
+        return None
+    attachment = db.get(DMAttachment, attachment_id)
+    if not attachment or attachment.owner_id != sender_id:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if attachment.receiver_id is not None:
+        raise HTTPException(status_code=409, detail="Attachment is already bound")
+    return attachment
 
 
 class ThreadSummary(BaseModel):
@@ -131,9 +152,9 @@ def list_threads(
 
 @router.get("/thread/{other_id}", response_model=List[Dict])
 def get_thread(
-    other_id: int,
-    skip: int = 0,
-    limit: int = 50,
+    other_id: int = Path(gt=0),
+    skip: int = Query(default=0, ge=0, le=10_000),
+    limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
@@ -141,20 +162,31 @@ def get_thread(
     msgs = crud_dm.get_thread(
         db, user_a=current_user.id, user_b=other_id, skip=skip, limit=limit
     )
-    # 标记已读
-    crud_dm.mark_thread_read(db, reader_id=current_user.id, sender_id=other_id)
     return [
         {
             "id": m.id,
             "sender_id": m.sender_id,
             "receiver_id": m.receiver_id,
             "content": m.content if not m.recalled else "该消息已撤回",
+            "attachment_id": str(m.attachment_id) if m.attachment_id else None,
             "is_read": m.is_read,
             "recalled": m.recalled,
             "created_at": m.created_at.isoformat() if m.created_at else None,
         }
         for m in msgs
     ]
+
+
+@router.post("/thread/{other_id}/read")
+def mark_thread_read(
+    other_id: int = Path(gt=0),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    count = crud_dm.mark_thread_read(
+        db, reader_id=current_user.id, sender_id=other_id
+    )
+    return {"marked_read": count}
 
 
 @router.post("/send", response_model=Dict)
@@ -172,18 +204,21 @@ async def send_message(
     if payload.receiver_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能给自己发私信")
     _ensure_can_message(db, current_user.id, payload.receiver_id)
+    attachment = _attachment_for_send(db, payload.attachment_id, current_user.id)
 
     msg = crud_dm.send(
         db,
         sender_id=current_user.id,
         receiver_id=payload.receiver_id,
         content=payload.content,
+        attachment=attachment,
     )
     msg_dict = {
         "id": msg.id,
         "sender_id": msg.sender_id,
         "receiver_id": msg.receiver_id,
         "content": msg.content,
+        "attachment_id": str(msg.attachment_id) if msg.attachment_id else None,
         "is_read": msg.is_read,
         "recalled": msg.recalled,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
@@ -268,8 +303,7 @@ async def websocket_endpoint(
     import json
     # Token 鉴权
     try:
-        from jose import jwt, JWTError
-        from app.core.config import settings
+        from jose import jwt
         from app.schemas.token import TokenPayload
         payload_data = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         token_data = TokenPayload(**payload_data)
@@ -281,10 +315,31 @@ async def websocket_endpoint(
         await websocket.close(code=4001)
         return
 
-    await manager.connect(user_id, websocket)
+    origin = websocket.headers.get("origin")
+    if origin and origin not in settings.BACKEND_CORS_ORIGINS:
+        await websocket.close(code=4003, reason="Origin not allowed")
+        return
+
+    if not await manager.connect(user_id, websocket):
+        return
+    event_times_10s = deque()
+    event_times_60s = deque()
     try:
         while True:
             raw = await websocket.receive_text()
+            if len(raw.encode("utf-8")) > 8192:
+                await websocket.close(code=4009, reason="Message too large")
+                return
+            now = monotonic()
+            while event_times_10s and now - event_times_10s[0] > 10:
+                event_times_10s.popleft()
+            while event_times_60s and now - event_times_60s[0] > 60:
+                event_times_60s.popleft()
+            if len(event_times_10s) >= 10 or len(event_times_60s) >= 60:
+                await websocket.close(code=4008, reason="Rate limit exceeded")
+                return
+            event_times_10s.append(now)
+            event_times_60s.append(now)
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
@@ -305,18 +360,31 @@ async def websocket_endpoint(
                 if receiver_id == user_id:
                     await websocket.send_text(json.dumps({"event": "error", "detail": "不能给自己发私信"}))
                     continue
+                if len(content) > 2000:
+                    await websocket.send_text(json.dumps({"event": "error", "detail": "消息过长"}))
+                    continue
                 try:
                     _ensure_can_message(db, user_id, int(receiver_id))
+                    attachment_raw = data.get("attachment_id")
+                    attachment_id = UUID(str(attachment_raw)) if attachment_raw else None
+                    attachment = _attachment_for_send(db, attachment_id, user_id)
                 except (HTTPException, TypeError, ValueError) as error:
                     detail = error.detail if isinstance(error, HTTPException) else "Invalid receiver_id"
                     await websocket.send_text(json.dumps({"event": "error", "detail": detail}))
                     continue
-                msg = crud_dm.send(db, sender_id=user_id, receiver_id=receiver_id, content=content)
+                msg = crud_dm.send(
+                    db,
+                    sender_id=user_id,
+                    receiver_id=int(receiver_id),
+                    content=content,
+                    attachment=attachment,
+                )
                 msg_dict = {
                     "id": msg.id,
                     "sender_id": msg.sender_id,
                     "receiver_id": msg.receiver_id,
                     "content": msg.content,
+                    "attachment_id": str(msg.attachment_id) if msg.attachment_id else None,
                     "is_read": msg.is_read,
                     "recalled": msg.recalled,
                     "created_at": msg.created_at.isoformat() if msg.created_at else None,

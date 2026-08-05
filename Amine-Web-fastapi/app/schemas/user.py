@@ -65,13 +65,13 @@ class UserInDB(UserInDBBase):
 
 # 管理员操作请求模型
 class SetTitleRequest(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=50)
 
 class SetRoleRequest(BaseModel):
     is_superuser: bool
 
 class MuteUserRequest(BaseModel):
-    reason: Optional[str] = None
+    reason: Optional[str] = Field(default=None, max_length=500)
 
 class BanUserRequest(BaseModel):
-    reason: str
+    reason: str = Field(min_length=1, max_length=500)

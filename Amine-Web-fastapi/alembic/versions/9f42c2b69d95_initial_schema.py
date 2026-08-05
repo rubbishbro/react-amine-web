@@ -135,8 +135,23 @@ def upgrade() -> None:
     op.create_index('ix_user_relation_to_user_id', 'user_relation', ['to_user_id'])
     op.create_index('ix_user_relation_relation_type', 'user_relation', ['relation_type'])
 
+    # direct messages (older deployments created this through SQLModel.create_all)
+    op.create_table(
+        'directmessage',
+        sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column('sender_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
+        sa.Column('receiver_id', sa.Integer(), sa.ForeignKey('user.id'), nullable=False),
+        sa.Column('content', sa.String(length=2000), nullable=False),
+        sa.Column('is_read', sa.Boolean(), nullable=False, default=False),
+        sa.Column('recalled', sa.Boolean(), nullable=False, default=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+    )
+    op.create_index('ix_directmessage_sender_id', 'directmessage', ['sender_id'])
+    op.create_index('ix_directmessage_receiver_id', 'directmessage', ['receiver_id'])
+
 
 def downgrade() -> None:
+    op.drop_table('directmessage')
     op.drop_table('user_relation')
     op.drop_table('comment_like')
     op.drop_table('comment')

@@ -6,6 +6,7 @@ import logging.config
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles # 静态资源托管
 from fastapi.middleware.cors import CORSMiddleware # 前后端跨域
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn # 运行服务器
 
 from slowapi import _rate_limit_exceeded_handler
@@ -14,6 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings # 配置中心，管理项目名，API前缀，CORS白名单，数据库
 from app.core.limiter import limiter  # 全局速率限制器
+from app.core.request_limits import SecurityRateLimitMiddleware, create_redis_client
 from app.api.api import api_router # 路由注册（入口）
 from app.db.database import init_db # 初始化数据库
 from app import models 
@@ -72,6 +74,8 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(SecurityRateLimitMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
 
 # 设置所有 CORS 允许的源，告诉浏览器哪些前端合法
 app.add_middleware(
@@ -88,12 +92,35 @@ app.mount("/static/uploads", StaticFiles(directory="static/uploads"), name="uplo
 # 注册API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    )
+    return response
+
 # 启动事件，初始化数据库
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
+    if _is_production and not settings.REDIS_URL:
+        raise RuntimeError("REDIS_URL is required in production")
+    app.state.security_redis = await create_redis_client()
     init_db()
     env = settings.ENVIRONMENT
     logger.info("Amine Web API 已启动 [%s] Swagger=%s", env, "off" if _is_production else "on")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    redis_client = getattr(app.state, "security_redis", None)
+    if redis_client is not None:
+        await redis_client.aclose()
 
 # 根路由
 @app.get("/")

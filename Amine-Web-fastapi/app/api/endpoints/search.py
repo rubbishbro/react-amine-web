@@ -2,10 +2,10 @@
 搜索 API 端点
 支持帖子和用户的关键词搜索、Tag搜索
 """
-from typing import Any, List, Optional
+from typing import Any, List
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlmodel import Session, select, or_, col, func
+from sqlmodel import Session, select, or_
 
 from app.api import deps
 from app.models.post import Post
@@ -26,9 +26,9 @@ router = APIRouter()
 def search_posts(
     *,
     db: Session = Depends(deps.get_db),
-    q: str = Query(..., description="搜索关键词，以#开头表示Tag搜索"),
-    skip: int = 0,
-    limit: int = 50,
+    q: str = Query(..., min_length=1, max_length=100, description="搜索关键词，以#开头表示Tag搜索"),
+    skip: int = Query(default=0, ge=0, le=10_000),
+    limit: int = Query(default=50, ge=1, le=50),
 ) -> Any:
     """
     搜索帖子
@@ -49,7 +49,7 @@ def search_posts(
         # PostgreSQL ARRAY类型的搜索：ANY(tags) = tag
         statement = (
             select(Post)
-            .where(Post.is_published == True)
+            .where(Post.is_published.is_(True))
             .where(Post.tags.any(tag))  # 任一标签匹配
             .order_by(Post.created_at.desc())
             .offset(skip)
@@ -60,7 +60,7 @@ def search_posts(
         search_pattern = f"%{query_text}%"
         statement = (
             select(Post)
-            .where(Post.is_published == True)
+            .where(Post.is_published.is_(True))
             .where(
                 or_(
                     Post.title.ilike(search_pattern),
@@ -79,9 +79,9 @@ def search_posts(
 def search_users(
     *,
     db: Session = Depends(deps.get_db),
-    q: str = Query(..., description="搜索关键词，匹配用户名"),
-    skip: int = 0,
-    limit: int = 20,
+    q: str = Query(..., min_length=1, max_length=100, description="搜索关键词，匹配用户名"),
+    skip: int = Query(default=0, ge=0, le=10_000),
+    limit: int = Query(default=20, ge=1, le=50),
 ) -> Any:
     """
     搜索用户
@@ -115,9 +115,9 @@ def search_users(
 def search_all(
     *,
     db: Session = Depends(deps.get_db),
-    q: str = Query(..., description="搜索关键词"),
-    post_limit: int = 30,
-    user_limit: int = 10,
+    q: str = Query(..., min_length=1, max_length=100, description="搜索关键词"),
+    post_limit: int = Query(default=30, ge=1, le=50),
+    user_limit: int = Query(default=10, ge=1, le=50),
 ) -> Any:
     """
     综合搜索：同时搜索帖子和用户
@@ -133,7 +133,7 @@ def search_all(
         if tag:
             post_statement = (
                 select(Post)
-                .where(Post.is_published == True)
+                .where(Post.is_published.is_(True))
                 .where(Post.tags.any(tag))
                 .order_by(Post.created_at.desc())
                 .limit(post_limit)
@@ -144,7 +144,7 @@ def search_all(
         search_pattern = f"%{query_text}%"
         post_statement = (
             select(Post)
-            .where(Post.is_published == True)
+            .where(Post.is_published.is_(True))
             .where(
                 or_(
                     Post.title.ilike(search_pattern),

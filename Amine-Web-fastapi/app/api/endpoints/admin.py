@@ -3,6 +3,7 @@
 """
 from typing import Any, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+import secrets
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
@@ -34,7 +35,7 @@ def activate_admin(
     错误密钥 → 422 错误。
     """
     from app.core.config import settings
-    if secret_key != settings.ADMIN_SECRET_KEY:
+    if len(secret_key) > 256 or not secrets.compare_digest(secret_key, settings.ADMIN_SECRET_KEY):
         raise HTTPException(status_code=422, detail="无效的密钥")
     current_user.is_superuser = True
     db.add(current_user)

@@ -1,8 +1,7 @@
-from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlmodel import Session
 
-from app import crud
 from app.crud import crud_post
 from app.api import deps
 from app.models.user import User
@@ -13,15 +12,13 @@ router = APIRouter()
 @router.get("/", response_model=PostPage)
 def read_posts(
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 20,
-    category: Optional[str] = None,
+    skip: int = Query(default=0, ge=0, le=10_000),
+    limit: int = Query(default=20, ge=1, le=100),
+    category: Optional[str] = Query(default=None, max_length=40),
 ) -> Any:
     """
     读取已发布的帖子列表
     """
-    skip = max(skip, 0)
-    limit = min(max(limit, 1), 100)
     posts = crud_post.get_multi(db, skip=skip, limit=limit, category=category)
     total = crud_post.count(db, category=category)
     return {"items": posts, "total": total, "skip": skip, "limit": limit}
@@ -43,7 +40,7 @@ def create_post(
 def read_post(
     *,
     db: Session = Depends(deps.get_db),
-    id: int,
+    id: int = Path(gt=0),
     current_user: Optional[User] = Depends(deps.get_optional_current_user),
 ) -> Any:
     """
@@ -63,7 +60,7 @@ def read_post(
 def delete_post(
     *,
     db: Session = Depends(deps.get_db),
-    id: int,
+    id: int = Path(gt=0),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -82,7 +79,7 @@ def delete_post(
 def update_post(
     *,
     db: Session = Depends(deps.get_db),
-    id: int,
+    id: int = Path(gt=0),
     post_in: PostUpdate,
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:

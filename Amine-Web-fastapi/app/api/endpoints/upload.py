@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
 from app.core.config import settings
 from app.core.limiter import limiter
+from app.core.file_validation import validate_media_upload
 from app.models.user import User
 from app.api import deps
 
@@ -55,21 +56,15 @@ async def upload_file(
     - 配置了七牛云：存至七牛 CDN，返回公开 URL
     - 未配置：存至本地 static/uploads，返回相对路径
     """
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"文件类型不支持，可用: {ALLOWED_EXTENSIONS}")
+    media = await validate_media_upload(file, MAX_FILE_SIZE)
 
-    data = await file.read()
-    if len(data) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail=f"文件超过 {MAX_FILE_SIZE // 1024 // 1024}MB 限制")
-
-    key = f"uploads/{uuid.uuid4().hex}{ext}"
+    key = f"uploads/{uuid.uuid4().hex}{media.extension}"
 
     try:
         if _qiniu_enabled:
-            url = await asyncio.to_thread(_qiniu_upload_sync, data, key)
+            url = await asyncio.to_thread(_qiniu_upload_sync, media.data, key)
         else:
-            relative_url = _local_upload(data, os.path.basename(key))
+            relative_url = _local_upload(media.data, os.path.basename(key))
             url = f"{str(request.base_url).rstrip('/')}{relative_url}"
         return {"url": url}
     except Exception:

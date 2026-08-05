@@ -2,9 +2,11 @@
 私信 CRUD
 """
 from typing import List, Optional, Dict
+from uuid import UUID
 from sqlmodel import Session, select, or_, and_, func
 from app.models.direct_message import DirectMessage
 from app.models.user import User
+from app.models.dm_attachment import DMAttachment
 
 
 def send(
@@ -13,13 +15,18 @@ def send(
     sender_id: int,
     receiver_id: int,
     content: str,
+    attachment: Optional[DMAttachment] = None,
 ) -> DirectMessage:
     """发送一条私信。"""
     obj = DirectMessage(
         sender_id=sender_id,
         receiver_id=receiver_id,
         content=content.strip(),
+        attachment_id=attachment.id if attachment else None,
     )
+    if attachment:
+        attachment.receiver_id = receiver_id
+        db.add(attachment)
     db.add(obj)
     db.commit()
     db.refresh(obj)

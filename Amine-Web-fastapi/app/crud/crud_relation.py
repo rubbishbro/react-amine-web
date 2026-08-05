@@ -1,6 +1,6 @@
 # 用户关系 CRUD 操作
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from app.models.user_relation import UserRelation, RelationType
 from app.models.user import User
 
@@ -139,18 +139,18 @@ def get_follower_count(db: Session, user_id: int) -> int:
     """
     获取粉丝数量
     """
-    statement = select(UserRelation).where(
+    statement = select(func.count(UserRelation.id)).where(
         UserRelation.to_user_id == user_id,
         UserRelation.relation_type == RelationType.FOLLOW
     )
-    return len(list(db.exec(statement).all()))
+    return int(db.exec(statement).one())
 
 def get_following_count(db: Session, user_id: int) -> int:
     """
     获取关注数量
     """
-    statement = select(UserRelation).where(
+    statement = select(func.count(UserRelation.id)).where(
         UserRelation.from_user_id == user_id,
         UserRelation.relation_type == RelationType.FOLLOW
     )
-    return len(list(db.exec(statement).all()))
+    return int(db.exec(statement).one())

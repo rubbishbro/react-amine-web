@@ -1,12 +1,15 @@
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from urllib.parse import urlparse
+import re
 
 from app.crud import crud_user
 from app.api import deps
 from app.models.user import User
 from app.schemas.user import User as UserSchema, UserPublic
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -37,10 +40,21 @@ def read_user_by_username(
 
 
 class ProfileUpdate(BaseModel):
-    username: Optional[str] = None
-    userSchool: Optional[str] = None
-    userClass: Optional[str] = None
-    bio: Optional[str] = None
+    username: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    userSchool: Optional[str] = Field(default=None, max_length=200)
+    userClass: Optional[str] = Field(default=None, max_length=100)
+    bio: Optional[str] = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("username", "userSchool", "userClass", "bio")
+    @classmethod
+    def reject_unsafe_characters(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if "\x00" in value or any(ord(char) < 32 and char not in "\t\n\r" for char in value):
+            raise ValueError("control characters are not allowed")
+        return value
 
 
 @router.patch("/me", response_model=UserSchema)
@@ -65,6 +79,40 @@ def update_my_profile(
 class AvatarUpdate(BaseModel):
     avatar_url: Optional[str] = None
     cover_url: Optional[str] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("avatar_url", "cover_url")
+    @classmethod
+    def validate_media_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or value == "":
+            return value
+        if len(value) > 500 or "\x00" in value:
+            raise ValueError("invalid media URL")
+
+        local_pattern = re.compile(
+            r"^/static/uploads/[0-9a-f]{32}\.(?:jpg|jpeg|png|gif|mp3|wav|mp4)$",
+            re.IGNORECASE,
+        )
+        if local_pattern.fullmatch(value):
+            return value
+
+        parsed = urlparse(value)
+        allowed_hosts = {"api.lnssy-cykj.online"}
+        if settings.QINIU_DOMAIN:
+            qiniu_host = urlparse(settings.QINIU_DOMAIN).hostname
+            if qiniu_host:
+                allowed_hosts.add(qiniu_host)
+        if settings.ENVIRONMENT.lower() != "production":
+            allowed_hosts.update({"localhost", "127.0.0.1", "testserver"})
+
+        if parsed.scheme not in {"https", "http"} or parsed.hostname not in allowed_hosts:
+            raise ValueError("media URL host is not allowed")
+        if parsed.scheme == "http" and settings.ENVIRONMENT.lower() == "production":
+            raise ValueError("media URL must use HTTPS")
+        if parsed.hostname == "api.lnssy-cykj.online" and not local_pattern.fullmatch(parsed.path):
+            raise ValueError("invalid local media path")
+        return value
 
 
 @router.patch("/me/avatar", response_model=UserSchema)

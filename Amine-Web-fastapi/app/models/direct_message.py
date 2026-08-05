@@ -3,6 +3,7 @@
 """
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 from sqlmodel import Field, SQLModel
 
 
@@ -20,6 +21,9 @@ class DirectMessage(SQLModel, table=True):
     sender_id: int = Field(index=True, foreign_key="user.id")
     receiver_id: int = Field(index=True, foreign_key="user.id")
     content: str = Field(max_length=2000)
+    attachment_id: Optional[UUID] = Field(
+        default=None, foreign_key="dmattachment.id", index=True, unique=True
+    )
     is_read: bool = Field(default=False)
     recalled: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)

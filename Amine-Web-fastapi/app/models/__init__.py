@@ -6,3 +6,4 @@ from .comment import Comment
 from .comment_like import CommentLike
 from .notification import Notification, NotificationType
 from .direct_message import DirectMessage
+from .dm_attachment import DMAttachment

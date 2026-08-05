@@ -2,19 +2,23 @@
 私信图片上传 API 端点
 路由前缀：/dm_upload
 """
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request, Query
 import os
 import uuid
 import asyncio
 import mimetypes
+import re
 from pathlib import Path
 from typing import Any
 from fastapi.responses import FileResponse, Response
 import httpx
+from sqlmodel import Session, select
 
 from app.core.limiter import limiter
 from app.core.config import settings
+from app.core.file_validation import validate_media_upload
 from app.models.user import User
+from app.models.dm_attachment import DMAttachment
 from app.api import deps
 
 router = APIRouter()
@@ -23,6 +27,9 @@ UPLOAD_DIR = Path("private/dm_upload")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".mp3", ".wav", ".mp4"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+SAFE_FILENAME = re.compile(
+    r"^[0-9a-f]{32}\.(?:jpg|jpeg|png|gif|mp3|wav|mp4)$", re.IGNORECASE
+)
 
 # 检测是否已配置七牛云
 _qiniu_enabled = bool(
@@ -60,7 +67,7 @@ def _normalize_key(key: str) -> tuple[str, str]:
             break
     if normalized.startswith("dm_upload/"):
         normalized = normalized[len("dm_upload/"):]
-    if not normalized or "/" in normalized or normalized in {".", ".."}:
+    if not normalized or "/" in normalized or not SAFE_FILENAME.fullmatch(normalized):
         raise HTTPException(status_code=400, detail="Invalid file key")
     ext = Path(normalized).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -72,6 +79,7 @@ def _normalize_key(key: str) -> tuple[str, str]:
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
+    db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -79,22 +87,26 @@ async def upload_file(
     - 配置了七牛云：存至七牛 CDN，返回公开 URL
     - 未配置：存至本地 static/dm_upload，返回相对路径
     """
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"文件类型不支持，可用: {ALLOWED_EXTENSIONS}")
+    media = await validate_media_upload(file, MAX_FILE_SIZE)
 
-    data = await file.read()
-    if len(data) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail=f"文件超过 {MAX_FILE_SIZE // 1024 // 1024}MB 限制")
-
-    key = f"dm_upload/{uuid.uuid4().hex}{ext}"
+    key = f"dm_upload/{uuid.uuid4().hex}{media.extension}"
 
     try:
         if _qiniu_enabled:
-            stored_key = await asyncio.to_thread(_qiniu_upload_sync, data, key)
+            stored_key = await asyncio.to_thread(_qiniu_upload_sync, media.data, key)
         else:
-            stored_key = _local_upload(data, os.path.basename(key))
+            stored_key = _local_upload(media.data, os.path.basename(key))
+        attachment = DMAttachment(
+            storage_key=stored_key,
+            owner_id=current_user.id,
+            mime_type=media.media_type,
+            size=len(media.data),
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
         return {
+            "attachment_id": str(attachment.id),
             "key": stored_key,
             "url": f"/api/v1/dm_upload/download?key={stored_key}",
         }
@@ -136,7 +148,8 @@ def _local_download(filename: str) -> FileResponse:
 @limiter.limit("30/minute")  # 防止大量下载耗尽存储空间
 async def download_file(
     request: Request,
-    key: str,
+    key: str = Query(min_length=1, max_length=128),
+    db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -150,6 +163,14 @@ async def download_file(
     """
     try:
         safe_key, filename = _normalize_key(key)
+        attachment = db.exec(
+            select(DMAttachment).where(DMAttachment.storage_key == safe_key)
+        ).first()
+        if not attachment or current_user.id not in {
+            attachment.owner_id,
+            attachment.receiver_id,
+        }:
+            raise HTTPException(status_code=404, detail="File not found")
         if _qiniu_enabled:
             file = await _qiniu_download(safe_key)
         else:

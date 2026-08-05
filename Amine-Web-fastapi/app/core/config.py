@@ -74,6 +74,20 @@ class Settings(BaseSettings):
     # 生产环境建议配置，多进程/重启后验证码不会丢失
     REDIS_URL: str = ""  # 例: redis://localhost:6379/0
 
+    # Nginx is the only public entry point in production.
+    TRUSTED_HOSTS: List[str] = [
+        "api.lnssy-cykj.online",
+        "localhost",
+        "127.0.0.1",
+        "testserver",
+    ]
+
+    @field_validator("TRUSTED_HOSTS", mode="before")
+    def assemble_trusted_hosts(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
     # 运行环境：development | production
     # 生产环境自动关闭 Swagger 文档
     ENVIRONMENT: str = "development"

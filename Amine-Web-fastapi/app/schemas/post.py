@@ -1,16 +1,37 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from app.schemas.user import UserPublic
 
 # 帖子输入/输出公共基类
 class PostBase(BaseModel):
-    title: str
-    content: str
-    summary: Optional[str] = None
-    category: Optional[str] = None
-    # 去除可变默认值陷阱
-    tags: List[str] = Field(default_factory=list)
+    title: str = Field(min_length=1, max_length=120)
+    content: str = Field(min_length=1, max_length=50_000)
+    summary: Optional[str] = Field(default=None, max_length=500)
+    category: Optional[str] = Field(default=None, max_length=40)
+    tags: List[str] = Field(default_factory=list, max_length=10)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("title", "summary", "category")
+    @classmethod
+    def reject_control_characters(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and any(ord(char) < 32 and char not in "\t\n\r" for char in value):
+            raise ValueError("control characters are not allowed")
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, tags: List[str]) -> List[str]:
+        cleaned = []
+        for tag in tags:
+            tag = tag.strip()
+            if not tag or len(tag) > 30:
+                raise ValueError("each tag must contain 1 to 30 characters")
+            if any(ord(char) < 32 for char in tag):
+                raise ValueError("control characters are not allowed in tags")
+            cleaned.append(tag)
+        return cleaned
 
 # 帖子创建输入
 class PostCreate(PostBase):
