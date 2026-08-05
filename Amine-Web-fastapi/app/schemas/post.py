@@ -42,15 +42,22 @@ class PostUpdate(PostBase):
     is_published: Optional[bool] = None
 
 # 数据库中存储的模型共享属性
-class PostInDBBase(PostBase):
+#
+# 输入模型保持严格校验；输出模型需要兼容加固前已经存在的数据。否则历史记录里
+# 的空正文会在序列化阶段触发 ResponseValidationError，让整个帖子列表返回 500。
+class PostInDBBase(BaseModel):
+    title: str
+    content: str
+    summary: Optional[str] = None
+    category: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
     id: int
     author_id: int
     created_at: datetime
     updated_at: datetime
     is_published: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # 返回给客户端的属性
 class Post(PostInDBBase):

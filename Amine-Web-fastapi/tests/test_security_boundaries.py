@@ -11,7 +11,7 @@ from app.api.endpoints.dm_upload import _normalize_key
 from app.api.endpoints.users import AvatarUpdate, ProfileUpdate
 from app.core.file_validation import validate_media_upload
 from app.core.request_limits import _policy_for
-from app.schemas.post import PostCreate
+from app.schemas.post import PostCreate, PostInDBBase
 
 
 PNG_1X1 = bytes.fromhex(
@@ -56,6 +56,27 @@ def test_post_and_profile_reject_oversized_or_extra_fields():
         ProfileUpdate(username="safe", is_superuser=True)
     with pytest.raises(ValidationError):
         SendMessageIn(receiver_id=1, content="x" * 2001)
+
+
+def test_post_output_remains_compatible_with_legacy_empty_content():
+    legacy = PostInDBBase.model_validate(
+        {
+            "id": 1,
+            "author_id": 1,
+            "title": "legacy",
+            "content": "",
+            "summary": None,
+            "category": None,
+            "tags": [],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "is_published": True,
+        }
+    )
+    assert legacy.content == ""
+
+    with pytest.raises(ValidationError):
+        PostCreate(title="legacy", content="", tags=[], is_published=True)
 
 
 def test_media_url_and_dm_key_are_allowlisted():
