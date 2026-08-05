@@ -77,6 +77,7 @@ def _normalize_key(key: str) -> tuple[str, str]:
 @router.post("/upload")
 @limiter.limit("30/minute")  # 防止大量上传耗尽存储空间
 async def upload_file(
+    response: Response,
     request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(deps.get_db),
@@ -147,6 +148,7 @@ def _local_download(filename: str) -> FileResponse:
 @router.get("/download")
 @limiter.limit("30/minute")  # 防止大量下载耗尽存储空间
 async def download_file(
+    response: Response,
     request: Request,
     key: str = Query(min_length=1, max_length=128),
     db: Session = Depends(deps.get_db),

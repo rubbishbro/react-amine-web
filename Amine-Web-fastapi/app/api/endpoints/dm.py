@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from collections import deque
 from time import monotonic
 from uuid import UUID
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Path
 from sqlmodel import Session
 from pydantic import BaseModel, Field
@@ -62,6 +63,40 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# ── 一次性 WS 连接票据 ─────────────────────────────────────────────────────────
+# 避免把 JWT 放进 URL(会被 nginx 访问日志等持久化)。票据 30 秒时效 + 单次使用，
+# 即使被日志记录也立即失效，无法复用。
+_ws_tickets: Dict[str, tuple] = {}
+_WS_TICKET_TTL_SECONDS = 30
+
+
+def _issue_ws_ticket(user_id: int) -> str:
+    _purge_expired_ws_tickets()
+    ticket = secrets.token_urlsafe(32)
+    _ws_tickets[ticket] = (user_id, monotonic())
+    return ticket
+
+
+def _consume_ws_ticket(ticket: str) -> Optional[int]:
+    entry = _ws_tickets.pop(ticket, None)
+    if not entry:
+        return None
+    user_id, created_at = entry
+    if monotonic() - created_at > _WS_TICKET_TTL_SECONDS:
+        return None
+    return user_id
+
+
+def _purge_expired_ws_tickets() -> None:
+    now = monotonic()
+    expired = [
+        t for t, (_, created_at) in _ws_tickets.items()
+        if now - created_at > _WS_TICKET_TTL_SECONDS
+    ]
+    for t in expired:
+        _ws_tickets.pop(t, None)
 
 
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
@@ -276,18 +311,35 @@ def unread_count(
     return {"unread_count": count}
 
 
+@router.post("/ws-ticket")
+def create_ws_ticket(
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    签发一次性 WebSocket 连接票据（30 秒有效，单次使用）。
+    获取后即可连接 /dm/ws/{user_id}?ticket=...，避免把 JWT 放进 URL。
+    """
+    return {
+        "ticket": _issue_ws_ticket(current_user.id),
+        "expires_in": _WS_TICKET_TTL_SECONDS,
+    }
+
+
 # ── WebSocket 端点 ────────────────────────────────────────────────────────────
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     user_id: int,
-    token: str = Query(...),
+    ticket: str = Query(...),
     db: Session = Depends(deps.get_db),
 ):
     """
     WebSocket 私信通道。
-    连接地址: ws://<host>/api/v1/dm/ws/{user_id}?token=<bearer_token>
+    连接地址: ws://<host>/api/v1/dm/ws/{user_id}?ticket=<一次性票据>
+
+    票据获取: 先 POST /api/v1/dm/ws-ticket(携带 Bearer token) 换取 30 秒有效、
+    单次使用的一次性票据。票据即使出现在日志中也立即失效，无法复用。
 
     客户端发送格式（JSON）:
         { "event": "send", "receiver_id": 123, "content": "你好" }
@@ -301,17 +353,13 @@ async def websocket_endpoint(
         { "event": "error",            "detail": "..." }
     """
     import json
-    # Token 鉴权
-    try:
-        from jose import jwt
-        from app.schemas.token import TokenPayload
-        payload_data = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        token_data = TokenPayload(**payload_data)
-        auth_user = db.get(User, int(token_data.sub))
-        if not auth_user or not auth_user.is_active or auth_user.is_banned or auth_user.id != user_id:
-            await websocket.close(code=4001)
-            return
-    except Exception:
+    # 一次性票据鉴权（30 秒有效，单次使用，绑定到 URL 中的 user_id）
+    authed_user_id = _consume_ws_ticket(ticket)
+    if authed_user_id is None or authed_user_id != user_id:
+        await websocket.close(code=4001)
+        return
+    auth_user = db.get(User, user_id)
+    if not auth_user or not auth_user.is_active or auth_user.is_banned:
         await websocket.close(code=4001)
         return
 

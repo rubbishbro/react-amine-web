@@ -8,7 +8,7 @@ from typing import Any
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 
@@ -129,6 +129,7 @@ def _build_unique_username(db: Session, email: str) -> str:
 @router.post("/login/access-token", response_model=Token)
 @limiter.limit("20/minute")  # 防止暴力破解密码
 def login_access_token(
+    response: Response,
     request: Request,
     db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
@@ -158,6 +159,7 @@ def login_access_token(
 @router.post("/auth/email-code/send", response_model=EmailCodeSendResponse)
 @limiter.limit("5/minute")  # 防止刺刀密码攻击和爆破邮箔
 def send_email_code(
+    response: Response,
     request: Request,
     *,
     db: Session = Depends(deps.get_db),
@@ -206,6 +208,7 @@ def send_email_code(
 @router.post("/auth/register-email", response_model=UserSchema)
 @limiter.limit("10/minute")
 def register_by_email(
+    response: Response,
     request: Request,
     *,
     db: Session = Depends(deps.get_db),
@@ -235,6 +238,7 @@ def register_by_email(
 @router.post("/auth/password-reset")
 @limiter.limit("10/minute")
 def reset_password_by_email_code(
+    response: Response,
     request: Request,
     *,
     db: Session = Depends(deps.get_db),

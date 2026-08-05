@@ -48,6 +48,7 @@ export class DmWsClient {
         this.token = token;
         this.handlers = handlers;
         this._ws = null;
+        this._connecting = false;
         this._reconnectAttempts = 0;
         this._manualClose = false;
         this._pendingQueue = [];   // 连接中暂存待发消息
@@ -58,17 +59,51 @@ export class DmWsClient {
     }
 
     connect() {
+        if (this._connecting) return;
         if (this._ws && this._ws.readyState === WebSocket.CONNECTING) return;
         this._manualClose = false;
         this._buildSocket();
     }
 
-    _buildSocket() {
-        const url = `${WS_BASE_URL}/dm/ws/${this.userId}?token=${encodeURIComponent(this.token)}`;
+    /**
+     * 把 wss/ws 前缀转成 https/http，用于换取一次性连接票据的 REST 请求
+     */
+    _httpUrl(path) {
+        const base = WS_BASE_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+        return `${base}${path}`;
+    }
+
+    /**
+     * 向后端换取 30 秒有效、单次使用的一次性连接票据。
+     * 真实 JWT 只走 Authorization 头，绝不进入 WS URL。
+     */
+    async _fetchTicket() {
+        const res = await fetch(this._httpUrl('/dm/ws-ticket'), {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.token}` },
+        });
+        if (!res.ok) {
+            throw new Error(`获取连接票据失败（HTTP ${res.status}）`);
+        }
+        const data = await res.json();
+        if (!data?.ticket) throw new Error('后端未返回连接票据');
+        return data.ticket;
+    }
+
+    async _buildSocket() {
+        if (this._connecting) return;
+        this._connecting = true;
         try {
+            const ticket = await this._fetchTicket();
+            if (this._manualClose) return;
+            const url = `${WS_BASE_URL}/dm/ws/${this.userId}?ticket=${encodeURIComponent(ticket)}`;
             this._ws = new WebSocket(url);
+            this._connecting = false;
         } catch (e) {
-            console.error('[DmWsClient] WebSocket 创建失败:', e);
+            console.error('[DmWsClient] 获取连接票据失败:', e);
+            this._connecting = false;
+            this.handlers.onError?.(e.message || 'WebSocket 连接失败');
+            this._scheduleReconnect();
             return;
         }
 
@@ -114,13 +149,19 @@ export class DmWsClient {
         };
 
         this._ws.onclose = () => {
+            this._ws = null;
             this.handlers.onClose?.();
-            if (!this._manualClose && this._reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                this._reconnectAttempts += 1;
-                console.info(`[DmWsClient] 断开，${RECONNECT_DELAY_MS}ms 后第 ${this._reconnectAttempts} 次重连...`);
-                setTimeout(() => this._buildSocket(), RECONNECT_DELAY_MS);
+            if (!this._manualClose) {
+                this._scheduleReconnect();
             }
         };
+    }
+
+    _scheduleReconnect() {
+        if (this._manualClose || this._reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+        this._reconnectAttempts += 1;
+        console.info(`[DmWsClient] 断开，${RECONNECT_DELAY_MS}ms 后第 ${this._reconnectAttempts} 次重连...`);
+        setTimeout(() => this._buildSocket(), RECONNECT_DELAY_MS);
     }
 
     /**
