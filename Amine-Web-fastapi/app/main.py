@@ -18,7 +18,7 @@ from app.core.limiter import limiter  # 全局速率限制器
 from app.core.request_limits import SecurityRateLimitMiddleware, create_redis_client
 from app.api.api import api_router # 路由注册（入口）
 from app.db.database import init_db # 初始化数据库
-from app import models 
+from app import models  # noqa: F401 - 导入模型以注册 SQLModel 元数据
 # 将models重新执行一遍，否则不会创建表
 
 # 配置结构化日志（先建目录再配置，否则 RotatingFileHandler 找不到路径）
@@ -103,6 +103,10 @@ async def add_security_headers(request, call_next):
     response.headers["Content-Security-Policy"] = (
         "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
     )
+    if _is_production:
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
     return response
 
 # 启动事件，初始化数据库

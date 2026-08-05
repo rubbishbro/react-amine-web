@@ -2,6 +2,7 @@
 搜索 API 端点
 支持帖子和用户的关键词搜索、Tag搜索
 """
+import html
 from typing import Any, List
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -123,9 +124,10 @@ def search_all(
     综合搜索：同时搜索帖子和用户
     """
     query_text = q.strip()
+    response_query = html.escape(query_text, quote=True)
     
     if not query_text:
-        return {"posts": [], "users": [], "query": query_text}
+        return {"posts": [], "users": [], "query": response_query}
     
     # 搜索帖子
     if query_text.startswith('#'):
@@ -174,6 +176,6 @@ def search_all(
     return {
         "posts": posts,
         "users": users,
-        "query": query_text,
+        "query": response_query,
         "is_tag_search": query_text.startswith('#'),
     }

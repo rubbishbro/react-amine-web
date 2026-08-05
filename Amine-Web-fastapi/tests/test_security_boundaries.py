@@ -4,10 +4,13 @@ from io import BytesIO
 import pytest
 from fastapi import UploadFile
 from pydantic import ValidationError
+from starlette.responses import Response
 from starlette.requests import Request
 
+import app.main as main_module
 from app.api.endpoints.dm import SendMessageIn
 from app.api.endpoints.dm_upload import _normalize_key
+from app.api.endpoints.search import search_all
 from app.api.endpoints.users import AvatarUpdate, ProfileUpdate
 from app.core.file_validation import validate_media_upload
 from app.core.request_limits import _policy_for
@@ -35,6 +38,20 @@ def request_for(path: str, method: str = "GET") -> Request:
             "server": ("testserver", 443),
         }
     )
+
+
+class FakeSearchResult:
+    def all(self):
+        return []
+
+
+class FakeSearchSession:
+    def __init__(self):
+        self.statements = []
+
+    def exec(self, statement):
+        self.statements.append(statement)
+        return FakeSearchResult()
 
 
 def test_every_api_request_receives_a_policy():
@@ -77,6 +94,57 @@ def test_post_output_remains_compatible_with_legacy_empty_content():
 
     with pytest.raises(ValidationError):
         PostCreate(title="legacy", content="", tags=[], is_published=True)
+
+
+def test_search_all_escapes_only_the_response_query():
+    query = '<img src=x onerror=alert(1)>&"\''
+    db = FakeSearchSession()
+
+    response = search_all(db=db, q=f"  {query}  ", post_limit=30, user_limit=10)
+
+    assert response["query"] == (
+        "&lt;img src=x onerror=alert(1)&gt;&amp;&quot;&#x27;"
+    )
+    parameters = {
+        value
+        for statement in db.statements
+        for value in statement.compile().params.values()
+        if isinstance(value, str)
+    }
+    assert f"%{query}%" in parameters
+    assert not any("&lt;" in value for value in parameters)
+
+
+def test_search_all_keeps_tag_detection_and_empty_query_behavior():
+    tag_response = search_all(
+        db=FakeSearchSession(), q="#<动画>", post_limit=30, user_limit=10
+    )
+    empty_response = search_all(
+        db=FakeSearchSession(), q="   ", post_limit=30, user_limit=10
+    )
+
+    assert tag_response["query"] == "#&lt;动画&gt;"
+    assert tag_response["is_tag_search"] is True
+    assert empty_response == {"posts": [], "users": [], "query": ""}
+
+
+def test_fastapi_hsts_header_is_production_only(monkeypatch):
+    async def call_next(_request):
+        return Response()
+
+    monkeypatch.setattr(main_module, "_is_production", True)
+    production_response = asyncio.run(
+        main_module.add_security_headers(request_for("/"), call_next)
+    )
+    assert production_response.headers["strict-transport-security"] == (
+        "max-age=31536000; includeSubDomains"
+    )
+
+    monkeypatch.setattr(main_module, "_is_production", False)
+    development_response = asyncio.run(
+        main_module.add_security_headers(request_for("/"), call_next)
+    )
+    assert "strict-transport-security" not in development_response.headers
 
 
 def test_media_url_and_dm_key_are_allowlisted():
