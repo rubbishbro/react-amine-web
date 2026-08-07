@@ -4,7 +4,7 @@ import { useUser } from '../context/userContext.js';
 import { buildUserId, getMappedUserId } from '../utils/userId';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { adminActivate } from '../../services/adminApi';
-import { uploadFile, updateUserAvatar } from '../../services/auth';
+import { uploadFile } from '../../services/auth';
 
 const emptyProfile = {
     name: '',
@@ -17,7 +17,8 @@ const emptyProfile = {
 };
 
 export default function Profile() {
-    const { user, updateProfile, logout, authToken, refreshUser } = useUser();
+    const { user, updateProfile, logout, refreshUser } = useUser();
+    const authToken = user?.loggedIn ? 'cookie-session' : '';
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -30,7 +31,10 @@ export default function Profile() {
     const lastUserIdRef = useRef(user?.id || '');
     const [adminOpen, setAdminOpen] = useState(location.state?.openAdmin === true);
     const [adminKey, setAdminKey] = useState('');
+    const [adminPassword, setAdminPassword] = useState('');
     const [adminError, setAdminError] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
     const isAdmin = user?.isAdmin === true;
 
     useEffect(() => {
@@ -69,10 +73,12 @@ export default function Profile() {
 
     const [avatarError, setAvatarError] = useState('');
     const [coverError, setCoverError] = useState('');
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
 
     const handleAvatar = async (e) => {
         const file = e.target.files?.[0];
-        if (!file) return;
+        if (!file || uploadingAvatar) return;
 
         const maxFileSize = 2 * 1024 * 1024;
         if (file.size > maxFileSize) {
@@ -81,6 +87,7 @@ export default function Profile() {
             return;
         }
         setAvatarError('');
+        setUploadingAvatar(true);
 
         try {
             // 先在本地压缩，再上传到后端
@@ -108,12 +115,14 @@ export default function Profile() {
             setForm((s) => ({ ...s, avatar: url }));
         } catch (err) {
             setAvatarError(err.message || '上传失败，请重试');
+        } finally {
+            setUploadingAvatar(false);
         }
     };
 
     const handleCover = async (e) => {
         const file = e.target.files?.[0];
-        if (!file) return;
+        if (!file || uploadingCover) return;
 
         const maxFileSize = 2 * 1024 * 1024;
         if (file.size > maxFileSize) {
@@ -122,6 +131,7 @@ export default function Profile() {
             return;
         }
         setCoverError('');
+        setUploadingCover(true);
 
         try {
             const blob = await new Promise((resolve, reject) => {
@@ -148,38 +158,49 @@ export default function Profile() {
             setForm((s) => ({ ...s, cover: url }));
         } catch (err) {
             setCoverError(err.message || '上传失败，请重试');
+        } finally {
+            setUploadingCover(false);
         }
     };
 
     const handleSave = async (e) => {
         e.preventDefault();
-        await updateProfile({ ...form });
-        // 头像和头图 URL 同步到后端数据库，等待写入完成再跳转，防止刷新后丢失
-        if (authToken) {
-            await updateUserAvatar(authToken, { avatarUrl: form.avatar, coverUrl: form.cover }).catch(() => {});
+        if (saving) return;
+        setSaving(true);
+        setSaveError('');
+        try {
+            await updateProfile({ ...form });
+            const derivedId = getMappedUserId(user?.id || buildUserId(form.name, user?.id || 'local'));
+            formDirtyRef.current = false;
+            navigate(`/user/${derivedId}`);
+        } catch (error) {
+            setSaveError(error?.message || '保存失败，请检查填写内容后重试');
+        } finally {
+            setSaving(false);
         }
-        const derivedId = getMappedUserId(user?.id || buildUserId(form.name, user?.id || 'local'));
-        formDirtyRef.current = false;
-        navigate(`/user/${derivedId}`);
     };
 
     const handleAdminKey = async () => {
         const key = adminKey.trim();
-        if (!key) return;
+        if (!key || !adminPassword) {
+            setAdminError('请输入管理员密钥和当前账号密码');
+            return;
+        }
         // 先标记 dirty，防止 refreshUser 后 useEffect 用后端数据覆盖用户正在编辑的表单
         formDirtyRef.current = true;
         try {
-            await adminActivate(authToken, key);
+            await adminActivate(authToken, key, adminPassword);
             await refreshUser();
             setAdminError('');
             setAdminKey('');
+            setAdminPassword('');
         } catch (err) {
             setAdminError(err.message || '无效的密钥');
         }
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         navigate('/'); // 回主界面
     };
 
@@ -195,8 +216,8 @@ export default function Profile() {
                         style={form.avatar ? { backgroundImage: `url(${form.avatar})` } : undefined}
                     />
                     <div className={styles.avatarUpload}>
-                        <input type="file" accept="image/*" onChange={handleAvatar} />
-                        <span className={styles.avatarHint}>支持 JPG/PNG，最大 2MB</span>
+                        <input type="file" accept="image/*" onChange={handleAvatar} disabled={uploadingAvatar} />
+                        <span className={styles.avatarHint}>{uploadingAvatar ? '上传中...' : '支持 JPG/PNG，最大 2MB'}</span>
                         {avatarError && <span className={styles.avatarError}>{avatarError}</span>}
                     </div>
                 </div>
@@ -207,8 +228,8 @@ export default function Profile() {
                         style={form.cover ? { backgroundImage: `url(${form.cover})` } : undefined}
                     />
                     <div className={styles.avatarUpload}>
-                        <input type="file" accept="image/*" onChange={handleCover} />
-                        <span className={styles.avatarHint}>头图建议横向，最大 2MB</span>
+                        <input type="file" accept="image/*" onChange={handleCover} disabled={uploadingCover} />
+                        <span className={styles.avatarHint}>{uploadingCover ? '上传中...' : '头图建议横向，最大 2MB'}</span>
                         {coverError && <span className={styles.avatarError}>{coverError}</span>}
                     </div>
                 </div>
@@ -271,6 +292,13 @@ export default function Profile() {
                                     onChange={(e) => setAdminKey(e.target.value)}
                                     placeholder="输入密钥"
                                 />
+                                <input
+                                    type="password"
+                                    value={adminPassword}
+                                    onChange={(e) => setAdminPassword(e.target.value)}
+                                    placeholder="输入当前账号密码"
+                                    autoComplete="current-password"
+                                />
                                 <button
                                     type="button"
                                     className={styles.adminApply}
@@ -287,7 +315,10 @@ export default function Profile() {
                 </div>
 
                 <div className={styles.actions}>
-                    <button className={styles.save} type="submit">保存</button>
+                    {saveError && <div className={styles.adminError}>{saveError}</div>}
+                    <button className={styles.save} type="submit" disabled={saving}>
+                        {saving ? '保存中...' : '保存'}
+                    </button>
                     <button className={styles.logout} type="button" onClick={handleLogout}>退出登录</button>
                 </div>
             </form>

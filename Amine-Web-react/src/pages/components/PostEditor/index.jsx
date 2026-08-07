@@ -25,7 +25,8 @@ const buildDefaultValues = (initialData = null) => initialData || {
 const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const navigate = useNavigate();
   const { id: postId } = useParams();
-  const { user, authToken } = useUser();
+  const { user } = useUser();
+  const authToken = user?.loggedIn ? 'cookie-session' : '';
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);

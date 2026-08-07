@@ -88,7 +88,8 @@ export default function AdminPanel() {
 
 function AdminPanelContent({ target, user, targetId, onBack, onLogout }) {
     const navigate = useNavigate();
-    const { authToken, refreshUser } = useUser();
+    const { isAuthenticated, refreshUser } = useUser();
+    const authToken = isAuthenticated ? 'cookie-session' : '';
 
     // 从后端加载目标用户的真实状态
     const [backendUser, setBackendUser] = useState(null);

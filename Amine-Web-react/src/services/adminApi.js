@@ -2,7 +2,7 @@
  * 管理员后端 API 服务
  * 所有管理员操作均通过此服务与后端交互，不再依赖 localStorage
  */
-import { buildApiUrl } from '../pages/config/api.js';
+import { apiFetch } from './apiClient.js';
 import { authHeaders } from './auth.js';
 
 /**
@@ -24,7 +24,7 @@ const extractError = async (response) => {
  * GET /admin/users/{user_id}
  */
 export const adminGetUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}`), {
+    const res = await apiFetch(`/admin/users/${userId}`, {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));
@@ -36,7 +36,7 @@ export const adminGetUser = async (token, userId) => {
  * GET /admin/users?skip=0&limit=50
  */
 export const adminListUsers = async (token, { skip = 0, limit = 50 } = {}) => {
-    const res = await fetch(buildApiUrl(`/admin/users?skip=${skip}&limit=${limit}`), {
+    const res = await apiFetch(`/admin/users?skip=${skip}&limit=${limit}`, {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));
@@ -49,7 +49,7 @@ export const adminListUsers = async (token, { skip = 0, limit = 50 } = {}) => {
  */
 export const adminSearchUsers = async (token, keyword, { skip = 0, limit = 20 } = {}) => {
     const q = encodeURIComponent(String(keyword || '').trim());
-    const res = await fetch(buildApiUrl(`/admin/users?q=${q}&skip=${skip}&limit=${limit}`), {
+    const res = await apiFetch(`/admin/users?q=${q}&skip=${skip}&limit=${limit}`, {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));
@@ -61,7 +61,7 @@ export const adminSearchUsers = async (token, keyword, { skip = 0, limit = 20 } 
  * PUT /admin/users/{user_id}/title
  */
 export const adminSetTitle = async (token, userId, title) => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}/title`), {
+    const res = await apiFetch(`/admin/users/${userId}/title`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ title }),
@@ -75,7 +75,7 @@ export const adminSetTitle = async (token, userId, title) => {
  * PUT /admin/users/{user_id}/role
  */
 export const adminSetRole = async (token, userId, is_superuser) => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}/role`), {
+    const res = await apiFetch(`/admin/users/${userId}/role`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ is_superuser }),
@@ -89,7 +89,7 @@ export const adminSetRole = async (token, userId, is_superuser) => {
  * POST /admin/users/{user_id}/mute
  */
 export const adminMuteUser = async (token, userId, reason = '') => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}/mute`), {
+    const res = await apiFetch(`/admin/users/${userId}/mute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ reason }),
@@ -103,7 +103,7 @@ export const adminMuteUser = async (token, userId, reason = '') => {
  * DELETE /admin/users/{user_id}/mute
  */
 export const adminUnmuteUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}/mute`), {
+    const res = await apiFetch(`/admin/users/${userId}/mute`, {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -116,7 +116,7 @@ export const adminUnmuteUser = async (token, userId) => {
  * POST /admin/users/{user_id}/ban
  */
 export const adminBanUser = async (token, userId, reason = '') => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}/ban`), {
+    const res = await apiFetch(`/admin/users/${userId}/ban`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ reason }),
@@ -130,7 +130,7 @@ export const adminBanUser = async (token, userId, reason = '') => {
  * DELETE /admin/users/{user_id}/ban
  */
 export const adminUnbanUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}/ban`), {
+    const res = await apiFetch(`/admin/users/${userId}/ban`, {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -143,7 +143,7 @@ export const adminUnbanUser = async (token, userId) => {
  * DELETE /admin/users/{user_id}
  */
 export const adminDeleteUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/admin/users/${userId}`), {
+    const res = await apiFetch(`/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -155,11 +155,11 @@ export const adminDeleteUser = async (token, userId) => {
  * 用管理员密钥激活当前用户的管理员权限
  * POST /admin/activate
  */
-export const adminActivate = async (token, secretKey) => {
-    const res = await fetch(buildApiUrl('/admin/activate'), {
+export const adminActivate = async (token, secretKey, currentPassword) => {
+    const res = await apiFetch('/admin/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
-        body: JSON.stringify({ secret_key: secretKey }),
+        body: JSON.stringify({ secret_key: secretKey, current_password: currentPassword }),
     });
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();

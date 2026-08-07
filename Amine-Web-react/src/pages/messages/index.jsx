@@ -12,14 +12,15 @@ import {
     markAllNotificationsRead,
     syncNotificationsFromBackend,
 } from '../utils/notifications';
-import { getDmThreads, getDmThread, sendDm, recallDm, deleteDm } from '../../services/dmApi';
+import { getDmThreads, getDmThread, markDmThreadRead, sendDm, recallDm, deleteDm } from '../../services/dmApi';
 import { DmWsClient } from '../../services/dmWsClient';
 
 export default function Messages() {
     const { id } = useParams();
     const { state } = useLocation();
     const navigate = useNavigate();
-    const { user, authToken } = useUser();
+    const { user } = useUser();
+    const authToken = user?.loggedIn ? 'cookie-session' : '';
 
     const viewerId = user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : '';
     const targetId = id || '';
@@ -67,6 +68,7 @@ export default function Messages() {
                     recalled: m.recalled,
                     createdAt: m.created_at,
                 })));
+                return markDmThreadRead(authToken, numericOtherId);
             })
             .catch(() => { /* fallback to empty */ });
     }, [targetId, authToken, target?.avatar, target?.name, user?.id, viewerAvatar, viewerName]);
@@ -125,7 +127,7 @@ export default function Messages() {
         const numericUserId = Number(user.id);
         if (!numericUserId || Number.isNaN(numericUserId)) return;
 
-        const client = new DmWsClient(numericUserId, authToken, {
+        const client = new DmWsClient(numericUserId, {
             onMessage: (msg) => {
                 // 对方发来的新消息
                 setMessages((prev) => [

@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import styles from './PublicProfile.module.css';
 import { useUser } from '../context/userContext.js';
 import { adminGetUser } from '../../services/adminApi';
-import { fetchCurrentUser, fetchUserByUsername, readStoredToken } from '../../services/auth';
+import { fetchCurrentUser, fetchUserByUsername } from '../../services/auth';
 import { getFollowing } from '../../services/relationsApi';
 import Post from '../components/Post';
 import { loadAllPosts } from '../utils/postLoader';
@@ -85,10 +85,8 @@ export default function ProfileView() {
     const { state } = useLocation();
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user, authToken, logout } = useUser();
-
-    const storedToken = readStoredToken();
-    const effectiveAuthToken = authToken || storedToken || '';
+    const { user, logout } = useUser();
+    const effectiveAuthToken = user?.loggedIn ? 'cookie-session' : '';
     const mappedRouteId = id ? getMappedUserId(id) : '';
     const routeId = mappedRouteId || id || '';
 

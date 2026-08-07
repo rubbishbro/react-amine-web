@@ -3,12 +3,12 @@ import { UserContext } from './userContext.js';
 import { buildTagInfo } from '../utils/adminMeta';
 import { updateAuthorInCaches } from '../utils/postLoader';
 import {
-  authHeaders as buildAuthHeaders,
   clearToken,
   fetchCurrentUser,
+  loginWithPassword,
+  logoutSession,
+  migrateLegacySession,
   readStoredToken,
-  requestToken,
-  saveToken,
   updateUserProfile,
 } from '../../services/auth.js';
 import { getMyInteractionStatus, togglePostLike, togglePostFavorite } from '../../services/interactApi.js';
@@ -75,13 +75,11 @@ const normalizeBackendUser = (backendUser, extraProfile = defaultProfile) => {
       ...extraProfile,
       name: backendUser.username || backendUser.email || extraProfile.name || '',
       email: backendUser.email || extraProfile.email || '',
-      // 学校/班级/简介：后端字段优先，localStorage 仅作旧数据兜底
-      school: backendUser.userSchool || extraProfile.school || '',
-      className: backendUser.userClass || extraProfile.className || '',
-      bio: backendUser.bio || extraProfile.bio || '',
-      // 头像和头图：后端 URL 优先，如无则用本地缓存（未迁移时的降级）
-      avatar: backendUser.avatar_url || extraProfile.avatar || '',
-      cover: backendUser.cover_url || extraProfile.cover || '',
+      school: backendUser.userSchool || '',
+      className: backendUser.userClass || '',
+      bio: backendUser.bio || '',
+      avatar: backendUser.avatar_url || '',
+      cover: backendUser.cover_url || '',
     },
     backendUser.email,
   );
@@ -136,11 +134,9 @@ const readList = (key) => {
 };
 
 export function UserProvider({ children }) {
-  const initialToken = readStoredToken();
-  const cachedUser = initialToken ? readCachedUser() : null;
+  const cachedUser = readCachedUser();
 
   const [user, setUser] = useState(() => (cachedUser ? attachTagInfo(cachedUser) : null));
-  const [authToken, setAuthToken] = useState(() => initialToken || '');
 
   const getStorageKey = (type, userId) => `aw_${type}_${userId || 'guest'}`;
 
@@ -150,37 +146,64 @@ export function UserProvider({ children }) {
   const interactionSyncedRef = useRef('');
 
   const refreshUserFromBackend = useCallback(
-    async (token) => {
-      if (!token) return;
-      const backendUser = await fetchCurrentUser(token);
+    async () => {
+      const backendUser = await fetchCurrentUser();
       const extraProfile = readExtraProfile(backendUser?.id);
       const normalized = normalizeBackendUser(backendUser, extraProfile);
-      if (!normalized) return;
+      if (!normalized) return null;
       persistExtraProfile(normalized.id, normalized.profile);
       setUser(normalized);
+      return normalized;
     },
     [setUser],
   );
 
-  // On token change, fetch the fresh user profile.
+  // Restore an HttpOnly Cookie session, migrating one legacy localStorage token once.
   useEffect(() => {
-    if (!authToken) return;
     let cancelled = false;
     (async () => {
       try {
-        await refreshUserFromBackend(authToken);
+        const legacyToken = readStoredToken();
+        let migratedUser = null;
+        if (legacyToken) {
+          try {
+            migratedUser = await migrateLegacySession();
+          } catch (error) {
+            if (error?.status === 409) clearToken();
+            else throw error;
+          }
+        }
+        if (cancelled) return;
+        if (migratedUser) {
+          const normalized = normalizeBackendUser(migratedUser, readExtraProfile(migratedUser.id));
+          persistExtraProfile(normalized.id, normalized.profile);
+          setUser(normalized);
+        } else {
+          await refreshUserFromBackend();
+        }
       } catch (error) {
         if (cancelled) return;
-        console.error('Failed to refresh user info:', error);
-        clearToken();
-        setAuthToken('');
-        setUser(null);
+        if (error?.status === 401) {
+          clearToken();
+          setUser(null);
+        } else {
+          console.warn('暂时无法刷新用户信息，保留本地快照:', error);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [authToken, refreshUserFromBackend]);
+  }, [refreshUserFromBackend]);
+
+  useEffect(() => {
+    const handleExpired = () => {
+      clearToken();
+      setUser(null);
+    };
+    window.addEventListener('aw:session-expired', handleExpired);
+    return () => window.removeEventListener('aw:session-expired', handleExpired);
+  }, []);
 
   // Persist aw_user snapshot for legacy helpers (e.g., getCurrentViewerId).
   useEffect(() => {
@@ -193,7 +216,7 @@ export function UserProvider({ children }) {
     const userId = user?.id || 'guest';
     let cancelled = false;
     // 未登录 → 直接读 localStorage（guest 缓存）
-    if (!userId || userId === 'guest' || !authToken) {
+    if (!userId || userId === 'guest') {
       interactionSyncedRef.current = '';
       queueMicrotask(() => {
         if (cancelled) return;
@@ -214,7 +237,7 @@ export function UserProvider({ children }) {
 
     // 再从后端拉取最新状态覆盖
     interactionSyncedRef.current = userId;
-    getMyInteractionStatus(authToken)
+    getMyInteractionStatus()
       .then(({ liked_ids, favorited_ids }) => {
         if (cancelled) return;
         // 后端返回数字 ID，统一转 string 与前端保持一致
@@ -235,7 +258,7 @@ export function UserProvider({ children }) {
         interactionSyncedRef.current = ''; // 允许下次重试
       });
     return () => { cancelled = true; };
-  }, [user?.id, authToken]);
+  }, [user?.id]);
 
   // Keep post caches in sync with the logged-in user.
   useEffect(() => {
@@ -265,45 +288,43 @@ export function UserProvider({ children }) {
   ]);
 
   const login = async (payload) => {
-    const loginEmail = normalizeEmail(payload?.email || payload?.loginId || payload?.username);
+    const loginIdentifier = normalizeEmail(payload?.identifier || payload?.email || payload?.loginId || payload?.username);
+    const normalizedIdentifier = loginIdentifier.includes('@') ? loginIdentifier.toLowerCase() : loginIdentifier;
     const password = normalizePassword(payload?.password);
     const extraProfile = normalizeExtraProfile({
       school: payload?.school || '',
       className: payload?.className || '',
-      email: loginEmail,
+      email: normalizedIdentifier.includes('@') ? normalizedIdentifier : '',
       bio: payload?.bio || '',
     });
 
-    if (!loginEmail) {
-      return { ok: false, message: '请输入邮箱' };
+    if (!normalizedIdentifier) {
+      return { ok: false, message: '请输入邮箱或用户名' };
     }
     if (!password) {
       return { ok: false, message: '请输入密码' };
     }
 
     try {
-      const token = await requestToken({ username: loginEmail, password });
-      saveToken(token);
-      setAuthToken(token);
-
-      const backendUser = await fetchCurrentUser(token);
+      const backendUser = await loginWithPassword({ identifier: normalizedIdentifier, password });
       const mergedProfile = normalizeExtraProfile(extraProfile, backendUser?.email);
       const normalized = normalizeBackendUser(backendUser, mergedProfile);
-      persistExtraProfile(normalized?.id, mergedProfile);
+      persistExtraProfile(normalized?.id, normalized.profile);
       setUser(normalized);
       return { ok: true };
     } catch (error) {
       console.error('Login failed:', error);
-      clearToken();
-      setAuthToken('');
-      setUser(null);
       return { ok: false, message: error?.message || '登录失败，请稍后重试' };
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await logoutSession();
+    } catch (error) {
+      console.warn('服务端退出失败，本地会话仍会清理:', error);
+    }
     clearToken();
-    setAuthToken('');
     setUser(null);
     setLikes(readList(getStorageKey('likes', 'guest')));
     setFavorites(readList(getStorageKey('favorites', 'guest')));
@@ -312,17 +333,18 @@ export function UserProvider({ children }) {
   const updateProfile = async (profile) => {
     if (!user?.id) return;
     const mergedProfile = normalizeExtraProfile({ ...user.profile, ...profile }, user.profile?.email);
-    persistExtraProfile(user.id, mergedProfile);
-    setUser((prev) => (prev ? attachTagInfo({ ...prev, profile: mergedProfile }) : prev));
-    // 同步昵称/学校/班级到后端，使 refreshUser 后不再被覆盖
-    if (authToken) {
-      updateUserProfile(authToken, {
-        username: mergedProfile.name || undefined,
-        userSchool: mergedProfile.school || undefined,
-        userClass: mergedProfile.className || undefined,
-        bio: mergedProfile.bio ?? undefined,
-      }).catch((err) => console.warn('[updateProfile] 后端同步失败', err));
-    }
+    const backendUser = await updateUserProfile(undefined, {
+      username: mergedProfile.name,
+      userSchool: mergedProfile.school,
+      userClass: mergedProfile.className,
+      bio: mergedProfile.bio,
+      avatarUrl: mergedProfile.avatar,
+      coverUrl: mergedProfile.cover,
+    });
+    const normalized = normalizeBackendUser(backendUser, mergedProfile);
+    persistExtraProfile(user.id, normalized.profile);
+    setUser(normalized);
+    return normalized;
   };
 
   // Admin role is controlled by backend; keep as read-only to avoid confusion.
@@ -336,9 +358,9 @@ export function UserProvider({ children }) {
     // 乐观更新
     setLikes((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     // 已登录才调用后端
-    if (!authToken) return;
+    if (!user?.loggedIn) return;
     try {
-      const res = await togglePostLike(authToken, id);
+      const res = await togglePostLike(undefined, id);
       // 用后端返回的真实状态同步
       setLikes((prev) => {
         if (res.liked) {
@@ -351,15 +373,15 @@ export function UserProvider({ children }) {
       // 回滚：再切换一次
       setLikes((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     }
-  }, [authToken]);
+  }, [user?.loggedIn]);
 
   const toggleFavorite = useCallback(async (postId) => {
     if (!postId) return;
     const id = String(postId);
     setFavorites((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-    if (!authToken) return;
+    if (!user?.loggedIn) return;
     try {
-      const res = await togglePostFavorite(authToken, id);
+      const res = await togglePostFavorite(undefined, id);
       setFavorites((prev) => {
         if (res.favorited) {
           return prev.includes(id) ? prev : [...prev, id];
@@ -370,7 +392,7 @@ export function UserProvider({ children }) {
       console.warn('[toggleFavorite] 后端失败，回滚到乐观状态', err);
       setFavorites((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     }
-  }, [authToken]);
+  }, [user?.loggedIn]);
 
   const isLiked = (postId) => likes.includes(postId);
   const isFavorited = (postId) => favorites.includes(postId);
@@ -379,7 +401,7 @@ export function UserProvider({ children }) {
     <UserContext.Provider
       value={{
         user,
-        authToken,
+        isAuthenticated: user?.loggedIn === true,
         login,
         logout,
         updateProfile,
@@ -390,8 +412,8 @@ export function UserProvider({ children }) {
         toggleFavorite,
         isLiked,
         isFavorited,
-        authHeaders: () => buildAuthHeaders(authToken),
-        refreshUser: () => refreshUserFromBackend(authToken),
+        authHeaders: () => ({}),
+        refreshUser: refreshUserFromBackend,
       }}
     >
       {children}

@@ -6,7 +6,8 @@ import { buildUserId } from '../utils/userId';
 import { syncBlockedFromBackend, toggleBlock } from '../utils/blockStore';
 
 export default function Blacklist() {
-    const { user, authToken } = useUser();
+    const { user } = useUser();
+    const authToken = user?.loggedIn ? 'cookie-session' : '';
     const navigate = useNavigate();
     const viewerId = useMemo(
         () => (user?.loggedIn ? buildUserId(user?.profile?.name, user?.id || 'guest') : ''),
