@@ -198,6 +198,7 @@ def test_unhandled_error_is_json_with_request_id_cors_and_security_headers():
     assert response.headers["access-control-allow-origin"] == (
         "https://www.lnssy-cykj.online"
     )
+    assert response.headers["access-control-allow-credentials"] == "true"
     assert response.headers["x-request-id"] == "p0-regression-test"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert b"sensitive internal detail" not in response.body

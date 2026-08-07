@@ -1,6 +1,10 @@
 from typing import Any, Dict, Optional, Union
 from sqlmodel import Session, select
-from app.core.security import get_password_hash, verify_password
+from app.core.security import (
+    get_password_hash,
+    password_hash_needs_upgrade,
+    verify_password,
+)
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -72,15 +76,22 @@ def authenticate_flexible(db: Session, *, identifier: str, password: str) -> Opt
     identifier: 可以是邮箱或用户名
     """
     # 先尝试作为邮箱查询
-    user = get_by_email(db, email=identifier)
+    normalized_identifier = (identifier or "").strip()
+    email_identifier = normalized_identifier.lower()
+    user = get_by_email(db, email=email_identifier)
     
     # 如果邮箱未找到，尝试作为用户名查询
     if not user:
-        user = get_by_username(db, username=identifier)
+        user = get_by_username(db, username=normalized_identifier)
     
     # 验证密码
     if not user:
         return None
     if not verify_password(password, user.hashed_password):
         return None
+    if password_hash_needs_upgrade(user.hashed_password):
+        user.hashed_password = get_password_hash(password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     return user

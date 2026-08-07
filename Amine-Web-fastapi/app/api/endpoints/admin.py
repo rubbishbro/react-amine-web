@@ -2,8 +2,9 @@
 管理员 API 端点
 """
 from typing import Any, List, Optional
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 import secrets
+import logging
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
@@ -18,16 +19,30 @@ from app.schemas.user import (
     MuteUserRequest,
     BanUserRequest,
 )
+from app.core import security
+from app.core.limiter import limiter
+from app.core.session_store import SessionUnavailable, session_store
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _require_session_store() -> None:
+    try:
+        session_store.ping()
+    except SessionUnavailable as error:
+        raise HTTPException(status_code=503, detail="Session service unavailable") from error
 
 
 @router.post("/activate", response_model=UserSchema)
+@limiter.limit("3/hour")
 def activate_admin(
+    request: Request,
     *,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
     secret_key: str = Body(..., embed=True, alias="secret_key"),
+    current_password: str = Body(..., embed=True, alias="current_password"),
 ) -> Any:
     """
     用管理员密钥激活当前用户的管理员权限。
@@ -35,12 +50,20 @@ def activate_admin(
     错误密钥 → 422 错误。
     """
     from app.core.config import settings
-    if len(secret_key) > 256 or not secrets.compare_digest(secret_key, settings.ADMIN_SECRET_KEY):
-        raise HTTPException(status_code=422, detail="无效的密钥")
+    valid_password = len(current_password or "") <= 128 and security.verify_password(
+        current_password, current_user.hashed_password
+    )
+    valid_secret = len(secret_key) <= 256 and secrets.compare_digest(
+        secret_key, settings.ADMIN_SECRET_KEY
+    )
+    if not valid_password or not valid_secret:
+        logger.warning("Admin activation rejected user_id=%s", current_user.id)
+        raise HTTPException(status_code=403, detail="Invalid activation credentials")
     current_user.is_superuser = True
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
+    logger.info("Admin activation succeeded user_id=%s", current_user.id)
     return current_user
 
 
@@ -166,10 +189,12 @@ def ban_user(
     # 不能封禁自己
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能封禁自己")
-    
+
+    _require_session_store()
     user = crud_admin.admin.ban_user(db, user_id=user_id, reason=request.reason)
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在或无法封禁管理员")
+    session_store.revoke_all(user_id)
     return user
 
 
@@ -202,10 +227,12 @@ def delete_user(
     # 不能删除自己
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能删除自己")
-    
+
+    _require_session_store()
     success = crud_admin.admin.delete_user(db, user_id=user_id)
     if not success:
         raise HTTPException(status_code=404, detail="用户不存在或无法删除管理员")
+    session_store.revoke_all(user_id)
     return {"message": "用户已删除"}
 
 

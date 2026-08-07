@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256" # 采用HS256算法
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    BROWSER_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    JWT_ISSUER: str = "amine-web-api"
+    JWT_AUDIENCE: str = "amine-web-browser"
+    ACCESS_COOKIE_NAME: str = "aw_access_token"
+    REFRESH_COOKIE_NAME: str = "aw_refresh_token"
+    CSRF_COOKIE_NAME: str = "aw_csrf_token"
+    COOKIE_DOMAIN: Optional[str] = None
 
     # 管理员密钥
     ADMIN_SECRET_KEY: str

@@ -3,10 +3,7 @@
 路由前缀: /dm
 """
 from typing import Any, Dict, List, Optional
-from collections import deque
-from time import monotonic
 from uuid import UUID
-import secrets
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Path
 from sqlmodel import Session
 from pydantic import BaseModel, Field
@@ -17,6 +14,7 @@ from app.models.user import User
 from app.models.user_relation import RelationType
 from app.models.dm_attachment import DMAttachment
 from app.core.config import settings
+from app.core.session_store import SessionUnavailable, session_store
 
 router = APIRouter()
 
@@ -63,40 +61,6 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
-
-
-# ── 一次性 WS 连接票据 ─────────────────────────────────────────────────────────
-# 避免把 JWT 放进 URL(会被 nginx 访问日志等持久化)。票据 30 秒时效 + 单次使用，
-# 即使被日志记录也立即失效，无法复用。
-_ws_tickets: Dict[str, tuple] = {}
-_WS_TICKET_TTL_SECONDS = 30
-
-
-def _issue_ws_ticket(user_id: int) -> str:
-    _purge_expired_ws_tickets()
-    ticket = secrets.token_urlsafe(32)
-    _ws_tickets[ticket] = (user_id, monotonic())
-    return ticket
-
-
-def _consume_ws_ticket(ticket: str) -> Optional[int]:
-    entry = _ws_tickets.pop(ticket, None)
-    if not entry:
-        return None
-    user_id, created_at = entry
-    if monotonic() - created_at > _WS_TICKET_TTL_SECONDS:
-        return None
-    return user_id
-
-
-def _purge_expired_ws_tickets() -> None:
-    now = monotonic()
-    expired = [
-        t for t, (_, created_at) in _ws_tickets.items()
-        if now - created_at > _WS_TICKET_TTL_SECONDS
-    ]
-    for t in expired:
-        _ws_tickets.pop(t, None)
 
 
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
@@ -316,13 +280,14 @@ def create_ws_ticket(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    签发一次性 WebSocket 连接票据（30 秒有效，单次使用）。
+    签发一次性 WebSocket 连接票据（60 秒有效，单次使用）。
     获取后即可连接 /dm/ws/{user_id}?ticket=...，避免把 JWT 放进 URL。
     """
-    return {
-        "ticket": _issue_ws_ticket(current_user.id),
-        "expires_in": _WS_TICKET_TTL_SECONDS,
-    }
+    try:
+        ticket, expires_in = session_store.issue_ws_ticket(current_user.id)
+    except SessionUnavailable as error:
+        raise HTTPException(status_code=503, detail="Session service unavailable") from error
+    return {"ticket": ticket, "expires_in": expires_in}
 
 
 # ── WebSocket 端点 ────────────────────────────────────────────────────────────
@@ -338,7 +303,7 @@ async def websocket_endpoint(
     WebSocket 私信通道。
     连接地址: ws://<host>/api/v1/dm/ws/{user_id}?ticket=<一次性票据>
 
-    票据获取: 先 POST /api/v1/dm/ws-ticket(携带 Bearer token) 换取 30 秒有效、
+    票据获取: 先 POST /api/v1/dm/ws-ticket 换取 60 秒有效、
     单次使用的一次性票据。票据即使出现在日志中也立即失效，无法复用。
 
     客户端发送格式（JSON）:
@@ -353,8 +318,12 @@ async def websocket_endpoint(
         { "event": "error",            "detail": "..." }
     """
     import json
-    # 一次性票据鉴权（30 秒有效，单次使用，绑定到 URL 中的 user_id）
-    authed_user_id = _consume_ws_ticket(ticket)
+    # 一次性票据鉴权（60 秒有效，单次使用，绑定到 URL 中的 user_id）
+    try:
+        authed_user_id = session_store.consume_ws_ticket(ticket)
+    except SessionUnavailable:
+        await websocket.close(code=1013, reason="Session service unavailable")
+        return
     if authed_user_id is None or authed_user_id != user_id:
         await websocket.close(code=4001)
         return
@@ -364,30 +333,37 @@ async def websocket_endpoint(
         return
 
     origin = websocket.headers.get("origin")
-    if origin and origin not in settings.BACKEND_CORS_ORIGINS:
+    if origin not in settings.BACKEND_CORS_ORIGINS:
         await websocket.close(code=4003, reason="Origin not allowed")
         return
 
-    if not await manager.connect(user_id, websocket):
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    try:
+        connection_allowed = session_store.acquire_ws_connection(user_id, client_ip)
+    except SessionUnavailable:
+        await websocket.close(code=1013, reason="Session service unavailable")
         return
-    event_times_10s = deque()
-    event_times_60s = deque()
+    if not connection_allowed:
+        await websocket.close(code=4008, reason="Too many connections")
+        return
+
+    if not await manager.connect(user_id, websocket):
+        session_store.release_ws_connection(user_id, client_ip)
+        return
     try:
         while True:
             raw = await websocket.receive_text()
             if len(raw.encode("utf-8")) > 8192:
                 await websocket.close(code=4009, reason="Message too large")
                 return
-            now = monotonic()
-            while event_times_10s and now - event_times_10s[0] > 10:
-                event_times_10s.popleft()
-            while event_times_60s and now - event_times_60s[0] > 60:
-                event_times_60s.popleft()
-            if len(event_times_10s) >= 10 or len(event_times_60s) >= 60:
+            try:
+                event_allowed = session_store.allow_ws_event(user_id)
+            except SessionUnavailable:
+                await websocket.close(code=1013, reason="Session service unavailable")
+                return
+            if not event_allowed:
                 await websocket.close(code=4008, reason="Rate limit exceeded")
                 return
-            event_times_10s.append(now)
-            event_times_60s.append(now)
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
@@ -470,3 +446,7 @@ async def websocket_endpoint(
         pass
     finally:
         manager.disconnect(user_id, websocket)
+        try:
+            session_store.release_ws_connection(user_id, client_ip)
+        except SessionUnavailable:
+            pass
