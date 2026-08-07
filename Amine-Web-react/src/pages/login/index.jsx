@@ -31,7 +31,7 @@ export default function Login() {
   const [sendingCode, setSendingCode] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+  const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}$/;
 
   const switchMode = (nextMode) => {
     setMode(nextMode);
@@ -100,7 +100,7 @@ export default function Login() {
     setSuccess('');
 
     const result = await login({
-      email: loginForm.email.trim(),
+      identifier: loginForm.email.trim(),
       password: loginForm.password,
     });
 
@@ -136,9 +136,9 @@ export default function Login() {
         password: registerForm.password,
         confirmPassword: registerForm.confirmPassword,
       });
-      setSuccess('注册成功，请使用邮箱和密码登录');
       setLoginForm({ email: registerForm.email.trim(), password: '' });
       switchMode('login');
+      setSuccess('注册成功，请使用邮箱或用户名和密码登录');
     } catch (err) {
       setError(err?.message || '注册失败');
     } finally {
@@ -169,9 +169,9 @@ export default function Login() {
         password: resetForm.password,
         confirmPassword: resetForm.confirmPassword,
       });
-      setSuccess('密码重置成功，请使用新密码登录');
       setLoginForm({ email: resetForm.email.trim(), password: '' });
       switchMode('login');
+      setSuccess('密码重置成功，请使用新密码登录');
     } catch (err) {
       setError(err?.message || '重置密码失败');
     } finally {
@@ -182,14 +182,14 @@ export default function Login() {
   const renderLoginForm = () => (
     <form className={styles.form} onSubmit={handleLoginSubmit}>
       <label className={styles.label}>
-        邮箱
+        邮箱或用户名
         <input
           name="email"
-          type="email"
+          type="text"
           value={loginForm.email}
           onChange={handleLoginChange}
-          placeholder="you@example.com"
-          autoComplete="email"
+          placeholder="you@example.com 或昵称"
+          autoComplete="username"
         />
       </label>
 
@@ -373,8 +373,8 @@ export default function Login() {
 
       <div className={styles.card}>
         <div className={styles.cardHeader}>
-          <h2>{mode === 'login' ? '邮箱登录' : mode === 'register' ? '邮箱注册' : '忘记密码'}</h2>
-          <span>{mode === 'login' ? '使用邮箱 + 密码登录' : mode === 'register' ? '邮箱验证码注册' : '邮箱验证码重置密码'}</span>
+          <h2>{mode === 'login' ? '账号登录' : mode === 'register' ? '邮箱注册' : '忘记密码'}</h2>
+          <span>{mode === 'login' ? '使用邮箱或用户名 + 密码登录' : mode === 'register' ? '邮箱验证码注册' : '邮箱验证码重置密码'}</span>
         </div>
 
         {mode === 'login' && renderLoginForm()}

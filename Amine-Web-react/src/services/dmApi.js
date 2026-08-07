@@ -2,7 +2,7 @@
  * 私信 REST API 服务
  * WebSocket 连接管理见 dmWsClient.js
  */
-import { buildApiUrl } from '../pages/config/api.js';
+import { apiFetch } from './apiClient.js';
 import { authHeaders } from './auth.js';
 
 const extractError = async (res) => {
@@ -20,7 +20,7 @@ const extractError = async (res) => {
  * @returns {Promise<{ other_id:number, unread_count:number, last_message:{} }[]>}
  */
 export const getDmThreads = async (token) => {
-    const res = await fetch(buildApiUrl('/dm/threads'), { headers: authHeaders(token) });
+    const res = await apiFetch('/dm/threads', { headers: authHeaders(token) });
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -34,7 +34,16 @@ export const getDmThreads = async (token) => {
  */
 export const getDmThread = async (token, otherId, { skip = 0, limit = 50 } = {}) => {
     const params = new URLSearchParams({ skip, limit });
-    const res = await fetch(buildApiUrl(`/dm/thread/${otherId}?${params}`), { headers: authHeaders(token) });
+    const res = await apiFetch(`/dm/thread/${otherId}?${params}`, { headers: authHeaders(token) });
+    if (!res.ok) throw new Error(await extractError(res));
+    return res.json();
+};
+
+export const markDmThreadRead = async (token, otherId) => {
+    const res = await apiFetch(`/dm/thread/${otherId}/read`, {
+        method: 'POST',
+        headers: authHeaders(token),
+    });
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -46,7 +55,7 @@ export const getDmThread = async (token, otherId, { skip = 0, limit = 50 } = {})
  * @returns {Promise<Message>}
  */
 export const sendDm = async (token, payload) => {
-    const res = await fetch(buildApiUrl('/dm/send'), {
+    const res = await apiFetch('/dm/send', {
         method: 'POST',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -60,7 +69,7 @@ export const sendDm = async (token, payload) => {
  * @returns {Promise<Message>}
  */
 export const recallDm = async (token, messageId) => {
-    const res = await fetch(buildApiUrl(`/dm/${messageId}/recall`), {
+    const res = await apiFetch(`/dm/${messageId}/recall`, {
         method: 'POST',
         headers: authHeaders(token),
     });
@@ -73,7 +82,7 @@ export const recallDm = async (token, messageId) => {
  * @returns {Promise<{ deleted:boolean }>}
  */
 export const deleteDm = async (token, messageId) => {
-    const res = await fetch(buildApiUrl(`/dm/${messageId}`), {
+    const res = await apiFetch(`/dm/${messageId}`, {
         method: 'DELETE',
         headers: authHeaders(token),
     });
@@ -86,7 +95,7 @@ export const deleteDm = async (token, messageId) => {
  * @returns {Promise<{ unread_count:number }>}
  */
 export const getDmUnreadCount = async (token) => {
-    const res = await fetch(buildApiUrl('/dm/unread-count'), { headers: authHeaders(token) });
+    const res = await apiFetch('/dm/unread-count', { headers: authHeaders(token) });
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };

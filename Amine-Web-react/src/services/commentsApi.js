@@ -2,7 +2,7 @@
  * 评论 API 服务
  * 所有评论操作均经由后端 /comments 端点持久化，不再依赖 localStorage
  */
-import { buildApiUrl } from '../pages/config/api.js';
+import { apiFetch } from './apiClient.js';
 import { authHeaders } from './auth.js';
 
 const extractError = async (response) => {
@@ -26,7 +26,7 @@ const extractError = async (response) => {
  * @returns {Array<{ id, post_id, author_id, author_name, author_avatar, content, parent_id, likes, created_at, updated_at, is_deleted }>}
  */
 export const getPostComments = async (postId, { skip = 0, limit = 100 } = {}) => {
-    const res = await fetch(buildApiUrl(`/comments/post/${postId}?skip=${skip}&limit=${limit}`));
+    const res = await apiFetch(`/comments/post/${postId}?skip=${skip}&limit=${limit}`);
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -36,7 +36,7 @@ export const getPostComments = async (postId, { skip = 0, limit = 100 } = {}) =>
  * GET /comments/{comment_id}/replies
  */
 export const getCommentReplies = async (commentId, { skip = 0, limit = 50 } = {}) => {
-    const res = await fetch(buildApiUrl(`/comments/${commentId}/replies?skip=${skip}&limit=${limit}`));
+    const res = await apiFetch(`/comments/${commentId}/replies?skip=${skip}&limit=${limit}`);
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -46,7 +46,7 @@ export const getCommentReplies = async (commentId, { skip = 0, limit = 50 } = {}
  * GET /comments/post/{post_id}/count
  */
 export const getCommentCount = async (postId) => {
-    const res = await fetch(buildApiUrl(`/comments/post/${postId}/count`));
+    const res = await apiFetch(`/comments/post/${postId}/count`);
     if (!res.ok) throw new Error(await extractError(res));
     const data = await res.json();
     return data.count ?? 0;
@@ -63,7 +63,7 @@ export const getCommentCount = async (postId) => {
  * @param {{ post_id: number, content: string, parent_id?: number }} payload
  */
 export const createComment = async (token, payload) => {
-    const res = await fetch(buildApiUrl('/comments/'), {
+    const res = await apiFetch('/comments/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify(payload),
@@ -77,7 +77,7 @@ export const createComment = async (token, payload) => {
  * PUT /comments/{comment_id}
  */
 export const updateComment = async (token, commentId, content) => {
-    const res = await fetch(buildApiUrl(`/comments/${commentId}`), {
+    const res = await apiFetch(`/comments/${commentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({ content }),
@@ -91,7 +91,7 @@ export const updateComment = async (token, commentId, content) => {
  * DELETE /comments/{comment_id}
  */
 export const deleteComment = async (token, commentId) => {
-    const res = await fetch(buildApiUrl(`/comments/${commentId}`), {
+    const res = await apiFetch(`/comments/${commentId}`, {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -105,7 +105,7 @@ export const deleteComment = async (token, commentId) => {
  * @returns {{ success: boolean, likes: number }}
  */
 export const likeComment = async (token, commentId) => {
-    const res = await fetch(buildApiUrl(`/comments/${commentId}/like`), {
+    const res = await apiFetch(`/comments/${commentId}/like`, {
         method: 'POST',
         headers: { ...authHeaders(token) },
     });

@@ -1,6 +1,7 @@
-import { buildApiUrl, resolveMediaUrl } from '../pages/config/api.js';
+import { resolveMediaUrl } from '../pages/config/api.js';
+import { apiFetch, expectOk } from './apiClient.js';
 
-const TOKEN_KEY = 'aw_access_token';
+const LEGACY_TOKEN_KEY = 'aw_access_token';
 
 const normalizeUserMedia = (user) => user ? {
   ...user,
@@ -8,147 +9,104 @@ const normalizeUserMedia = (user) => user ? {
   cover_url: resolveMediaUrl(user.cover_url),
 } : user;
 
-const parseErrorMessage = async (response) => {
-  try {
-    const data = await response.json();
-    if (typeof data === 'string') return data;
-    if (data?.detail) return Array.isArray(data.detail) ? data.detail[0]?.msg || '' : data.detail;
-  } catch {
-    // ignore
-  }
-  return '';
-};
-
 export const readStoredToken = () => {
   try {
-    return localStorage.getItem(TOKEN_KEY) || '';
+    return localStorage.getItem(LEGACY_TOKEN_KEY) || '';
   } catch {
     return '';
   }
 };
 
-export const saveToken = (token) => {
-  if (!token) return;
-  try {
-    localStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // ignore write errors
-  }
-};
-
 export const clearToken = () => {
   try {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
   } catch {
-    // ignore
+    // Storage may be disabled; the server-side session still works.
   }
 };
 
-export const authHeaders = (token = readStoredToken()) =>
-  token ? { Authorization: `Bearer ${token}` } : {};
+// Kept temporarily for service call compatibility. New browser requests use Cookie auth.
+export const authHeaders = () => ({});
 
-export async function requestToken({ username, password }) {
-  const formData = new URLSearchParams();
-  formData.set('username', username);
-  formData.set('password', password);
-
-  const response = await fetch(buildApiUrl('/login/access-token'), {
+export async function migrateLegacySession() {
+  const token = readStoredToken();
+  if (!token) return null;
+  const response = await apiFetch('/auth/session/migrate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: formData.toString(),
-  });
+    headers: { Authorization: `Bearer ${token}` },
+  }, { retryAuth: false });
+  await expectOk(response, '旧登录状态迁移失败');
+  clearToken();
+  return normalizeUserMedia(await response.json());
+}
 
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || `邮箱或密码错误（HTTP ${response.status}）`);
-  }
+export async function loginWithPassword({ identifier, password }) {
+  const response = await apiFetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, password }),
+  }, { retryAuth: false });
+  await expectOk(response, '邮箱、用户名或密码错误');
+  clearToken();
+  return normalizeUserMedia(await response.json());
+}
 
-  const data = await response.json();
-  if (!data?.access_token) {
-    throw new Error('后端未返回访问令牌 access_token');
-  }
-  return data.access_token;
+export async function logoutSession() {
+  const response = await apiFetch('/auth/logout', { method: 'POST' }, { retryAuth: false });
+  await expectOk(response, '退出登录失败');
+  clearToken();
 }
 
 export async function sendEmailCode({ email, purpose }) {
-  const response = await fetch(buildApiUrl('/auth/email-code/send'), {
+  const response = await apiFetch('/auth/email-code/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, purpose }),
-  });
-
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || `发送验证码失败（HTTP ${response.status}）`);
-  }
-
+    body: JSON.stringify({ email: email.trim().toLowerCase(), purpose }),
+  }, { retryAuth: false });
+  await expectOk(response, '发送验证码失败');
   return response.json();
 }
 
 export async function registerByEmail({ email, password, confirmPassword, code }) {
-  const response = await fetch(buildApiUrl('/auth/register-email'), {
+  const response = await apiFetch('/auth/register-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email,
+      email: email.trim().toLowerCase(),
       password,
       confirm_password: confirmPassword,
       code,
     }),
-  });
-
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || `注册失败（HTTP ${response.status}）`);
-  }
-
+  }, { retryAuth: false });
+  await expectOk(response, '注册失败');
   return response.json();
 }
 
 export async function resetPasswordByEmailCode({ email, password, confirmPassword, code }) {
-  const response = await fetch(buildApiUrl('/auth/password-reset'), {
+  const response = await apiFetch('/auth/password-reset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email,
+      email: email.trim().toLowerCase(),
       password,
       confirm_password: confirmPassword,
       code,
     }),
-  });
-
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || `重置密码失败（HTTP ${response.status}）`);
-  }
-
+  }, { retryAuth: false });
+  await expectOk(response, '重置密码失败');
   return response.json();
 }
 
-export async function fetchCurrentUser(token) {
-  if (!token) throw new Error('缺少登录令牌');
-  const response = await fetch(buildApiUrl('/users/me'), {
-    headers: {
-      ...authHeaders(token),
-    },
-  });
-
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || `获取用户信息失败（HTTP ${response.status}）`);
-  }
-
+export async function fetchCurrentUser() {
+  const response = await apiFetch('/users/me');
+  await expectOk(response, '获取用户信息失败');
   return normalizeUserMedia(await response.json());
 }
 
-/**
- * 根据用户名获取用户公开信息（无需登录）
- * GET /users/username/{username}
- */
 export async function fetchUserByUsername(username) {
   if (!username) return null;
   try {
-    const response = await fetch(buildApiUrl(`/users/username/${encodeURIComponent(username)}`));
+    const response = await apiFetch(`/users/username/${encodeURIComponent(username)}`);
     if (!response.ok) return null;
     return normalizeUserMedia(await response.json());
   } catch {
@@ -156,54 +114,40 @@ export async function fetchUserByUsername(username) {
   }
 }
 
-/**
- * 上传图片或音频文件，返回后端 URL
- * 配置了七牛云时返回 CDN 地址，否则返回本地 /static/uploads/... 路径
- */
-export async function uploadFile(token, file) {
+export async function uploadFile(_legacyToken, file) {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetch(buildApiUrl('/upload/'), {
-    method: 'POST',
-    headers: authHeaders(token),  // 不要手动设置 Content-Type，浏览器自动带 boundary
-    body: formData,
-  });
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || `上传失败（HTTP ${response.status}）`);
-  }
+  const response = await apiFetch('/upload/', { method: 'POST', body: formData });
+  await expectOk(response, '上传失败');
   const result = await response.json();
   return { ...result, url: resolveMediaUrl(result?.url) };
 }
 
-/**
- * 更新当前用户的头像 / 头图 URL（写入数据库）
- */
-export async function updateUserProfile(token, { username, userSchool, userClass, bio } = {}) {
-    const res = await fetch(buildApiUrl('/users/me'), {
-        method: 'PATCH',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, userSchool, userClass, bio }),
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || '更新个人资料失败');
-    }
-    return res.json();
-}
-
-export async function updateUserAvatar(token, { avatarUrl, coverUrl } = {}) {
-  const body = {};
-  if (avatarUrl !== undefined) body.avatar_url = avatarUrl;
-  if (coverUrl !== undefined) body.cover_url = coverUrl;
-  const response = await fetch(buildApiUrl('/users/me/avatar'), {
+export async function updateUserProfile(_legacyToken, profile = {}) {
+  const body = {
+    username: profile.username,
+    userSchool: profile.userSchool,
+    userClass: profile.userClass,
+    bio: profile.bio,
+    avatar_url: profile.avatarUrl,
+    cover_url: profile.coverUrl,
+  };
+  Object.keys(body).forEach((key) => body[key] === undefined && delete body[key]);
+  const response = await apiFetch('/users/me', {
     method: 'PATCH',
-    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    const detail = await parseErrorMessage(response);
-    throw new Error(detail || '头像更新失败');
-  }
+  await expectOk(response, '更新个人资料失败');
+  return normalizeUserMedia(await response.json());
+}
+
+export async function updateUserAvatar(_legacyToken, { avatarUrl, coverUrl } = {}) {
+  const response = await apiFetch('/users/me/avatar', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ avatar_url: avatarUrl, cover_url: coverUrl }),
+  });
+  await expectOk(response, '头像更新失败');
   return normalizeUserMedia(await response.json());
 }

@@ -2,7 +2,7 @@
  * 通知 API 服务
  * 所有通知操作经由后端 /notifications 端点持久化
  */
-import { buildApiUrl } from '../pages/config/api.js';
+import { apiFetch } from './apiClient.js';
 import { authHeaders } from './auth.js';
 
 const extractError = async (res) => {
@@ -22,7 +22,7 @@ const extractError = async (res) => {
  */
 export const getNotifications = async (token, { skip = 0, limit = 50, unread_only = false } = {}) => {
     const params = new URLSearchParams({ skip, limit, unread_only });
-    const res = await fetch(buildApiUrl(`/notifications/?${params}`), { headers: authHeaders(token) });
+    const res = await apiFetch(`/notifications/?${params}`, { headers: authHeaders(token) });
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -32,7 +32,7 @@ export const getNotifications = async (token, { skip = 0, limit = 50, unread_onl
  * @returns {Promise<{ unread_count: number }>}
  */
 export const getUnreadNotificationCount = async (token) => {
-    const res = await fetch(buildApiUrl('/notifications/unread-count'), { headers: authHeaders(token) });
+    const res = await apiFetch('/notifications/unread-count', { headers: authHeaders(token) });
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -43,7 +43,7 @@ export const getUnreadNotificationCount = async (token) => {
  * @param {number} notificationId
  */
 export const markNotificationReadApi = async (token, notificationId) => {
-    const res = await fetch(buildApiUrl(`/notifications/${notificationId}/read`), {
+    const res = await apiFetch(`/notifications/${notificationId}/read`, {
         method: 'PATCH',
         headers: authHeaders(token),
     });
@@ -56,7 +56,7 @@ export const markNotificationReadApi = async (token, notificationId) => {
  * @returns {Promise<{ marked: number }>}
  */
 export const markAllReadApi = async (token) => {
-    const res = await fetch(buildApiUrl('/notifications/read-all'), {
+    const res = await apiFetch('/notifications/read-all', {
         method: 'POST',
         headers: authHeaders(token),
     });
@@ -69,7 +69,7 @@ export const markAllReadApi = async (token) => {
  * @returns {Promise<{ deleted: number }>}
  */
 export const clearReadNotificationsApi = async (token) => {
-    const res = await fetch(buildApiUrl('/notifications/clear-read'), {
+    const res = await apiFetch('/notifications/clear-read', {
         method: 'DELETE',
         headers: authHeaders(token),
     });

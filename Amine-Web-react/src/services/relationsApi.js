@@ -2,7 +2,7 @@
  * 用户关系 API 服务（关注 / 拉黑）
  * 所有操作均经由后端 /users 端点持久化，不再依赖 localStorage
  */
-import { buildApiUrl } from '../pages/config/api.js';
+import { apiFetch } from './apiClient.js';
 import { authHeaders } from './auth.js';
 
 const extractError = async (response) => {
@@ -25,7 +25,7 @@ const extractError = async (response) => {
  * POST /users/{user_id}/follow
  */
 export const followUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/follow`), {
+    const res = await apiFetch(`/users/${userId}/follow`, {
         method: 'POST',
         headers: { ...authHeaders(token) },
     });
@@ -38,7 +38,7 @@ export const followUser = async (token, userId) => {
  * DELETE /users/{user_id}/follow
  */
 export const unfollowUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/follow`), {
+    const res = await apiFetch(`/users/${userId}/follow`, {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -65,7 +65,7 @@ export const toggleFollowApi = async (token, userId, currentlyFollowing) => {
  * GET /users/{user_id}/relation
  */
 export const getRelationStatus = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/relation`), {
+    const res = await apiFetch(`/users/${userId}/relation`, {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));
@@ -77,7 +77,7 @@ export const getRelationStatus = async (token, userId) => {
  * GET /users/{user_id}/stats
  */
 export const getUserRelationStats = async (userId) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/stats`));
+    const res = await apiFetch(`/users/${userId}/stats`);
     if (!res.ok) throw new Error(await extractError(res));
     return res.json(); // { follower_count, following_count }
 };
@@ -87,7 +87,7 @@ export const getUserRelationStats = async (userId) => {
  * GET /users/{user_id}/followers
  */
 export const getFollowers = async (userId, { skip = 0, limit = 100 } = {}) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/followers?skip=${skip}&limit=${limit}`));
+    const res = await apiFetch(`/users/${userId}/followers?skip=${skip}&limit=${limit}`);
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -97,7 +97,7 @@ export const getFollowers = async (userId, { skip = 0, limit = 100 } = {}) => {
  * GET /users/{user_id}/following
  */
 export const getFollowing = async (userId, { skip = 0, limit = 100 } = {}) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/following?skip=${skip}&limit=${limit}`));
+    const res = await apiFetch(`/users/${userId}/following?skip=${skip}&limit=${limit}`);
     if (!res.ok) throw new Error(await extractError(res));
     return res.json();
 };
@@ -111,7 +111,7 @@ export const getFollowing = async (userId, { skip = 0, limit = 100 } = {}) => {
  * POST /users/{user_id}/block
  */
 export const blockUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/block`), {
+    const res = await apiFetch(`/users/${userId}/block`, {
         method: 'POST',
         headers: { ...authHeaders(token) },
     });
@@ -124,7 +124,7 @@ export const blockUser = async (token, userId) => {
  * DELETE /users/{user_id}/block
  */
 export const unblockUser = async (token, userId) => {
-    const res = await fetch(buildApiUrl(`/users/${userId}/block`), {
+    const res = await apiFetch(`/users/${userId}/block`, {
         method: 'DELETE',
         headers: { ...authHeaders(token) },
     });
@@ -151,7 +151,7 @@ export const toggleBlockApi = async (token, userId, currentlyBlocked) => {
  * GET /users/me/blocked
  */
 export const getMyBlockedUsers = async (token) => {
-    const res = await fetch(buildApiUrl('/users/me/blocked'), {
+    const res = await apiFetch('/users/me/blocked', {
         headers: { ...authHeaders(token) },
     });
     if (!res.ok) throw new Error(await extractError(res));

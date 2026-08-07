@@ -17,6 +17,7 @@
  *   client.recall(messageId);
  *   client.disconnect();
  */
+import { apiFetch } from './apiClient.js';
 
 const WS_BASE_URL = (() => {
     if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WS_BASE_URL) {
@@ -43,9 +44,8 @@ export class DmWsClient {
      * @param {Function} [handlers.onOpen]
      * @param {Function} [handlers.onClose]
      */
-    constructor(userId, token, handlers = {}) {
+    constructor(userId, handlers = {}) {
         this.userId = userId;
-        this.token = token;
         this.handlers = handlers;
         this._ws = null;
         this._connecting = false;
@@ -78,9 +78,8 @@ export class DmWsClient {
      * 真实 JWT 只走 Authorization 头，绝不进入 WS URL。
      */
     async _fetchTicket() {
-        const res = await fetch(this._httpUrl('/dm/ws-ticket'), {
+        const res = await apiFetch(this._httpUrl('/dm/ws-ticket'), {
             method: 'POST',
-            headers: { Authorization: `Bearer ${this.token}` },
         });
         if (!res.ok) {
             throw new Error(`获取连接票据失败（HTTP ${res.status}）`);

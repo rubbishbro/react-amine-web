@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import styles from './SearchResults.module.css';
 import Post from '../Post';
-import { API_BASE_URL } from '../../config/api';
+import { apiFetch } from '../../../services/apiClient';
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
@@ -25,7 +25,7 @@ const SearchResults = () => {
       setError(null);
       
       try {
-        const response = await fetch(`${API_BASE_URL}/search/all?q=${encodeURIComponent(query)}`);
+        const response = await apiFetch(`/search/all?q=${encodeURIComponent(query)}`);
         
         if (!response.ok) {
           throw new Error('搜索请求失败');

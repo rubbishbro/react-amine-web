@@ -2,7 +2,7 @@
  * 帖子互动 API 服务
  * 所有点赞/收藏操作均经由后端 /interact 端点持久化，不再依赖 localStorage
  */
-import { buildApiUrl } from '../pages/config/api.js';
+import { apiFetch } from './apiClient.js';
 import { authHeaders } from './auth.js';
 
 const extractError = async (response) => {
@@ -23,7 +23,7 @@ const extractError = async (response) => {
  * @returns {Promise<{ liked: boolean, post_id: number }>}
  */
 export const togglePostLike = async (token, postId) => {
-    const res = await fetch(buildApiUrl(`/interact/posts/${postId}/like`), {
+    const res = await apiFetch(`/interact/posts/${postId}/like`, {
         method: 'POST',
         headers: authHeaders(token),
     });
@@ -38,7 +38,7 @@ export const togglePostLike = async (token, postId) => {
  * @returns {Promise<{ favorited: boolean, post_id: number }>}
  */
 export const togglePostFavorite = async (token, postId) => {
-    const res = await fetch(buildApiUrl(`/interact/posts/${postId}/favorite`), {
+    const res = await apiFetch(`/interact/posts/${postId}/favorite`, {
         method: 'POST',
         headers: authHeaders(token),
     });
@@ -52,7 +52,7 @@ export const togglePostFavorite = async (token, postId) => {
  * @returns {Promise<{ liked_ids: number[], favorited_ids: number[] }>}
  */
 export const getMyInteractionStatus = async (token) => {
-    const res = await fetch(buildApiUrl('/interact/me/status'), {
+    const res = await apiFetch('/interact/me/status', {
         headers: authHeaders(token),
     });
     if (!res.ok) throw new Error(await extractError(res));
@@ -66,7 +66,7 @@ export const getMyInteractionStatus = async (token) => {
  * @returns {Promise<{ liked: boolean, favorited: boolean }>}
  */
 export const getMyPostStatus = async (token, postId) => {
-    const res = await fetch(buildApiUrl(`/interact/posts/${postId}/me`), {
+    const res = await apiFetch(`/interact/posts/${postId}/me`, {
         headers: authHeaders(token),
     });
     if (!res.ok) throw new Error(await extractError(res));

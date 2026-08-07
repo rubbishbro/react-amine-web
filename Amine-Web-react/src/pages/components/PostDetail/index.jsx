@@ -38,7 +38,8 @@ const PostDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, authToken, toggleLike, toggleFavorite, isLiked, isFavorited } = useUser();
+  const { user, toggleLike, toggleFavorite, isLiked, isFavorited } = useUser();
+  const authToken = user?.loggedIn ? 'cookie-session' : '';
   const isViewerLoggedIn = user?.loggedIn === true;
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
