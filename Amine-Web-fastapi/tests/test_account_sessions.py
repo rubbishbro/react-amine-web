@@ -13,7 +13,7 @@ from app.api.endpoints.users import ProfileUpdate, update_my_profile
 from app.crud import crud_user
 
 
-def _request(method="POST", headers=None):
+def _request(method="POST", headers=None, path="/api/v1/users/me"):
     raw_headers = [
         (key.lower().encode(), value.encode()) for key, value in (headers or {}).items()
     ]
@@ -23,8 +23,8 @@ def _request(method="POST", headers=None):
             "http_version": "1.1",
             "method": method,
             "scheme": "https",
-            "path": "/api/v1/users/me",
-            "raw_path": b"/api/v1/users/me",
+            "path": path,
+            "raw_path": path.encode(),
             "query_string": b"",
             "headers": raw_headers,
             "client": ("203.0.113.10", 1234),
@@ -136,6 +136,17 @@ def test_cookie_write_requires_matching_origin_and_csrf(monkeypatch):
     bearer = _request(headers={"Authorization": "Bearer legacy-token"})
     bearer_accepted = asyncio.run(middleware.dispatch(bearer, ok))
     assert bearer_accepted.status_code == 204
+
+    old_refresh_pair = _request(
+        path="/api/v1/auth/refresh",
+        headers={
+            "Origin": "https://www.lnssy-cykj.online",
+            "Cookie": "aw_refresh_token=sid.old; aw_csrf_token=old-csrf",
+            "X-CSRF-Token": "old-csrf",
+        },
+    )
+    replay_reaches_rotation = asyncio.run(middleware.dispatch(old_refresh_pair, ok))
+    assert replay_reaches_rotation.status_code == 204
 
 
 def test_email_login_is_case_insensitive_and_upgrades_legacy_hash(monkeypatch):
