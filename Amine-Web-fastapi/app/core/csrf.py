@@ -51,6 +51,11 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return JSONResponse(status_code=403, content={"detail": "CSRF token required"})
         if not secrets.compare_digest(csrf_cookie, csrf_header):
             return JSONResponse(status_code=403, content={"detail": "CSRF token mismatch"})
+        if request.url.path == f"{settings.API_V1_STR}/auth/refresh":
+            # The refresh token is compared and rotated atomically. Allow an
+            # old, matching double-submit pair through so replay is detected
+            # by the rotation layer and revokes the server-side session.
+            return await call_next(request)
         try:
             valid = session_store.verify_csrf(sid, csrf_header)
         except SessionUnavailable:
