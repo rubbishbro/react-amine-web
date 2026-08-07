@@ -2,8 +2,10 @@
 
 import logging
 import logging.config
+from uuid import uuid4
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles # 静态资源托管
 from fastapi.middleware.cors import CORSMiddleware # 前后端跨域
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -95,7 +97,34 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.middleware("http")
 async def add_security_headers(request, call_next):
-    response = await call_next(request)
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(
+            "Unhandled request error request_id=%s method=%s path=%s",
+            request_id,
+            request.method,
+            request.url.path,
+        )
+        response = JSONResponse(
+            status_code=500,
+            content={
+                "detail": "The server could not process the request",
+                "request_id": request_id,
+            },
+        )
+
+        # This middleware is outside CORSMiddleware. Add the exact approved
+        # origin on locally generated 500 responses so browsers expose the
+        # JSON error instead of reducing it to an opaque `Failed to fetch`.
+        origin = request.headers.get("origin")
+        allowed_origins = {str(item) for item in settings.BACKEND_CORS_ORIGINS}
+        if origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+
+    response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

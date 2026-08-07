@@ -2,12 +2,15 @@ import asyncio
 from io import BytesIO
 
 import pytest
-from fastapi import UploadFile
+from fastapi import FastAPI, UploadFile
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.responses import Response
 from starlette.requests import Request
 
 import app.main as main_module
+from app.core.limiter import limiter
 from app.api.endpoints.dm import SendMessageIn
 from app.api.endpoints.dm_upload import _normalize_key
 from app.api.endpoints.search import search_all
@@ -145,6 +148,60 @@ def test_fastapi_hsts_header_is_production_only(monkeypatch):
         main_module.add_security_headers(request_for("/"), call_next)
     )
     assert "strict-transport-security" not in development_response.headers
+
+
+def test_slowapi_keeps_enforcement_without_response_header_injection():
+    # Regression: headers_enabled=True made successful decorated endpoints
+    # crash unless they explicitly accepted a Starlette Response parameter.
+    assert limiter._headers_enabled is False
+
+
+def test_slowapi_decorated_success_response_remains_200():
+    regression_app = FastAPI()
+    regression_app.state.limiter = limiter
+    regression_app.add_middleware(SlowAPIMiddleware)
+
+    @regression_app.post("/account-success")
+    @limiter.limit("20/minute")
+    def account_success(request: Request):
+        return {"ok": True}
+
+    response = TestClient(regression_app).post("/account-success")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+def test_unhandled_error_is_json_with_request_id_cors_and_security_headers():
+    async def call_next(_request):
+        raise RuntimeError("sensitive internal detail")
+
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/api/v1/login/access-token",
+            "raw_path": b"/api/v1/login/access-token",
+            "query_string": b"",
+            "headers": [
+                (b"origin", b"https://www.lnssy-cykj.online"),
+                (b"x-request-id", b"p0-regression-test"),
+            ],
+            "client": ("203.0.113.8", 1234),
+            "server": ("testserver", 443),
+        }
+    )
+
+    response = asyncio.run(main_module.add_security_headers(request, call_next))
+    assert response.status_code == 500
+    assert response.headers["access-control-allow-origin"] == (
+        "https://www.lnssy-cykj.online"
+    )
+    assert response.headers["x-request-id"] == "p0-regression-test"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert b"sensitive internal detail" not in response.body
+    assert b"p0-regression-test" in response.body
 
 
 def test_media_url_and_dm_key_are_allowlisted():

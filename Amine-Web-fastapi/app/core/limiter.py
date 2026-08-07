@@ -11,5 +11,10 @@ from app.core.config import settings
 limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=settings.REDIS_URL or "memory://",
-    headers_enabled=True,
+    # SlowAPI can only inject limit headers when every decorated endpoint
+    # receives a Starlette Response instance. Several legacy account/upload
+    # endpoints return plain models, so enabling injection turns successful
+    # requests into HTTP 500 responses. Enforcement remains enabled; the
+    # global security middleware owns the public 429/Retry-After response.
+    headers_enabled=False,
 )
