@@ -9,12 +9,12 @@ from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from jose import JWTError, jwt
 from redis.asyncio import Redis
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
 from app.core.config import settings
+from app.core import security
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,13 @@ def _policy_for(request: Request) -> LimitPolicy:
 
     if path.startswith(f"{settings.API_V1_STR}/search"):
         return LimitPolicy("search", 60, 20)
-    if path == f"{settings.API_V1_STR}/login/access-token":
+    if path in {
+        f"{settings.API_V1_STR}/login/access-token",
+        f"{settings.API_V1_STR}/auth/login",
+    }:
         return LimitPolicy("login", 60, 20)
+    if path == f"{settings.API_V1_STR}/auth/refresh":
+        return LimitPolicy("session_refresh", 60, 60, 30)
     if path == f"{settings.API_V1_STR}/auth/email-code/send":
         return LimitPolicy("email_code", 60, 5)
     if path == f"{settings.API_V1_STR}/admin/activate":
@@ -81,14 +86,18 @@ def _client_ip(request: Request) -> str:
 
 def _authenticated_user_id(request: Request) -> Optional[str]:
     authorization = request.headers.get("authorization", "")
-    if not authorization.lower().startswith("bearer "):
+    token = (
+        authorization.split(" ", 1)[1].strip()
+        if authorization.lower().startswith("bearer ")
+        else request.cookies.get(settings.ACCESS_COOKIE_NAME, "")
+    )
+    if not token:
         return None
-    token = authorization.split(" ", 1)[1].strip()
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = security.decode_access_token(token)
         subject = payload.get("sub")
         return str(int(subject)) if subject is not None else None
-    except (JWTError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return None
 
 

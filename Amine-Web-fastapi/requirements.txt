@@ -6,6 +6,7 @@ python-dotenv
 python-jose[cryptography]
 passlib[bcrypt]
 bcrypt==4.0.1
+argon2-cffi>=23.1,<26
 python-multipart
 pydantic-settings
 pydantic[email]

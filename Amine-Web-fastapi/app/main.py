@@ -16,8 +16,10 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings # 配置中心，管理项目名，API前缀，CORS白名单，数据库
+from app.core.csrf import CSRFMiddleware
 from app.core.limiter import limiter  # 全局速率限制器
 from app.core.request_limits import SecurityRateLimitMiddleware, create_redis_client
+from app.core.session_store import session_store
 from app.api.api import api_router # 路由注册（入口）
 from app.db.database import init_db # 初始化数据库
 from app import models  # noqa: F401 - 导入模型以注册 SQLModel 元数据
@@ -78,14 +80,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SecurityRateLimitMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
+app.add_middleware(CSRFMiddleware)
 
 # 设置所有 CORS 允许的源，告诉浏览器哪些前端合法
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-CSRF-Token"],
 )
 
 # 静态资源托管(图片/音频上传）
@@ -122,6 +125,7 @@ async def add_security_headers(request, call_next):
         allowed_origins = {str(item) for item in settings.BACKEND_CORS_ORIGINS}
         if origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Vary"] = "Origin"
 
     response.headers["X-Request-ID"] = request_id
@@ -143,6 +147,7 @@ async def add_security_headers(request, call_next):
 async def on_startup():
     if _is_production and not settings.REDIS_URL:
         raise RuntimeError("REDIS_URL is required in production")
+    session_store.ping()
     app.state.security_redis = await create_redis_client()
     init_db()
     env = settings.ENVIRONMENT

@@ -1,17 +1,15 @@
 # 依赖注入和鉴权的核心
 from typing import Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
-from pydantic import ValidationError
 from sqlmodel import Session
 
 from app import models
 from app.core import security
 from app.core.config import settings
 from app.db.database import get_db
-from app.schemas.token import TokenPayload
 from app.models.user import User
+from app.core.session_store import SessionUnavailable, session_store
 
 # 规定OAuth2的token获取路径
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -22,16 +20,18 @@ optional_oauth2 = OAuth2PasswordBearer(
 )
 
 
-def _decode_user(db: Session, token: str) -> User:
+def _decode_user(db: Session, token: str, *, require_session: bool = False) -> User:
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
-        token_data = TokenPayload(**payload)
-        user_id = int(token_data.sub)
-    except (JWTError, ValidationError, TypeError, ValueError):
+        payload = security.decode_access_token(token, require_session=require_session)
+        user_id = int(payload.get("sub"))
+        sid = payload.get("sid")
+        if require_session and not session_store.validate(sid, user_id):
+            raise ValueError("session revoked")
+    except SessionUnavailable as error:
+        raise HTTPException(status_code=503, detail="Session service unavailable") from error
+    except (TypeError, ValueError):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
         )
     user = db.get(User, user_id)
@@ -41,17 +41,29 @@ def _decode_user(db: Session, token: str) -> User:
 
 # 获取当前用户
 def get_current_user(
-    db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
+    request: Request,
+    db: Session = Depends(get_db),
+    token: Optional[str] = Depends(optional_oauth2),
 ) -> User:
-    return _decode_user(db, token)
+    if token:
+        return _decode_user(db, token)
+    cookie_token = request.cookies.get(settings.ACCESS_COOKIE_NAME)
+    if not cookie_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return _decode_user(db, cookie_token, require_session=True)
 
 
 def get_optional_current_user(
-    db: Session = Depends(get_db), token: Optional[str] = Depends(optional_oauth2)
+    request: Request,
+    db: Session = Depends(get_db),
+    token: Optional[str] = Depends(optional_oauth2),
 ) -> Optional[User]:
-    if not token:
-        return None
-    return _decode_user(db, token)
+    if token:
+        return _decode_user(db, token)
+    cookie_token = request.cookies.get(settings.ACCESS_COOKIE_NAME)
+    if cookie_token:
+        return _decode_user(db, cookie_token, require_session=True)
+    return None
 
 # 是否激活当前用户
 def get_current_active_user(

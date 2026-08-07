@@ -47,6 +47,37 @@ class _MemoryStore:
         with self._lock:
             self._data.pop(key, None)
 
+    def acquire_send_lock(self, key: str, ttl_seconds: int = 30) -> bool:
+        lock_key = f"lock:{key}"
+        with self._lock:
+            entry = self._data.get(lock_key)
+            now = datetime.now(timezone.utc).timestamp()
+            if entry and entry["expire_ts"] > now:
+                return False
+            self._data[lock_key] = {"value": {}, "expire_ts": now + ttl_seconds}
+            return True
+
+    def release_send_lock(self, key: str) -> None:
+        with self._lock:
+            self._data.pop(f"lock:{key}", None)
+
+    def verify(self, key: str, code: str, max_attempts: int = 5) -> str:
+        with self._lock:
+            entry = self._data.get(key)
+            if not entry:
+                return "missing"
+            if datetime.now(timezone.utc).timestamp() > entry["expire_ts"]:
+                self._data.pop(key, None)
+                return "missing"
+            payload = entry["value"]
+            if payload.get("code") == code:
+                return "ok"
+            payload["attempts"] = int(payload.get("attempts", 0)) + 1
+            if payload["attempts"] >= max_attempts:
+                self._data.pop(key, None)
+                return "locked"
+            return "invalid"
+
     @property
     def backend_name(self) -> str:
         return "memory"
@@ -75,6 +106,34 @@ class _RedisStore:
 
     def delete(self, key: str) -> None:
         self._client.delete(f"email_code:{key}")
+
+    def acquire_send_lock(self, key: str, ttl_seconds: int = 30) -> bool:
+        return bool(
+            self._client.set(f"email_code_lock:{key}", "1", ex=ttl_seconds, nx=True)
+        )
+
+    def release_send_lock(self, key: str) -> None:
+        self._client.delete(f"email_code_lock:{key}")
+
+    def verify(self, key: str, code: str, max_attempts: int = 5) -> str:
+        script = """
+        local raw = redis.call('GET', KEYS[1])
+        if not raw then return 'missing' end
+        local payload = cjson.decode(raw)
+        if payload['code'] == ARGV[1] then return 'ok' end
+        local attempts = tonumber(payload['attempts'] or 0) + 1
+        if attempts >= tonumber(ARGV[2]) then
+            redis.call('DEL', KEYS[1])
+            return 'locked'
+        end
+        payload['attempts'] = attempts
+        local ttl = redis.call('TTL', KEYS[1])
+        if ttl > 0 then redis.call('SETEX', KEYS[1], ttl, cjson.encode(payload)) end
+        return 'invalid'
+        """
+        return self._client.eval(
+            script, 1, f"email_code:{key}", (code or "").strip(), max_attempts
+        )
 
     @property
     def backend_name(self) -> str:
