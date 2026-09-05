@@ -89,3 +89,25 @@ export const onPostStatsUpdated = (handler) => {
     window.addEventListener('aw-post-stats-updated', listener);
     return () => window.removeEventListener('aw-post-stats-updated', listener);
 };
+
+/**
+ * 用服务器返回的权威统计作为基线写入本地（仅同步服务端存在的字段）。
+ * 不清空本地的 views 等无服务端来源的计数。
+ */
+export const seedServerStats = (postId, server = {}) => {
+    if (!postId) return;
+    const keys = {};
+    ['likes', 'favorites', 'replies'].forEach((key) => {
+        if (server[key] !== undefined && server[key] !== null) {
+            keys[key] = safeNumber(server[key]);
+        }
+    });
+    if (Object.keys(keys).length === 0) return;
+    const store = readStats();
+    const current = store[postId] || {};
+    const merged = normalizeStats({ ...DEFAULT_STATS, ...current, ...keys });
+    store[postId] = merged;
+    writeStats(store);
+    emitStatsUpdate(postId, merged);
+    return merged;
+};

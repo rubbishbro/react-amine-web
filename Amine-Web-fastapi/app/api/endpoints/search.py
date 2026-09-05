@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select, or_
 
 from app.api import deps
+from app.crud import crud_post
 from app.models.post import Post
 from app.models.user import User
 from app.schemas.post import Post as PostSchema
@@ -74,7 +75,7 @@ def search_posts(
         )
     
     posts = db.exec(statement).all()
-    return posts
+    return crud_post.posts_to_public(db, posts)
 
 @router.get("/users", response_model=List[UserPublic])
 def search_users(
@@ -160,6 +161,7 @@ def search_all(
         )
     
     posts = db.exec(post_statement).all()
+    public_posts = crud_post.posts_to_public(db, posts)
     
     # 搜索用户（Tag搜索也搜用户）
     user_query = query_text[1:].strip() if query_text.startswith('#') else query_text
@@ -178,7 +180,7 @@ def search_all(
         users = []
     
     return {
-        "posts": posts,
+        "posts": public_posts,
         "users": users,
         "query": response_query,
         "is_tag_search": query_text.startswith('#'),

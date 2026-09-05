@@ -20,8 +20,9 @@ def read_posts(
     读取已发布的帖子列表
     """
     posts = crud_post.get_multi(db, skip=skip, limit=limit, category=category)
+    items = crud_post.posts_to_public(db, posts)
     total = crud_post.count(db, category=category)
-    return {"items": posts, "total": total, "skip": skip, "limit": limit}
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 @router.post("/", response_model=Post)
 def create_post(
@@ -34,7 +35,7 @@ def create_post(
     创建新帖子
     """
     post = crud_post.create(db, obj_in=post_in, author_id=current_user.id)
-    return post
+    return crud_post.post_to_public(db, post)
 
 @router.get("/{id}", response_model=Post)
 def read_post(
@@ -54,7 +55,7 @@ def read_post(
         or (not current_user.is_superuser and post.author_id != current_user.id)
     ):
         raise HTTPException(status_code=404, detail="Post not found")
-    return post
+    return crud_post.post_to_public(db, post)
 
 @router.delete("/{id}", response_model=Post)
 def delete_post(
@@ -73,7 +74,7 @@ def delete_post(
     if not current_user.is_superuser and (post.author_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
     post = crud_post.remove(db, id=id)
-    return post
+    return {**post.model_dump(), "likes": 0, "favorites": 0, "replies": 0, "author": None}
 
 @router.put("/{id}", response_model=Post)
 def update_post(
@@ -93,4 +94,4 @@ def update_post(
     if not current_user.is_superuser and (post.author_id != current_user.id):
         raise HTTPException(status_code=400, detail="Not enough permissions")
     post = crud_post.update(db, db_obj=post, obj_in=post_in)
-    return post
+    return crud_post.post_to_public(db, post)

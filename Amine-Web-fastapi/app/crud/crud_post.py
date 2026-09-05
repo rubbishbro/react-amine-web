@@ -72,3 +72,72 @@ def update(db: Session, *, db_obj: Post, obj_in: PostUpdate) -> Post:
     db.refresh(db_obj)
     return db_obj
 
+
+def _counts_by_post(db: Session, ids) -> dict:
+    """返回 {post_id: (likes, favorites, replies)} 聚合（无 schema 变更）。"""
+    if not ids:
+        return {}
+
+    from app.models.interact import Interaction, InteractionType
+    from app.models.comment import Comment
+
+    def _group(statement):
+        return {int(row[0]): int(row[1]) for row in db.execute(statement).all()}
+
+    likes = _group(
+        select(Interaction.post_id, func.count())
+        .where(Interaction.post_id.in_(ids), Interaction.type == InteractionType.LIKE)
+        .group_by(Interaction.post_id)
+    )
+    favorites = _group(
+        select(Interaction.post_id, func.count())
+        .where(Interaction.post_id.in_(ids), Interaction.type == InteractionType.FAVORITE)
+        .group_by(Interaction.post_id)
+    )
+    replies = _group(
+        select(Comment.post_id, func.count())
+        .where(Comment.post_id.in_(ids), Comment.is_deleted == False)
+        .group_by(Comment.post_id)
+    )
+    return {
+        pid: (likes.get(pid, 0), favorites.get(pid, 0), replies.get(pid, 0))
+        for pid in ids
+    }
+
+
+def post_to_public(db: Session, post) -> dict:
+    """把 Post ORM 转成带互动统计的字典（响应模型可直接校验）。"""
+    if post is None:
+        return None
+    data = post.model_dump()
+    likes, favorites, replies = _counts_by_post(db, [post.id]).get(post.id, (0, 0, 0))
+    data["likes"] = likes
+    data["favorites"] = favorites
+    data["replies"] = replies
+    author = getattr(post, "author", None)
+    if author is not None:
+        from app.schemas.user import UserPublic
+        data["author"] = UserPublic.model_validate(author).model_dump()
+    else:
+        data["author"] = None
+    return data
+
+
+def posts_to_public(db: Session, posts) -> list:
+    """批量转字典并附带统计，避免逐条 N+1 聚合。"""
+    ids = [p.id for p in posts if p is not None and getattr(p, "id", None) is not None]
+    counts = _counts_by_post(db, ids)
+    from app.schemas.user import UserPublic
+
+    result = []
+    for post in posts:
+        data = post.model_dump()
+        likes, favorites, replies = counts.get(post.id, (0, 0, 0))
+        data["likes"] = likes
+        data["favorites"] = favorites
+        data["replies"] = replies
+        author = getattr(post, "author", None)
+        data["author"] = UserPublic.model_validate(author).model_dump() if author else None
+        result.append(data)
+    return result
+

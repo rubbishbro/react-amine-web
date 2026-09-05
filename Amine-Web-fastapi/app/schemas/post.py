@@ -56,6 +56,9 @@ class PostInDBBase(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_published: bool = False
+    likes: int = 0
+    favorites: int = 0
+    replies: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

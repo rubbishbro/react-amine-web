@@ -15,9 +15,10 @@ import {
   getPostStats,
   incrementPostViews,
   onPostStatsUpdated,
-  syncPostReplies,
+  seedServerStats,
   updatePostFavorites,
   updatePostLikes,
+  updatePostReplies,
 } from '../../utils/postStats';
 import { buildTagInfo } from '../../utils/adminMeta';
 import { buildUserId, getMappedUserId } from '../../utils/userId';
@@ -255,6 +256,7 @@ const PostDetail = () => {
       };
       setReplies((prev) => [...prev, newReply]);
       setReplyLikeMap((prev) => ({ ...prev, [newReply.id]: { count: 0, liked: false } }));
+      updatePostReplies(id, 1);
       setReplyDraft('');
       setIsReplyOpen(false);
     } catch (err) {
@@ -320,6 +322,7 @@ const PostDetail = () => {
       };
       setReplies((prev) => [...prev, newReply]);
       setReplyLikeMap((prev) => ({ ...prev, [newReply.id]: { count: 0, liked: false } }));
+      updatePostReplies(id, 1);
       setNestedDraft('');
       setActiveReplyId(null);
     } catch (err) {
@@ -348,7 +351,7 @@ const PostDetail = () => {
         state: { refreshPostsAt: Date.now() },
       });
     } catch (err) {
-      window.alert(err?.message || '鍒犻櫎澶辫触锛岃閲嶈瘯');
+      window.alert(err?.message || '删除失败，请重试');
     }
   };
 
@@ -406,6 +409,7 @@ const PostDetail = () => {
     try {
       await deleteComment(authToken, backendId);
       setReplies((prev) => prev.filter((reply) => reply.id !== replyId && reply.parentId !== replyId));
+      updatePostReplies(id, -1);
       if (activeReplyId === replyId) {
         setActiveReplyId(null);
       }
@@ -425,6 +429,12 @@ const PostDetail = () => {
 
   useEffect(() => {
     if (!post?.id) return;
+    // 以服务器统计为基线，供本地点赞/收藏增量在其上叠加
+    seedServerStats(post.id, {
+      likes: baseStats.likes,
+      favorites: baseStats.favorites,
+      replies: baseStats.replies,
+    });
     setStats(getPostStats(post.id, baseStats));
     const unsubscribe = onPostStatsUpdated((event) => {
       if (event?.detail?.postId === post.id) {
@@ -442,11 +452,6 @@ const PostDetail = () => {
       incrementPostViews(post.id);
     }
   }, [post?.id, isViewerLoggedIn, isLocalDraft]);
-
-  useEffect(() => {
-    if (!id || !isViewerLoggedIn || isLocalDraft) return;
-    syncPostReplies(id, replies.length);
-  }, [id, replies.length, isViewerLoggedIn, isLocalDraft]);
 
   const handleToggleLike = () => {
     if (!isViewerLoggedIn) {

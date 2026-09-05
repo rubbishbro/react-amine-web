@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import styles from './Post.module.css';
 import { getCategoryColor } from '../../config';
 import { Link, useNavigate } from 'react-router-dom';
-import { getPostStats, onPostStatsUpdated } from '../../utils/postStats';
+import { getPostStats, onPostStatsUpdated, seedServerStats } from '../../utils/postStats';
 import { buildTagInfo } from '../../utils/adminMeta';
 import { useUser } from '../../context/userContext.js';
 import { getMappedUserId } from '../../utils/userId';
@@ -98,6 +98,16 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
     });
     return unsubscribe;
   }, [post?.id, post?.views, post?.likes, post?.favorites, post?.replies]);
+
+  // 以服务器返回的统计为准基线，避免本地旧缓存把权威计数覆盖成 0
+  useEffect(() => {
+    if (!post?.id) return;
+    seedServerStats(post.id, {
+      likes: post?.likes,
+      favorites: post?.favorites,
+      replies: post?.replies,
+    });
+  }, [post?.id, post?.likes, post?.favorites, post?.replies]);
 
   // 提前返回检查放在所有hooks之后
   if (!post) return null;
