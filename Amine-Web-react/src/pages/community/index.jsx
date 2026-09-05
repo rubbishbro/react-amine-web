@@ -13,6 +13,8 @@ import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useUser } from '../context/userContext.js'
 import { buildUserId } from '../utils/userId'
 import { getUnreadNotificationCount } from '../utils/notifications'
+import { getDmUnreadCount } from '../../services/dmApi'
+import { getUnreadNotificationCount as getServerUnreadNotificationCount } from '../../services/notificationsApi'
 
 //用户面板组件
 import UserPanel from '../components/UserPanel'
@@ -126,11 +128,8 @@ export default function CommunityBoard() {
   }, []);
 
   useEffect(() => {
-    const refreshUnreadCount = () => {
-      if (!viewerId) {
-        setUnreadCount(0);
-        return;
-      }
+    const computeLocalCount = () => {
+      if (!viewerId) return 0;
       let total = 0;
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
@@ -142,7 +141,34 @@ export default function CommunityBoard() {
         total += getThreadUnreadCount(list, viewerId, otherId);
       }
       total += getUnreadNotificationCount(viewerId);
-      setUnreadCount(total);
+      return total;
+    };
+
+    const refreshUnreadCount = async () => {
+      if (!viewerId) {
+        setUnreadCount(0);
+        return;
+      }
+      // 先用本地计数兜底，避免网络慢时徽标短暂归零
+      setUnreadCount(computeLocalCount());
+      if (!user?.loggedIn) return;
+      try {
+        const [dmResult, notifResult] = await Promise.allSettled([
+          getDmUnreadCount(),
+          getServerUnreadNotificationCount(),
+        ]);
+        const dmCount = dmResult.status === 'fulfilled' && dmResult.value
+          ? Number(dmResult.value.unread_count ?? 0)
+          : null;
+        const notifCount = notifResult.status === 'fulfilled' && notifResult.value
+          ? Number(notifResult.value.unread_count ?? 0)
+          : null;
+        if (dmCount !== null || notifCount !== null) {
+          setUnreadCount((dmCount ?? 0) + (notifCount ?? 0));
+        }
+      } catch {
+        // 保持本地计数
+      }
     };
     queueMicrotask(refreshUnreadCount);
     const handleUpdate = () => refreshUnreadCount();
@@ -154,7 +180,7 @@ export default function CommunityBoard() {
       window.removeEventListener('aw-notifications-updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
-  }, [viewerId, location.key]);
+  }, [viewerId, user?.loggedIn, location.key]);
 
   // 处理阅读全文点击
   const handleReadMore = (postId) => {

@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import styles from './SearchResults.module.css';
 import Post from '../Post';
 import { apiFetch } from '../../../services/apiClient';
+import { transformBackendPost } from '../../utils/postLoader';
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
@@ -33,7 +34,7 @@ const SearchResults = () => {
         
         const data = await response.json();
         setResults({
-          posts: data.posts || [],
+          posts: (data.posts || []).map(transformBackendPost).filter(Boolean),
           users: data.users || [],
           isTagSearch: data.is_tag_search || false,
         });
@@ -83,9 +84,12 @@ const SearchResults = () => {
         </h2>
         {!loading && (
           <p className={styles.searchStats}>
-            找到 {totalResults} 个结果
-            {results.posts.length > 0 && ` (${results.posts.length} 篇帖子`}
-            {results.users.length > 0 && `, ${results.users.length} 位用户)`}
+            {(() => {
+              const parts = [`找到 ${totalResults} 个结果`];
+              if (results.posts.length > 0) parts.push(`${results.posts.length} 篇帖子`);
+              if (results.users.length > 0) parts.push(`${results.users.length} 位用户`);
+              return parts.join('，');
+            })()}
           </p>
         )}
       </div>
@@ -177,7 +181,7 @@ const SearchResults = () => {
                         </div>
                         <div className={styles.userInfo}>
                           <h4 className={styles.username}>{u.username}</h4>
-                          <p className={styles.userEmail}>{u.email}</p>
+                          {u.bio && <p className={styles.userEmail}>{u.bio}</p>}
                         </div>
                       </div>
                     ))}

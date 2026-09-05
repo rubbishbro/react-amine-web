@@ -63,15 +63,44 @@ def get_threads_list(db: Session, *, user_id: int) -> List[Dict]:
     """
     获取某用户的所有会话列表（每个会话只取最新一条消息）。
     返回 list[dict]: { other_id, last_message, unread_count }
+    仅加载每个会话的最新一条消息和未读聚合，避免把全部私信拉进内存。
     """
-    # 找出与该用户有过会话的所有对方 ID
-    stmt = select(DirectMessage).where(
-        or_(DirectMessage.sender_id == user_id, DirectMessage.receiver_id == user_id)
-    ).order_by(DirectMessage.created_at.desc())
-    all_msgs = db.exec(stmt).all()
+    from sqlalchemy import case
+
+    # 会话另一方（参与双方中不是当前用户的那一个）
+    other_expr = case(
+        (DirectMessage.sender_id == user_id, DirectMessage.receiver_id),
+        else_=DirectMessage.sender_id,
+    )
+    involved = or_(
+        DirectMessage.sender_id == user_id,
+        DirectMessage.receiver_id == user_id,
+    )
+
+    # 每个会话按时间倒序编号，只保留最新一条（rn = 1）
+    ranked = (
+        select(
+            DirectMessage.id.label("msg_id"),
+            other_expr.label("other_id"),
+            func.row_number()
+            .over(
+                partition_by=other_expr,
+                order_by=(DirectMessage.created_at.desc(), DirectMessage.id.desc()),
+            )
+            .label("rn"),
+        )
+        .where(involved)
+        .subquery()
+    )
+    latest_ids = select(ranked.c.msg_id).where(ranked.c.rn == 1)
+    latest_msgs = db.exec(
+        select(DirectMessage)
+        .where(DirectMessage.id.in_(latest_ids))
+        .order_by(DirectMessage.created_at.desc(), DirectMessage.id.desc())
+    ).all()
 
     seen: Dict[int, Dict] = {}
-    for msg in all_msgs:
+    for msg in latest_msgs:
         other = msg.receiver_id if msg.sender_id == user_id else msg.sender_id
         if other not in seen:
             seen[other] = {"other_id": other, "last_message": msg, "unread_count": 0}
@@ -83,16 +112,19 @@ def get_threads_list(db: Session, *, user_id: int) -> List[Dict]:
         user_rows = db.exec(select(User).where(User.id.in_(other_ids))).all()
         users = {u.id: u for u in user_rows}
 
-    # 统计未读数（对方发给 user_id 且未读的）
-    unread_stmt = select(DirectMessage).where(
-        DirectMessage.receiver_id == user_id,
-        DirectMessage.is_read == False,
-        DirectMessage.recalled == False,
-    )
-    unread_msgs = db.exec(unread_stmt).all()
-    for msg in unread_msgs:
-        if msg.sender_id in seen:
-            seen[msg.sender_id]["unread_count"] += 1
+    # 统计未读数（对方发给 user_id 且未读的），按发送方分组聚合
+    unread_rows = db.execute(
+        select(DirectMessage.sender_id, func.count())
+        .where(
+            DirectMessage.receiver_id == user_id,
+            DirectMessage.is_read == False,
+            DirectMessage.recalled == False,
+        )
+        .group_by(DirectMessage.sender_id)
+    ).all()
+    for sender_id, count in unread_rows:
+        if sender_id in seen:
+            seen[sender_id]["unread_count"] += int(count)
 
     # 将用户名写入结果
     for other_id, entry in seen.items():

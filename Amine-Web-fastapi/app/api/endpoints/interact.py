@@ -1,5 +1,5 @@
-from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlmodel import Session
 
 from app.crud import crud_interact, crud_notification
@@ -103,8 +103,8 @@ def create_interaction(
 def read_my_interactions(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=100, ge=1, le=200),
 ) -> Any:
     """
     获取当前用户的交互记录
@@ -114,13 +114,20 @@ def read_my_interactions(
 
 @router.get("/post/{post_id}", response_model=List[Interaction])
 def read_post_interactions(
-    post_id: int,
+    post_id: int = Path(gt=0),
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 100,
+    current_user: Optional[User] = Depends(deps.get_optional_current_user),
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=100, ge=1, le=200),
 ) -> Any:
     """
     获取指定帖子的交互记录
     """
+    post = db.get(Post, post_id)
+    if not post or not post.is_published and not (
+        current_user
+        and (current_user.is_superuser or post.author_id == current_user.id)
+    ):
+        raise HTTPException(status_code=404, detail="Post not found")
     interactions = crud_interact.get_by_post(db, post_id=post_id, skip=skip, limit=limit)
     return interactions

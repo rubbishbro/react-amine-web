@@ -3,7 +3,7 @@
 路由前缀: /notifications
 """
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 from pydantic import BaseModel
 
@@ -36,8 +36,8 @@ class NotificationOut(BaseModel):
 
 @router.get("/", response_model=List[NotificationOut])
 def list_notifications(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=50, ge=1, le=200),
     unread_only: bool = False,
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),

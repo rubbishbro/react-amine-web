@@ -74,7 +74,7 @@ const canViewerAccessDraft = (post, viewerId = getCurrentViewerId()) => {
 /**
  * 将后端帖子格式转换为前端期望的格式
  */
-const transformBackendPost = (backendPost) => {
+export const transformBackendPost = (backendPost) => {
   if (!backendPost) return null;
   
   return {
@@ -429,13 +429,21 @@ export const publishLocalDraft = async (postData, token = '') => {
 
   const PostAPI = (await import('../../services/getpostfromback.js')).default;
   const api = new PostAPI();
-  const created = await api.createPost(postData, resolvedToken);
+  const rawId = postData?.id;
+  // 数字 ID 表示后端已存在的帖子（编辑更新），否则为新建
+  const isExistingRemote = /^\d+$/.test(String(rawId ?? ''));
+  let created;
+  if (isExistingRemote) {
+    created = await api.updatePost(rawId, postData, resolvedToken);
+  } else {
+    created = await api.createPost(postData, resolvedToken);
+  }
 
   if (!created?.id) {
     throw new Error('发布失败：后端未返回帖子 ID');
   }
 
-  return replaceDraftAfterPublish(postData?.id, created) || transformBackendPost(created);
+  return replaceDraftAfterPublish(rawId, created) || transformBackendPost(created);
 };
 
 const getLocalPostById = (postId) => {

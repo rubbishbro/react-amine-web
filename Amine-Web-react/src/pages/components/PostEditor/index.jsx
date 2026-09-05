@@ -37,6 +37,8 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
   const [feedback, setFeedback] = useState(null);
   const publishLockRef = useRef(false);
   const draftLockRef = useRef(false);
+  // 是否在编辑“后端已发布的帖子”（数字 ID）——用于区分新建与更新
+  const [editingRemotePost, setEditingRemotePost] = useState(false);
 
   const {
     register,
@@ -93,6 +95,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
           return;
         }
 
+        setEditingRemotePost(/^\d+$/.test(String(postData.id || '')));
         reset({
           title: postData.title || '',
           category: postData.category || '',
@@ -128,11 +131,15 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     event.preventDefault();
 
     const nextTag = currentTag.trim();
+    if (tags.length >= 10) {
+      showFeedback('error', '最多只能添加 10 个标签');
+      return;
+    }
     if (!tags.includes(nextTag)) {
       setTags((prev) => [...prev, nextTag]);
     }
     setCurrentTag('');
-  }, [currentTag, tags]);
+  }, [currentTag, tags, showFeedback]);
 
   const handleRemoveTag = useCallback((tagToRemove) => {
     setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
@@ -206,7 +213,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
 
       const created = await publishLocalDraft(postData, authToken);
       setHasUnsavedChanges(false);
-      showFeedback('success', '帖子已成功发布');
+      showFeedback('success', editingRemotePost ? '帖子已更新' : '帖子已成功发布');
 
       setTimeout(() => {
         navigate(`/post/${created.id}`);
@@ -220,7 +227,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
       logMessage(message, 'error');
       throw error;
     }
-  }, [authToken, logMessage, navigate, showFeedback]);
+  }, [authToken, editingRemotePost, logMessage, navigate, showFeedback]);
 
   const handleSaveDraft = useCallback(async () => {
     if (draftLockRef.current || savingDraft || publishing) return;
@@ -230,15 +237,22 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     setFeedback(null);
 
     try {
-      const postData = preparePostData('draft');
-      await savePostData(postData, 'draft');
+      if (editingRemotePost) {
+        // 后端没有草稿态：编辑已发布帖子时“保存草稿”即保存修改（保持发布）
+        if (!validateForm()) return;
+        const postData = preparePostData('published');
+        await savePostData(postData, 'published');
+      } else {
+        const postData = preparePostData('draft');
+        await savePostData(postData, 'draft');
+      }
     } catch (error) {
       console.error('保存草稿失败:', error);
     } finally {
       setSavingDraft(false);
       draftLockRef.current = false;
     }
-  }, [preparePostData, publishing, savePostData, savingDraft]);
+  }, [preparePostData, publishing, savePostData, savingDraft, editingRemotePost, validateForm]);
 
   const handlePublishPost = useCallback(async () => {
     if (publishLockRef.current || publishing || savingDraft) return;
@@ -324,7 +338,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
             className={`${styles.actionButton} ${styles.saveDraftButton}`}
             disabled={savingDraft || publishing}
           >
-            {savingDraft ? '保存中...' : '保存草稿'}
+            {savingDraft ? '保存中...' : editingRemotePost ? '保存更新' : '保存草稿'}
           </button>
 
           <button

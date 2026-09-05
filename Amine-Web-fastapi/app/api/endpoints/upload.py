@@ -1,6 +1,7 @@
 import os
 import uuid
 import asyncio
+import logging
 from typing import Any
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request, Response
 from app.core.config import settings
@@ -10,6 +11,7 @@ from app.models.user import User
 from app.api import deps
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "static/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -69,4 +71,5 @@ async def upload_file(
             url = f"{str(request.base_url).rstrip('/')}{relative_url}"
         return {"url": url}
     except Exception:
+        logger.exception("upload_file failed user_id=%s", current_user.id)
         raise HTTPException(status_code=500, detail="File upload failed")

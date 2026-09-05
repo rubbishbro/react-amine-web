@@ -104,6 +104,8 @@ def search_users(
     statement = (
         select(User)
         .where(User.username.ilike(search_pattern))
+        .where(User.is_active == True)
+        .where(User.is_banned == False)
         .order_by(User.id.desc())  # 使用 id 排序
         .offset(skip)
         .limit(limit)
@@ -166,6 +168,8 @@ def search_all(
         user_statement = (
             select(User)
             .where(User.username.ilike(user_pattern))
+            .where(User.is_active == True)
+            .where(User.is_banned == False)
             .order_by(User.id.desc())  # 使用 id 排序
             .limit(user_limit)
         )

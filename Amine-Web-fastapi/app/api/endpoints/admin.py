@@ -131,7 +131,14 @@ def set_user_role(
     # 不能修改自己的权限
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能修改自己的权限")
-    
+
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    # 不能修改其他管理员的权限（管理员之间平级）
+    if target.is_superuser:
+        raise HTTPException(status_code=403, detail="不能修改其他管理员的权限")
+
     user = crud_admin.admin.set_role(db, user_id=user_id, is_superuser=request.is_superuser)
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")

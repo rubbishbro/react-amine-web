@@ -1,8 +1,8 @@
 """
 评论 API 端点
 """
-from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlmodel import Session
 
 from app.api import deps
@@ -30,9 +30,9 @@ def create_comment(
     """
     创建评论
     """
-    # 验证帖子是否存在
+    # 验证帖子是否存在且已发布（草稿不允许陌生人评论）
     post = db.get(Post, comment_in.post_id)
-    if not post:
+    if not post or not post.is_published:
         raise HTTPException(status_code=404, detail="帖子不存在")
     
     # 如果是回复评论，验证父评论是否存在
@@ -61,17 +61,23 @@ def create_comment(
 
 @router.get("/post/{post_id}", response_model=List[CommentWithAuthor])
 def get_post_comments(
-    post_id: int,
+    post_id: int = Path(gt=0),
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 100,
+    current_user: Optional[User] = Depends(deps.get_optional_current_user),
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=100, ge=1, le=200),
 ) -> Any:
     """
     获取帖子的评论列表（包含作者信息）
     """
-    # 验证帖子是否存在
+    # 验证帖子是否存在且对当前用户可见
     post = db.get(Post, post_id)
     if not post:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+    if not post.is_published and not (
+        current_user
+        and (current_user.is_superuser or post.author_id == current_user.id)
+    ):
         raise HTTPException(status_code=404, detail="帖子不存在")
     
     comments = crud_comment.get_by_post(db, post_id=post_id, skip=skip, limit=limit)
@@ -91,14 +97,24 @@ def get_post_comments(
 
 @router.get("/{comment_id}/replies", response_model=List[CommentWithAuthor])
 def get_comment_replies(
-    comment_id: int,
+    comment_id: int = Path(gt=0),
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 50,
+    current_user: Optional[User] = Depends(deps.get_optional_current_user),
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> Any:
     """
     获取评论的回复列表
     """
+    parent_comment = db.get(Comment, comment_id)
+    if not parent_comment:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    post = db.get(Post, parent_comment.post_id)
+    if not post or not post.is_published and not (
+        current_user
+        and (current_user.is_superuser or post.author_id == current_user.id)
+    ):
+        raise HTTPException(status_code=404, detail="评论不存在")
     replies = crud_comment.get_replies(db, parent_id=comment_id, skip=skip, limit=limit)
     
     # 附加作者信息

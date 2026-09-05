@@ -2,7 +2,7 @@
 用户关系 API 端点
 """
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from app.api import deps
@@ -137,8 +137,8 @@ def unblock_user(
 def get_followers(
     user_id: int,
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=100, ge=1, le=200),
     order: str = "desc",
 ) -> Any:
     """
@@ -151,8 +151,8 @@ def get_followers(
 def get_following(
     user_id: int,
     db: Session = Depends(deps.get_db),
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=100, ge=1, le=200),
     order: str = "desc",
 ) -> Any:
     """

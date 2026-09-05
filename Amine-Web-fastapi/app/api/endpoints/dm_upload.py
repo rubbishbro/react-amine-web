@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request
 import os
 import uuid
 import asyncio
+import logging
 import mimetypes
 import re
 from pathlib import Path
@@ -22,6 +23,7 @@ from app.models.dm_attachment import DMAttachment
 from app.api import deps
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path("private/dm_upload")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -91,12 +93,15 @@ async def upload_file(
     media = await validate_media_upload(file, MAX_FILE_SIZE)
 
     key = f"dm_upload/{uuid.uuid4().hex}{media.extension}"
+    local_path = None
 
     try:
         if _qiniu_enabled:
             stored_key = await asyncio.to_thread(_qiniu_upload_sync, media.data, key)
         else:
             stored_key = _local_upload(media.data, os.path.basename(key))
+            if "/" in stored_key:
+                local_path = UPLOAD_DIR / stored_key.split("/", 1)[1]
         attachment = DMAttachment(
             storage_key=stored_key,
             owner_id=current_user.id,
@@ -112,6 +117,12 @@ async def upload_file(
             "url": f"/api/v1/dm_upload/download?key={stored_key}",
         }
     except Exception:
+        logger.exception("dm_upload_file failed user_id=%s", current_user.id)
+        if local_path is not None and local_path.exists():
+            try:
+                local_path.unlink()
+            except OSError:
+                logger.exception("failed to clean up orphan dm upload %s", local_path)
         raise HTTPException(status_code=500, detail="File upload failed")
 
 async def _qiniu_download(key: str) -> Response:
