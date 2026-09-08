@@ -14,16 +14,22 @@ const SearchResults = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'posts', 'users'
+  const [exhausted, setExhausted] = useState({ posts: false, users: false });
+  const [loadingMore, setLoadingMore] = useState(null); // 'posts' | 'users' | null
 
   useEffect(() => {
     if (!query.trim()) {
       setResults({ posts: [], users: [], isTagSearch: false });
+      setExhausted({ posts: false, users: false });
+      setLoadingMore(null);
       return;
     }
 
     const fetchResults = async () => {
       setLoading(true);
       setError(null);
+      setExhausted({ posts: false, users: false });
+      setLoadingMore(null);
       
       try {
         const response = await apiFetch(`/search/all?q=${encodeURIComponent(query)}`);
@@ -55,6 +61,40 @@ const SearchResults = () => {
 
   const handleUserClick = (userId, username) => {
     navigate(`/user/${username}`);
+  };
+
+  // 加载更多：/all 最多返回 30 帖/10 人，这里按需用带分页的搜索接口补足
+  const fetchMore = async (kind) => {
+    if (loadingMore || exhausted[kind] || !query.trim()) return;
+    setLoadingMore(kind);
+    const current = results[kind] || [];
+    const url = kind === 'posts' ? '/search/posts' : '/search/users';
+    try {
+      const params = new URLSearchParams();
+      params.set('q', query);
+      params.set('skip', String(current.length));
+      params.set('limit', '50');
+      const response = await apiFetch(`${url}?${params.toString()}`);
+      if (!response.ok) {
+        setExhausted((e) => ({ ...e, [kind]: true }));
+        return;
+      }
+      const data = await response.json();
+      const mapped = Array.isArray(data)
+        ? (kind === 'posts' ? data.map(transformBackendPost).filter(Boolean) : data)
+        : [];
+      const seen = new Set(current.map((item) => String(item.id)));
+      const added = mapped.filter((item) => !seen.has(String(item.id)));
+      setResults((prev) => ({ ...prev, [kind]: [...prev[kind], ...added] }));
+      if (mapped.length < 50 || added.length === 0) {
+        setExhausted((e) => ({ ...e, [kind]: true }));
+      }
+    } catch (err) {
+      console.error(`加载更多${kind}失败:`, err);
+      setExhausted((e) => ({ ...e, [kind]: true }));
+    } finally {
+      setLoadingMore(null);
+    }
   };
 
   const totalResults = results.posts.length + results.users.length;
@@ -162,6 +202,16 @@ const SearchResults = () => {
                       />
                     ))}
                   </div>
+                  {!exhausted.posts && (
+                    <button
+                      type="button"
+                      className={styles.loadMoreButton}
+                      onClick={() => fetchMore('posts')}
+                      disabled={loadingMore === 'posts'}
+                    >
+                      {loadingMore === 'posts' ? '加载中...' : '加载更多帖子'}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -186,6 +236,16 @@ const SearchResults = () => {
                       </div>
                     ))}
                   </div>
+                  {!exhausted.users && (
+                    <button
+                      type="button"
+                      className={styles.loadMoreButton}
+                      onClick={() => fetchMore('users')}
+                      disabled={loadingMore === 'users'}
+                    >
+                      {loadingMore === 'users' ? '加载中...' : '加载更多用户'}
+                    </button>
+                  )}
                 </div>
               )}
             </>

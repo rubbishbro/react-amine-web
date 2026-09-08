@@ -56,6 +56,7 @@ class PostInDBBase(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_published: bool = False
+    views: int = 0
     likes: int = 0
     favorites: int = 0
     replies: int = 0

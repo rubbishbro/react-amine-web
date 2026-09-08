@@ -13,7 +13,6 @@ import { getCategoryColor } from '../../config';
 import { useUser } from '../../context/userContext.js';
 import {
   getPostStats,
-  incrementPostViews,
   onPostStatsUpdated,
   seedServerStats,
   updatePostFavorites,
@@ -58,7 +57,6 @@ const PostDetail = () => {
   const [draftFeedback, setDraftFeedback] = useState('');
   const [replySort, setReplySort] = useState('time');
   const adminMenuRef = useRef(null);
-  const viewTrackedRef = useRef(null);
 
   // 评论点赞本地状态（{ [commentId]: { liked: bool, count: number } }）
   // 初始值来自后端返回的 likes 字段，点赞后乐观更新
@@ -429,8 +427,9 @@ const PostDetail = () => {
 
   useEffect(() => {
     if (!post?.id) return;
-    // 以服务器统计为基线，供本地点赞/收藏增量在其上叠加
+    // 以服务器统计为基线（views 也由服务端每次详情访问自增）
     seedServerStats(post.id, {
+      views: baseStats.views,
       likes: baseStats.likes,
       favorites: baseStats.favorites,
       replies: baseStats.replies,
@@ -443,15 +442,6 @@ const PostDetail = () => {
     });
     return unsubscribe;
   }, [post?.id, baseStats]);
-
-  useEffect(() => {
-    if (!post?.id || isLocalDraft) return;
-    if (viewTrackedRef.current === post.id) return;
-    viewTrackedRef.current = post.id;
-    if (isViewerLoggedIn) {
-      incrementPostViews(post.id);
-    }
-  }, [post?.id, isViewerLoggedIn, isLocalDraft]);
 
   const handleToggleLike = () => {
     if (!isViewerLoggedIn) {

@@ -89,7 +89,9 @@ def get_followers(
         .join(UserRelation, UserRelation.from_user_id == User.id)
         .where(
             UserRelation.to_user_id == user_id,
-            UserRelation.relation_type == RelationType.FOLLOW
+            UserRelation.relation_type == RelationType.FOLLOW,
+            User.is_active == True,
+            User.is_banned == False,
         )
         .order_by(order_by)
         .offset(skip)
@@ -113,7 +115,9 @@ def get_following(
         .join(UserRelation, UserRelation.to_user_id == User.id)
         .where(
             UserRelation.from_user_id == user_id,
-            UserRelation.relation_type == RelationType.FOLLOW
+            UserRelation.relation_type == RelationType.FOLLOW,
+            User.is_active == True,
+            User.is_banned == False,
         )
         .order_by(order_by)
         .offset(skip)
@@ -130,7 +134,9 @@ def get_blocked_users(db: Session, user_id: int) -> List[User]:
         .join(UserRelation, UserRelation.to_user_id == User.id)
         .where(
             UserRelation.from_user_id == user_id,
-            UserRelation.relation_type == RelationType.BLOCK
+            UserRelation.relation_type == RelationType.BLOCK,
+            User.is_active == True,
+            User.is_banned == False,
         )
     )
     return list(db.exec(statement).all())

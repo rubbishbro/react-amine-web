@@ -3,7 +3,7 @@
 """
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.api import deps
 from app.crud import crud_comment, crud_notification
@@ -81,18 +81,22 @@ def get_post_comments(
         raise HTTPException(status_code=404, detail="帖子不存在")
     
     comments = crud_comment.get_by_post(db, post_id=post_id, skip=skip, limit=limit)
-    
-    # 附加作者信息（避免误用email作为头像）
-    # 使用 ORM 预加载的 author 对象
+
+    # 批量加载作者，避免逐条触发 lazy 查询（N+1）
+    author_ids = {c.author_id for c in comments if c.author_id}
+    author_map = {}
+    if author_ids:
+        author_map = {u.id: u for u in db.exec(select(User).where(User.id.in_(author_ids))).all()}
+
     result = []
     for comment in comments:
-        author = comment.author
+        author = author_map.get(comment.author_id)
         result.append({
             **comment.dict(),
             "author_name": author.username if author else "匿名",
-            "author_avatar": author.avatar_url if author else None, 
+            "author_avatar": author.avatar_url if author else None,
         })
-    
+
     return result
 
 @router.get("/{comment_id}/replies", response_model=List[CommentWithAuthor])
@@ -116,17 +120,22 @@ def get_comment_replies(
     ):
         raise HTTPException(status_code=404, detail="评论不存在")
     replies = crud_comment.get_replies(db, parent_id=comment_id, skip=skip, limit=limit)
-    
-    # 附加作者信息
+
+    # 一次性加载作者，避免逐条 N+1
+    author_ids = {c.author_id for c in replies if c.author_id}
+    author_map = {}
+    if author_ids:
+        author_map = {u.id: u for u in db.exec(select(User).where(User.id.in_(author_ids))).all()}
+
     result = []
     for comment in replies:
-        author = db.get(User, comment.author_id)
+        author = author_map.get(comment.author_id)
         result.append({
             **comment.dict(),
             "author_name": author.username if author else "匿名",
             "author_avatar": author.avatar_url if author else None,
         })
-    
+
     return result
 
 @router.put("/{comment_id}", response_model=CommentSchema)
@@ -205,11 +214,20 @@ def like_comment(
 
 @router.get("/post/{post_id}/count")
 def get_comment_count(
-    post_id: int,
+    post_id: int = Path(gt=0),
     db: Session = Depends(deps.get_db),
+    current_user: Optional[User] = Depends(deps.get_optional_current_user),
 ) -> Any:
     """
     获取帖子的评论总数
     """
+    post = db.get(Post, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+    if not post.is_published and not (
+        current_user
+        and (current_user.is_superuser or post.author_id == current_user.id)
+    ):
+        raise HTTPException(status_code=404, detail="帖子不存在")
     count = crud_comment.get_comment_count(db, post_id=post_id)
     return {"count": count}

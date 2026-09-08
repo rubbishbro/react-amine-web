@@ -91,6 +91,7 @@ export const transformBackendPost = (backendPost) => {
     pinnedInCategories: [],
     order: 999,
     // 后端聚合返回的互动统计（无字段时回退 0）
+    views: backendPost.views ?? 0,
     likes: backendPost.likes ?? 0,
     favorites: backendPost.favorites ?? 0,
     replies: backendPost.replies ?? 0,

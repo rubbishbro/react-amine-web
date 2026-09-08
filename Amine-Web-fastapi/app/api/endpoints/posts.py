@@ -1,10 +1,12 @@
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlmodel import Session
+from sqlalchemy import update
 
 from app.crud import crud_post
 from app.api import deps
 from app.models.user import User
+from app.models.post import Post as PostModel
 from app.schemas.post import Post, PostCreate, PostUpdate, PostPage
 
 router = APIRouter()
@@ -55,6 +57,13 @@ def read_post(
         or (not current_user.is_superuser and post.author_id != current_user.id)
     ):
         raise HTTPException(status_code=404, detail="Post not found")
+    # 已发布帖每次打开详情 +1 浏览（原子自增避免并发丢失）
+    if post.is_published:
+        db.execute(
+            update(PostModel).where(PostModel.id == post.id).values(views=PostModel.views + 1)
+        )
+        db.commit()
+        post.views = (post.views or 0) + 1
     return crud_post.post_to_public(db, post)
 
 @router.delete("/{id}", response_model=Post)

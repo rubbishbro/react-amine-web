@@ -161,6 +161,15 @@ def get_thread(
     msgs = crud_dm.get_thread(
         db, user_a=current_user.id, user_b=other_id, skip=skip, limit=limit
     )
+    # 自动把对方发给当前用户且未读的消息标记为已读
+    changed = False
+    for m in msgs:
+        if m.receiver_id == current_user.id and m.sender_id == other_id and not m.is_read:
+            m.is_read = True
+            db.add(m)
+            changed = True
+    if changed:
+        db.commit()
     return [
         {
             "id": m.id,
@@ -378,9 +387,17 @@ async def websocket_endpoint(
             elif event == "send":
                 receiver_id = data.get("receiver_id")
                 content = (data.get("content") or "").strip()
-                if not receiver_id or not content:
+                if receiver_id is None or not content:
                     await websocket.send_text(json.dumps({"event": "error", "detail": "receiver_id 和 content 必填"}))
                     continue
+                # receiver_id 必须是整数（拒绝 bool/float/非数字字符串被隐式转成 id）
+                if isinstance(receiver_id, bool) or not (
+                    isinstance(receiver_id, int)
+                    or (isinstance(receiver_id, str) and receiver_id.strip().isdigit())
+                ):
+                    await websocket.send_text(json.dumps({"event": "error", "detail": "receiver_id 必须是整数"}))
+                    continue
+                receiver_id = int(receiver_id)
                 if receiver_id == user_id:
                     await websocket.send_text(json.dumps({"event": "error", "detail": "不能给自己发私信"}))
                     continue
@@ -388,7 +405,7 @@ async def websocket_endpoint(
                     await websocket.send_text(json.dumps({"event": "error", "detail": "消息过长"}))
                     continue
                 try:
-                    _ensure_can_message(db, user_id, int(receiver_id))
+                    _ensure_can_message(db, user_id, receiver_id)
                     attachment_raw = data.get("attachment_id")
                     attachment_id = UUID(str(attachment_raw)) if attachment_raw else None
                     attachment = _attachment_for_send(db, attachment_id, user_id)

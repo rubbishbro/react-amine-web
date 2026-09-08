@@ -150,9 +150,13 @@ def _create_store():
             return _RedisStore(url)
         except Exception as e:
             logger.warning(
-                "[code_store] Redis 连接失败 (%s)，退回内存模式。"
-                "生产环境请确保 Redis 可用。", e
+                "[code_store] Redis 连接失败 (%s)。", e
             )
+            if settings.ENVIRONMENT.lower() == "production":
+                # 与 session_store 行为保持一致：生产环境缺少可用 Redis 时快速失败，
+                # 避免多实例下验证码状态静默丢失。
+                raise RuntimeError("REDIS_URL is configured but Redis is unreachable") from e
+            logger.warning("[code_store] 开发环境退回内存模式。")
     else:
         logger.info("[code_store] 未配置 REDIS_URL，使用内存模式（不适合多进程部署）。")
     return _MemoryStore()

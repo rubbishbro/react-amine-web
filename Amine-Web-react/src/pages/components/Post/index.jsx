@@ -103,11 +103,12 @@ const Post = ({ post, preview = false, onReadMore, isPinned = false, currentCate
   useEffect(() => {
     if (!post?.id) return;
     seedServerStats(post.id, {
+      views: post?.views,
       likes: post?.likes,
       favorites: post?.favorites,
       replies: post?.replies,
     });
-  }, [post?.id, post?.likes, post?.favorites, post?.replies]);
+  }, [post?.id, post?.views, post?.likes, post?.favorites, post?.replies]);
 
   // 提前返回检查放在所有hooks之后
   if (!post) return null;

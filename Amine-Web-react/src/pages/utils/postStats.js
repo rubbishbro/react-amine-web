@@ -91,13 +91,13 @@ export const onPostStatsUpdated = (handler) => {
 };
 
 /**
- * 用服务器返回的权威统计作为基线写入本地（仅同步服务端存在的字段）。
- * 不清空本地的 views 等无服务端来源的计数。
+ * 用服务器返回的权威统计作为基线写入本地。
+ * views 也以后端为准（服务端每次详情访问自增），不再本地叠加避免双计。
  */
 export const seedServerStats = (postId, server = {}) => {
     if (!postId) return;
     const keys = {};
-    ['likes', 'favorites', 'replies'].forEach((key) => {
+    ['views', 'likes', 'favorites', 'replies'].forEach((key) => {
         if (server[key] !== undefined && server[key] !== null) {
             keys[key] = safeNumber(server[key]);
         }
