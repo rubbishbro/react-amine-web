@@ -995,18 +995,6 @@ const PostDetail = () => {
         </>
       )}
 
-      {hasAuthorLink && (
-        <div className={styles.author}>
-          <Link to={`/user/${mappedAuthorId}`} state={{ author: { ...authorInfo, id: mappedAuthorId } }} className={styles.authorLink}>
-            <div
-              className={styles.authorAvatar}
-              style={authorInfo.avatar ? { backgroundImage: `url(${authorInfo.avatar})` } : undefined}
-            />
-            <span className={styles.authorName}>{authorInfo.name || '匿名'}</span>
-          </Link>
-        </div>
-      )}
-
       {modalNode}
     </div>
   );

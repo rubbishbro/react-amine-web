@@ -13,6 +13,7 @@ import { getCategoryTextColor } from '../../config';
 import { useUser } from '../../context/userContext.js';
 import { buildUserId } from '../../utils/userId';
 import { calculatePostReadTime, getPostWordCount } from '../../utils/postReadTime';
+import { uploadFile } from '../../../services/auth';
 
 const buildDefaultValues = (initialData = null) => initialData || {
   title: '',
@@ -289,6 +290,20 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     }
   }, [hasUnsavedChanges, navigate]);
 
+  // 图片按钮/粘贴 → 上传到云端（R2/七牛/本地），返回可访问 URL 插入正文
+  const handleEditorImageUpload = useCallback(async (file) => {
+    try {
+      const result = await uploadFile(null, file);
+      if (!result?.url) throw new Error('上传失败：未返回图片地址');
+      return result.url;
+    } catch (error) {
+      const message = error?.message || '图片上传失败，请重试';
+      showFeedback('error', message);
+      console.error('图片上传失败:', error);
+      throw new Error(message);
+    }
+  }, [showFeedback]);
+
   const mdEditorConfig = {
     view: {
       menu: true,
@@ -305,7 +320,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
     htmlClass: 'markdown-body markdown-preview',
     markdownClass: 'markdown-editor',
     syncScrollMode: ['leftFollowRight', 'rightFollowLeft'],
-    imageAccept: '.jpg,.jpeg,.png,.gif,.webp',
+    imageAccept: '.jpg,.jpeg,.png,.gif',
     linkAccept: '.*',
   };
 
@@ -518,6 +533,7 @@ const PostEditor = ({ isEditMode = false, initialData = null }) => {
                 </ReactMarkdown>
               )}
               config={mdEditorConfig}
+              onImageUpload={handleEditorImageUpload}
               placeholder="# 请输入内容..."
             />
           </div>

@@ -5,6 +5,7 @@ import logging
 from typing import Any
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Request, Response
 from app.core.config import settings
+from app.core.media_store import r2_enabled, r2_put
 from app.core.limiter import limiter
 from app.core.file_validation import validate_media_upload
 from app.models.user import User
@@ -64,7 +65,9 @@ async def upload_file(
     key = f"uploads/{uuid.uuid4().hex}{media.extension}"
 
     try:
-        if _qiniu_enabled:
+        if r2_enabled():
+            url = await asyncio.to_thread(r2_put, key, media.data, media.media_type)
+        elif _qiniu_enabled:
             url = await asyncio.to_thread(_qiniu_upload_sync, media.data, key)
         else:
             relative_url = _local_upload(media.data, os.path.basename(key))

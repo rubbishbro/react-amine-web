@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 
 from app.core.limiter import limiter
 from app.core.config import settings
+from app.core.media_store import r2_enabled, r2_put, r2_presign_get
 from app.core.file_validation import validate_media_upload
 from app.models.user import User
 from app.models.dm_attachment import DMAttachment
@@ -96,7 +97,11 @@ async def upload_file(
     local_path = None
 
     try:
-        if _qiniu_enabled:
+        if r2_enabled():
+            await asyncio.to_thread(r2_put, key, media.data, media.media_type)
+            stored_key = key
+            local_path = None
+        elif _qiniu_enabled:
             stored_key = await asyncio.to_thread(_qiniu_upload_sync, media.data, key)
         else:
             stored_key = _local_upload(media.data, os.path.basename(key))
@@ -124,6 +129,25 @@ async def upload_file(
             except OSError:
                 logger.exception("failed to clean up orphan dm upload %s", local_path)
         raise HTTPException(status_code=500, detail="File upload failed")
+
+async def _r2_download(key: str) -> Response:
+    """从 R2 下载（私密桶走预签名 URL）。"""
+    signed = r2_presign_get(key, expires=3600)
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
+            response = await client.get(signed)
+            if response.status_code == 200:
+                return Response(
+                    content=response.content,
+                    media_type=response.headers.get("Content-Type", "application/octet-stream"),
+                    headers={"Content-Disposition": "inline"},
+                )
+            raise HTTPException(status_code=response.status_code, detail="Image not found")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="File storage is unavailable")
+
 
 async def _qiniu_download(key: str) -> Response:
     """同步从七牛云下载，返回文件流。"""
@@ -184,7 +208,9 @@ async def download_file(
             attachment.receiver_id,
         }:
             raise HTTPException(status_code=404, detail="File not found")
-        if _qiniu_enabled:
+        if r2_enabled():
+            file = await _r2_download(safe_key)
+        elif _qiniu_enabled:
             file = await _qiniu_download(safe_key)
         else:
             file = _local_download(filename)

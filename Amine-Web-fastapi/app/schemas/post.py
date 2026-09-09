@@ -60,6 +60,8 @@ class PostInDBBase(BaseModel):
     likes: int = 0
     favorites: int = 0
     replies: int = 0
+    is_pinned: bool = False
+    pinned_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

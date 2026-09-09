@@ -30,7 +30,12 @@ def get_multi(
     )
     if category:
         statement = statement.where(Post.category == category)
-    statement = statement.order_by(Post.created_at.desc()).offset(skip).limit(limit)
+    # 置顶优先，置顶内按置顶时间倒序，其余按发布时间倒序
+    statement = statement.order_by(
+        Post.is_pinned.desc(),
+        Post.pinned_at.desc().nullslast(),
+        Post.created_at.desc(),
+    ).offset(skip).limit(limit)
     posts = db.exec(statement).all()
     return posts
 

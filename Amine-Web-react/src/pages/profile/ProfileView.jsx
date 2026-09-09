@@ -205,6 +205,10 @@ export default function ProfileView() {
             }
         }
 
+        if (!resolved && freshTargetUser) {
+            resolved = mapRelationUserToAuthor(freshTargetUser);
+        }
+
         if (resolved && user && isSamePerson(resolved, {
             id: buildUserId(user?.profile?.name, user?.id || 'local'),
             name: user.profile?.name || '匿名',
@@ -225,7 +229,7 @@ export default function ProfileView() {
         }
 
         return resolved;
-    }, [author, posts, user]);
+    }, [author, posts, user, freshTargetUser]);
 
     const isViewerLoggedIn = user?.loggedIn === true;
     const recentActivities = useMemo(() => posts.slice(0, 5), [posts]);
@@ -272,16 +276,8 @@ export default function ProfileView() {
         };
     }, [effectiveAuthToken, handleCredentialFailure, isViewerLoggedIn]);
 
-    const displayValue = useCallback((value) => {
-        if (!isViewerLoggedIn) return '-';
-        const normalized = normalizeText(value);
-        return normalized || '-';
-    }, [isViewerLoggedIn]);
-
-    const displayPosts = isViewerLoggedIn ? posts : [];
-    const displayStats = isViewerLoggedIn
-        ? stats
-        : { posts: '-', views: '-', likes: '-', favorites: '-', replies: '-' };
+    const displayPosts = posts;
+    const displayStats = stats;
     const isSelf = useMemo(() => {
         if (!displayAuthor || !user) return false;
         return isSamePerson(displayAuthor, {
@@ -290,30 +286,30 @@ export default function ProfileView() {
         });
     }, [displayAuthor, user]);
 
-    const displayName = isViewerLoggedIn ? (displayAuthor?.name || '匿名') : '未登录';
+    const displayName = displayAuthor?.name || '匿名';
     const mappedDisplayId = getMappedUserId(displayAuthor?.id || '');
     const resolvedId = isSupportedUserId(mappedDisplayId)
         ? mappedDisplayId
-        : (isSelf && isSupportedUserId(user?.id) ? user.id : 'Unknown');
-    const displayId = isViewerLoggedIn ? resolvedId : 'Unknown';
+        : (isSelf && isSupportedUserId(user?.id) ? user.id : (routeId || 'Unknown'));
+    const displayId = isSelf && isViewerLoggedIn ? resolvedId : (resolvedId !== 'Unknown' ? resolvedId : '匿名');
     const activityItems = useMemo(() => {
-        if (!isViewerLoggedIn) return [];
         return recentActivities.map((post) => ({
             id: post.id,
             badge: '发布',
             text: `发布了《${post.title}》`,
             date: formatDate(post.date),
         }));
-    }, [isViewerLoggedIn, recentActivities]);
+    }, [recentActivities]);
 
     useEffect(() => {
-        if (!displayAuthor?.name || isSelf) {
+        const targetName = displayAuthor?.name || (posts.length === 0 ? decodeSafe(routeId) : '');
+        if (!targetName || isSelf) {
             setFreshTargetUser(null);
             return;
         }
 
         let cancelled = false;
-        fetchUserByUsername(displayAuthor.name)
+        fetchUserByUsername(targetName)
             .then((data) => {
                 if (!cancelled && data) {
                     setFreshTargetUser(data);
@@ -324,7 +320,7 @@ export default function ProfileView() {
         return () => {
             cancelled = true;
         };
-    }, [displayAuthor?.name, isSelf]);
+    }, [displayAuthor?.name, isSelf, posts.length, routeId]);
 
     const tagInfo = useMemo(() => {
         if (freshTargetUser) return buildTagInfo(freshTargetUser);
@@ -520,9 +516,7 @@ export default function ProfileView() {
     };
 
     const canUseAdminTools = user?.isAdmin === true;
-    const coverImage = isViewerLoggedIn
-        ? (freshCover || displayAuthor?.cover || freshAvatar || displayAuthor?.avatar)
-        : '';
+    const coverImage = freshCover || displayAuthor?.cover || freshAvatar || displayAuthor?.avatar || '';
     const coverStyle = coverImage
         ? { backgroundImage: `linear-gradient(120deg, rgba(20, 20, 40, 0.4), rgba(30, 30, 60, 0.7)), url(${coverImage})` }
         : undefined;
@@ -547,7 +541,7 @@ export default function ProfileView() {
                         <div
                             className={styles.avatar}
                             style={
-                                isViewerLoggedIn && (freshAvatar || displayAuthor?.avatar)
+                                (freshAvatar || displayAuthor?.avatar)
                                     ? { backgroundImage: `url(${freshAvatar || displayAuthor.avatar})` }
                                     : undefined
                             }
@@ -569,8 +563,12 @@ export default function ProfileView() {
                             )}
                         </div>
                         <div className={styles.userId}>ID: {displayId}</div>
-                        <div className={styles.meta}>{displayValue(displayAuthor?.school)} · {displayValue(displayAuthor?.className)}</div>
-                        <div className={styles.meta}>{displayValue(displayAuthor?.email)}</div>
+                        <div className={styles.meta}>
+                            {[displayAuthor?.school, displayAuthor?.className].filter(Boolean).join(' · ') || '—'}
+                        </div>
+                        {isSelf && isViewerLoggedIn && displayAuthor?.email && (
+                            <div className={styles.meta}>{displayAuthor.email}</div>
+                        )}
                     </div>
                     <div className={styles.heroActions}>
                         <div className={styles.actionStack}>
@@ -676,13 +674,13 @@ export default function ProfileView() {
                     <div className={styles.section}>
                         <div className={styles.sectionHeader}>个人简介</div>
                         <div className={styles.sectionBody}>
-                            {isViewerLoggedIn && displayAuthor?.bio ? (
+                            {displayAuthor?.bio ? (
                                 <div className={styles.bioMarkdown}>
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                         {displayAuthor.bio}
                                     </ReactMarkdown>
                                 </div>
-                            ) : (isViewerLoggedIn ? '暂无资料' : '-')}
+                            ) : '暂无资料'}
                         </div>
                     </div>
 
@@ -750,7 +748,7 @@ export default function ProfileView() {
                                 <li className={styles.activityItem}>正在加载动态...</li>
                             )}
                             {!loading && activityItems.length === 0 && (
-                                <li className={styles.activityItem}>{isViewerLoggedIn ? '暂无动态' : '-'}</li>
+                                <li className={styles.activityItem}>暂无动态</li>
                             )}
                             {!loading && activityItems.map((item) => (
                                 <li key={item.id} className={styles.activityItem}>
@@ -778,7 +776,7 @@ export default function ProfileView() {
                                 <div className={styles.loading}>正在加载帖子...</div>
                             )}
                             {!loading && displayPosts.length === 0 && (
-                                <div className={styles.empty}>{isViewerLoggedIn ? '暂无发布内容' : '-'}</div>
+                                <div className={styles.empty}>暂无发布内容</div>
                             )}
                             {!loading && displayPosts.map((post) => (
                                 <Post

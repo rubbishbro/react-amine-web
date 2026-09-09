@@ -20,6 +20,8 @@ class Post(PostBase, table=True): # 帖子表
     updated_at: datetime = Field(default_factory=datetime.utcnow) # 自动调用时间
     is_published: bool = Field(default=False)
     views: int = Field(default=0) # 浏览次数
+    is_pinned: bool = Field(default=False) # 全站置顶
+    pinned_at: Optional[datetime] = Field(default=None, nullable=True) # 置顶时间
     
     author_id: Optional[int] = Field(default=None, foreign_key="user.id") # 外联
     author: Optional["User"] = Relationship(back_populates="posts") # 反向关联

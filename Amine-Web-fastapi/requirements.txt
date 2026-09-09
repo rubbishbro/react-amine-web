@@ -16,3 +16,4 @@ redis
 slowapi
 httpx
 Pillow>=10.4,<12
+boto3

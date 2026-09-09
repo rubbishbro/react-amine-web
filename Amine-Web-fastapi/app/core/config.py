@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256" # 采用HS256算法
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    BROWSER_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    BROWSER_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     JWT_ISSUER: str = "amine-web-api"
     JWT_AUDIENCE: str = "amine-web-browser"
@@ -77,6 +77,20 @@ class Settings(BaseSettings):
     QINIU_SECRET_KEY: str = ""
     QINIU_BUCKET_NAME: str = ""
     QINIU_DOMAIN: str = ""   # 例: https://xxx.bkt.clouddn.com
+
+    # Cloudflare R2（S3 兼容对象存储，可选）
+    R2_ACCOUNT_ID: str = ""          # 例: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET: str = ""              # 例: anime-uploads
+    R2_PUBLIC_DOMAIN: str = ""       # 例: https://cdn.lnssy-cykj.online（公开桶域名）
+
+    # 站娘 AI（DeepSeek 等 OpenAI 兼容接口）
+    LLM_BASE_URL: str = "https://api.deepseek.com/v1"
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = "deepseek-chat"
+    LLM_MASCOT_NAME: str = "小安"
+    LLM_MASCOT_MAX_TOKENS: int = 1024
 
     # Redis（可选，用于验证码持久化；不配置则退回内存模式）
     # 生产环境建议配置，多进程/重启后验证码不会丢失
