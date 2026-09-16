@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     LLM_MASCOT_NAME: str = "小安"
     LLM_MASCOT_MAX_TOKENS: int = 1024
 
+    # 新番时间表（Bangumi 开放 API）
+    BANGUMI_API_BASE: str = "https://api.bgm.tv"
+    BANGUMI_USER_AGENT: str = "AmineWeb/1.0 (https://lnssy-cykj.online)"
+    BANGUMI_CACHE_SECONDS: int = 3600
+
     # Redis（可选，用于验证码持久化；不配置则退回内存模式）
     # 生产环境建议配置，多进程/重启后验证码不会丢失
     REDIS_URL: str = ""  # 例: redis://localhost:6379/0

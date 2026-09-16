@@ -24,6 +24,8 @@ import AdminPanel from '../admin';
 import Messages from '../messages';
 import Blacklist from '../blacklist';
 import Login from '../login';
+import Music from '../music';
+import Mascot from '../components/Mascot';
 
 //帖子编辑器组件
 import PostEditor from '../components/PostEditor';
@@ -235,6 +237,7 @@ export default function CommunityBoard() {
         <Link to="/tech" className="nav-item" onClick={closeSidebar}><span>💻 前沿技术</span></Link>
         <Link to="/resources" className="nav-item" onClick={closeSidebar}><span>💾 网络资源</span></Link>
         <Link to="/musicgames" className="nav-item" onClick={closeSidebar}><span>🎵 音游区</span></Link>
+        <Link to="/music" className="nav-item" onClick={closeSidebar}><span>🎧 音乐播放器</span></Link>
         <Link to="/favorites" className="nav-item" onClick={closeSidebar}><span>⭐ 收藏夹</span></Link>
         <Link to="/messages" className="nav-item nav-item--with-badge" onClick={closeSidebar}>
           <span>✉️ 消息</span>
@@ -294,6 +297,7 @@ export default function CommunityBoard() {
             <Route path="/resources" element={<ResourcesContent />} />
             <Route path="/tech" element={<TechContent />} />
             <Route path="/musicgames" element={<MusicGamesContent />} />
+            <Route path="/music" element={<Music />} />
             <Route path="/favorites" element={<FavoritesContent onReadMore={handleReadMore} />} />
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/user/:id" element={<PublicProfile />} />
@@ -309,6 +313,8 @@ export default function CommunityBoard() {
           </Routes>
         </section>
       </main>
+
+      <Mascot />
     </div>
   )
 }

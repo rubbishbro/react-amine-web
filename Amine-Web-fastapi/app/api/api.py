@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.endpoints import auth, users, posts, upload, interact, relations, comments, search, admin, notifications, dm, dm_upload, announcements, mascot
+from app.api.endpoints import auth, users, posts, upload, interact, relations, comments, search, admin, notifications, dm, dm_upload, announcements, mascot, anime
 
 # api接口汇总
 api_router = APIRouter()
@@ -17,3 +17,4 @@ api_router.include_router(announcements.router, prefix="/notifications/announcem
 api_router.include_router(dm.router, prefix="/dm", tags=["dm"])
 api_router.include_router(dm_upload.router, prefix="/dm_upload", tags=["dm_upload"])
 api_router.include_router(mascot.router, prefix="/ai/mascot", tags=["ai"])
+api_router.include_router(anime.router, prefix="/anime", tags=["anime"])
