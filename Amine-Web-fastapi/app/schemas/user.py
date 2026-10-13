@@ -50,6 +50,8 @@ class UserPublic(BaseModel):
     id: int
     username: str
     is_superuser: bool = False
+    # 供前端过滤「被封禁作者的帖子」使用，见 postLoader.js::filterVisiblePosts
+    is_banned: bool = False
     userSchool: Optional[str] = None
     userClass: Optional[str] = None
     title: Optional[str] = None

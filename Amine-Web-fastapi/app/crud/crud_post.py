@@ -61,10 +61,40 @@ def create(db: Session, *, obj_in: PostCreate, author_id: int) -> Post:
 
 # 删除帖子
 def remove(db: Session, *, id: int) -> Optional[Post]:
+    """硬删帖子，并先清理所有指向它的依赖行。
+
+    之前这里只有 `db.delete(obj)`，但：
+      * comment.post_id / comment_like.comment_id / comment.parent_id 都是不带
+        ondelete 的外键，而 Comment 走的是软删除（is_deleted=True），行仍然存在，
+        所以只要帖子有评论，删帖就会触发外键冲突（IntegrityError -> 500）。
+      * Post 模型没有 comments 关系，ORM 不会替我们级联。
+      * notification.post_id 没有外键，删帖后会留下指向 404 的通知。
+    这里按依赖顺序显式清理：评论点赞 -> 评论 -> 该帖通知 -> 帖子。
+    评论一次性删除即可：PostgreSQL 的非延迟外键在同一条 DELETE 语句内
+    删除父子行不会冲突，不需要按 parent_id 逐层处理。
+    """
+    from sqlalchemy import delete
+
+    from app.models.comment import Comment
+    from app.models.comment_like import CommentLike
+    from app.models.notification import Notification
+
     obj = db.get(Post, id)
-    if obj:
-        db.delete(obj)
-        db.commit()
+    if not obj:
+        return None
+
+    comment_ids = db.execute(
+        select(Comment.id).where(Comment.post_id == id)
+    ).scalars().all()
+
+    if comment_ids:
+        db.execute(delete(CommentLike).where(CommentLike.comment_id.in_(comment_ids)))
+        db.execute(delete(Comment).where(Comment.post_id == id))
+
+    db.execute(delete(Notification).where(Notification.post_id == id))
+
+    db.delete(obj)
+    db.commit()
     return obj
 
 # 更新帖子

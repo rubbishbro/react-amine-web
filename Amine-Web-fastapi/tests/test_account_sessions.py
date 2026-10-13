@@ -1,10 +1,13 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
 from passlib.context import CryptContext
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.api import deps
 from app.core import security
 from app.core.csrf import CSRFMiddleware
 from app.core.session_store import AuthSessionStore
@@ -219,3 +222,62 @@ def test_profile_patch_clears_optional_fields_and_media_atomically():
     assert result.bio is None
     assert result.avatar_url is None
     assert result.cover_url is None
+
+
+def test_legacy_token_without_session_sid_is_rejected_by_dependencies():
+    """无 sid 的历史 JWT（/login/access-token 签发）不能再用于任何接口鉴权。"""
+    legacy = security.create_access_token({"sub": "7"})
+    with pytest.raises(HTTPException) as rejected:
+        deps._decode_user(None, legacy, require_session=True)
+    assert rejected.value.status_code == 401
+
+    # 携带 sid 的会话 token 仍然可解出会话信息（deps 会再向 session_store 校验）
+    session_token = security.create_access_token({"sub": "7"}, session_id="session-7")
+    payload = security.decode_access_token(session_token, require_session=True)
+    assert payload["sid"] == "session-7"
+
+
+def test_csrf_is_enforced_for_bearer_requests_without_a_session(monkeypatch):
+    """带 cookie 的请求即使使用 Bearer，也必须通过 CSRF 校验。"""
+    middleware = CSRFMiddleware(lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "app.core.csrf.security.decode_access_token",
+        lambda _token: {},  # 无 sid：既不豁免 CSRF，也取不到会话 sid
+    )
+
+    async def ok(_request):
+        return Response(status_code=204)
+
+    request = _request(
+        headers={
+            "Origin": "https://www.lnssy-cykj.online",
+            "Cookie": "aw_access_token=token; aw_csrf_token=csrf-1",
+            "Authorization": "Bearer legacy-token",
+        }
+    )
+    response = asyncio.run(middleware.dispatch(request, ok))
+    assert response.status_code == 403
+
+
+def test_csrf_still_allows_session_bearer_and_cookieless_clients(monkeypatch):
+    middleware = CSRFMiddleware(lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "app.core.csrf.security.decode_access_token",
+        lambda _token: {"sid": "sid-1"},
+    )
+    monkeypatch.setattr(
+        "app.core.csrf.session_store.verify_csrf",
+        lambda sid, token: sid == "sid-1" and token == "csrf-1",
+    )
+
+    async def ok(_request):
+        return Response(status_code=204)
+
+    # 携带 sid 的 Bearer 令牌豁免 CSRF（跨站请求不会自动带 Authorization 头）
+    bearer = _request(headers={"Authorization": "Bearer session-token"})
+    assert asyncio.run(middleware.dispatch(bearer, ok)).status_code == 204
+
+    # 没有任何会话 cookie 的客户端（脚本/API 调用）依旧不受 CSRF 约束
+    cookieless = _request(headers={"Origin": "https://www.lnssy-cykj.online"})
+    assert asyncio.run(middleware.dispatch(cookieless, ok)).status_code == 204
+

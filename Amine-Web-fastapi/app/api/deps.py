@@ -40,13 +40,20 @@ def _decode_user(db: Session, token: str, *, require_session: bool = False) -> U
     return user
 
 # 获取当前用户
+#
+# 注意：Bearer 分支同样要求 token 携带会话 sid（require_session=True）。
+# 历史遗留的 `POST /login/access-token` 会签发不带 sid 的 30 分钟 JWT，
+# 那种 token 既无法被 logout 吊销、也能绕过（基于 cookie 的）CSRF 防护，
+# 这里直接让它在所有接口上失效；需要旧 token 的用户仍可通过
+# `POST /auth/session/migrate` 换成正式的 cookie 会话
+# （migrate 自己解码 Authorization 头，不经过本依赖）。
 def get_current_user(
     request: Request,
     db: Session = Depends(get_db),
     token: Optional[str] = Depends(optional_oauth2),
 ) -> User:
     if token:
-        return _decode_user(db, token)
+        return _decode_user(db, token, require_session=True)
     cookie_token = request.cookies.get(settings.ACCESS_COOKIE_NAME)
     if not cookie_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -59,7 +66,7 @@ def get_optional_current_user(
     token: Optional[str] = Depends(optional_oauth2),
 ) -> Optional[User]:
     if token:
-        return _decode_user(db, token)
+        return _decode_user(db, token, require_session=True)
     cookie_token = request.cookies.get(settings.ACCESS_COOKIE_NAME)
     if cookie_token:
         return _decode_user(db, cookie_token, require_session=True)

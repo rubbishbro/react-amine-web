@@ -1,8 +1,26 @@
+/*
+  音游区页面样式
 
-.about-root {
+  注意：/musicgames 路由渲染的是本文件的 Content 导出，
+  它被放在社区布局里（外层是 .community-root），
+  整页大背景由 .community-root::before 提供（默认 BackGround.png）。
+  因此这里用 :has() 在音游区挂载时把大背景换成 Para.webp，且不影响其它页面。
+*/
+.community-root:has(.musicgames-content)::before {
+	background-image: url('/Para.webp');
+}
+
+/* 仅作为 :has() 的标记，display: contents 让它不产生盒子，
+   这样 card-content 的 grid 布局与其它页面完全一致 */
+.musicgames-content {
+	display: contents;
+}
+
+/* 独立渲染音游区页面时（MusicGamesPage）使用的根容器 */
+.musicgames-root {
 	font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
 	background-color: #f7f8fb;
-	background-image: url('/BackGround.png');
+	background-image: url('/Para.webp');
 	background-size: cover;
 	background-position: center;
 	min-height: 100vh;
@@ -12,7 +30,65 @@
 	color: var(--text-main, #4A4A4A);
 }
 
-.about-root .main-card { width: 85%; height: 85%; background: rgba(255,255,255,0.92); border-radius: 20px; box-shadow: 0 10px 25px rgba(149,157,165,0.2); overflow: hidden; }
-.about-root .card-header { padding: 22px 36px; background: rgba(255,255,255,0.7); display:flex; justify-content:space-between; align-items:center }
-.about-root .card-content { padding: 30px 36px; }
-.about-root h1 { color: #FF85A1 }
+.musicgames-root .main-card { width: 85%; height: 85%; background: rgba(255,255,255,0.92); border-radius: 20px; box-shadow: 0 10px 25px rgba(149,157,165,0.2); overflow: hidden; }
+.musicgames-root .card-header { padding: 22px 36px; background: rgba(255,255,255,0.7); display:flex; justify-content:space-between; align-items:center }
+.musicgames-root .card-content { padding: 30px 36px; }
+.musicgames-root h1 { color: #FF85A1 }
+
+/* ============================================================
+   音游区文字模板
+   与 about 页的 about-* 系列一一对应（见 about/about.css）：
+   .about-text-block   -> .musicgames-text-block
+   .about-section-label-> .musicgames-section-label
+   .about-placeholder  -> .musicgames-placeholder
+   .about-signature    -> .musicgames-signature
+   改文字时只动 musicgames.jsx 里的 IntroContent 即可。
+   ============================================================ */
+
+.musicgames-text-block {
+	font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+	line-height: 1.8;
+	font-size: 16px;
+	margin-bottom: 18px;
+}
+
+.musicgames-text-block blockquote {
+	margin: 0 0 12px 0;
+	padding-left: 12px;
+	border-left: 4px solid rgba(0, 0, 0, 0.08);
+}
+
+.musicgames-text-block p {
+	margin: 0 0 12px 0;
+}
+
+.musicgames-section-label {
+	margin: 18px 0 10px 0;
+	font-weight: 600;
+}
+
+.musicgames-placeholder {
+	width: 100%;
+	border-radius: 12px;
+	background: repeating-linear-gradient(45deg,
+			rgba(255, 133, 161, 0.1),
+			rgba(255, 133, 161, 0.1) 10px,
+			rgba(255, 255, 255, 0.9) 10px,
+			rgba(255, 255, 255, 0.9) 20px);
+	border: 1px dashed rgba(255, 133, 161, 0.5);
+}
+
+.musicgames-placeholder-photos {
+	height: 160px;
+}
+
+.musicgames-placeholder-contact {
+	height: 120px;
+}
+
+.musicgames-signature {
+	text-align: right;
+	color: #666;
+	font-style: italic;
+	margin-top: 10px;
+}

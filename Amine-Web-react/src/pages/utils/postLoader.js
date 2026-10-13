@@ -162,7 +162,9 @@ const filterVisiblePosts = (posts) => {
       if (isBlocked(authorId, viewerId)) return false;
       if (isBlocked(viewerId, authorId)) return false;
     }
-    if (authorId && isUserBanned(authorId)) return false;
+    // 第二个参数必须是后端返回的用户对象：isUserBanned 只认 backendUser.is_banned，
+    // 只传 userId 会永远返回 false（后端 UserPublic 已带 is_banned 字段）。
+    if (authorId && isUserBanned(authorId, normalizedAuthor)) return false;
     return true;
   });
 };

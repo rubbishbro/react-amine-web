@@ -25,7 +25,18 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         authorization = request.headers.get("authorization", "")
         if authorization.lower().startswith("bearer "):
-            return await call_next(request)
+            # 只有携带会话 sid 的 Bearer 令牌才豁免 CSRF：跨站请求不会自动携带
+            # Authorization 头，所以这类请求本身不受 CSRF 影响。历史上这里对任何
+            # Bearer 一律放行，导致 /login/access-token 签发的无 sid 长寿命 JWT
+            # 可以同时绕过 CSRF 和会话校验；现在无 sid 的令牌会走到下面的
+            # cookie/CSRF 校验，并且也会被 deps._decode_user 拒绝。
+            bearer_token = authorization.split(" ", 1)[1].strip()
+            try:
+                bearer_sid = security.decode_access_token(bearer_token).get("sid")
+            except ValueError:
+                bearer_sid = None
+            if bearer_sid:
+                return await call_next(request)
 
         access_token = request.cookies.get(settings.ACCESS_COOKIE_NAME, "")
         refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME, "")

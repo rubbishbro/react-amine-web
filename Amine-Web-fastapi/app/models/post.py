@@ -11,19 +11,20 @@ class PostBase(SQLModel):
     title: str
     content: str
     summary: Optional[str] = None
-    category: Optional[str] = None
+    # 分类过滤走 ix_post_category（见迁移 4d9b2f7a1c63）
+    category: Optional[str] = Field(default=None, index=True)
     tags: List[str] = Field(default_factory=list, sa_column=sa.Column(ARRAY(sa.String)))
 
 class Post(PostBase, table=True): # 帖子表
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow) # 自动调用时间
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True) # 自动调用时间
     updated_at: datetime = Field(default_factory=datetime.utcnow) # 自动调用时间
     is_published: bool = Field(default=False)
     views: int = Field(default=0) # 浏览次数
     is_pinned: bool = Field(default=False) # 全站置顶
     pinned_at: Optional[datetime] = Field(default=None, nullable=True) # 置顶时间
     
-    author_id: Optional[int] = Field(default=None, foreign_key="user.id") # 外联
+    author_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True) # 外联
     author: Optional["User"] = Relationship(back_populates="posts") # 反向关联
     
     interactions: List["Interaction"] = Relationship(back_populates="post", sa_relationship_kwargs={"cascade": "all, delete-orphan"}) # 级联
